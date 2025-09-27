@@ -18,7 +18,7 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(treeView);
 
-  const commandHandler = new CommandHandler(context, manager, treeDataProvider);
+  const commandHandler = new CommandHandler(manager, treeDataProvider, context);
 
   context.subscriptions.push(
     vscode.commands.registerCommand("addi.manage", async () => {
@@ -33,7 +33,17 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.commands.registerCommand("addi.editApiKey", (item: ProviderTreeItem) => commandHandler.editApiKey(item)));
   context.subscriptions.push(vscode.commands.registerCommand("addi.editModel", (item: ModelTreeItem) => commandHandler.editModel(item)));
   context.subscriptions.push(vscode.commands.registerCommand("addi.deleteModel", (item: ModelTreeItem) => commandHandler.deleteModel(item)));
-  context.subscriptions.push(vscode.commands.registerCommand("addi.useModel", (item: ModelTreeItem) => commandHandler.useModel(item)));
+  context.subscriptions.push(
+    vscode.commands.registerCommand("addi.useModel", (item: ModelTreeItem) => {
+      const result = manager.findModel(item.model.id);
+      if (!result) {
+        void vscode.window.showErrorMessage("Model not found");
+        return;
+      }
+      // 直接打开 playground
+      void commandHandler.openPlayground(result.provider, result.model);
+    })
+  );
   context.subscriptions.push(vscode.commands.registerCommand("addi.exportConfig", () => commandHandler.exportConfig()));
   context.subscriptions.push(vscode.commands.registerCommand("addi.importConfig", () => commandHandler.importConfig()));
 }

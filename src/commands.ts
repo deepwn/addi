@@ -2,22 +2,11 @@ import * as vscode from "vscode";
 import { ProviderModelManager, ProviderTreeItem, AddiTreeDataProvider } from "./provider";
 import { ModelTreeItem } from "./model";
 import { ConfigManager, InputValidator, UserFeedback } from "./utils";
-import { Model, ModelDraft, Provider } from "./types";
-import { ModelDebugPanel, DebugPanelContextMessage, DebugInteraction, DebugLogEntry } from "./debugPanel";
-import { invokeChatCompletion, ChatMessage, ChatRequestOptions } from "./apiClient";
-
-type DebugSessionState = {
-  panel: ModelDebugPanel;
-  provider: Provider;
-  model: Model;
-  history: ChatMessage[];
-  logs: DebugLogEntry[];
-};
+import { ModelDraft, Provider, Model } from "./types";
+import { invokeChatCompletion, ChatMessage, streamChatCompletion } from "./apiClient";
 
 export class CommandHandler {
-  private readonly debugSessions = new Map<string, DebugSessionState>();
-
-  constructor(private readonly context: vscode.ExtensionContext, private readonly manager: ProviderModelManager, private readonly treeDataProvider: AddiTreeDataProvider) {}
+  constructor(private readonly manager: ProviderModelManager, private readonly treeDataProvider: AddiTreeDataProvider, private readonly context?: vscode.ExtensionContext) {}
 
   private async promptModelApiTest(provider: Provider, modelDraft: ModelDraft, continueLabel: string): Promise<boolean> {
     const testChoice = await vscode.window.showQuickPick([{ label: "check" }, { label: "skip" }], { placeHolder: "should check model API?" });
@@ -279,185 +268,161 @@ export class CommandHandler {
     }
   }
 
-  private getSessionKey(providerId: string, modelId: string): string {
-    return `${providerId}:${modelId}`;
+  // playground 模式不再需要 session key
+
+  private createPlaygroundHtml(): string {
+    // 直接读取 resources/playground.html 的内容更好；此处简化为占位，实际载入文件以支持 CSP。
+    // 为保持简单，这里内联 minimal 占位，将很快被真正的文件替换（我们使用本地文件读取更可靠）。
+    return `<!DOCTYPE html><html><body><p>Loading playground...</p></body></html>`;
   }
 
-  private createLogEntry(level: DebugLogEntry["level"], message: string, details?: unknown): DebugLogEntry {
-    return {
-      id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      level,
-      message,
-      details,
-      timestamp: new Date().toLocaleString(),
+  async openPlayground(provider: Provider, model: Model | (ModelDraft & { id?: string; name?: string })): Promise<void> {
+    const panel = vscode.window.createWebviewPanel(
+      "addiPlayground",
+      `Playground · ${model.name || model.id || "model"}`,
+      vscode.ViewColumn.Active,
+      { enableScripts: true, retainContextWhenHidden: true }
+    );
+
+    const history: ChatMessage[] = [];
+    const presetKey = `addi.playground.params`; // global per workspace
+    const stored = this.context?.workspaceState.get<any>(presetKey);
+    let temperature = typeof stored?.temperature === "number" ? stored.temperature : 0.7;
+    let topP: number | undefined = typeof stored?.topP === "number" ? stored.topP : 1.0;
+    let maxOutputTokens: number | undefined = typeof stored?.maxOutputTokens === "number" ? stored.maxOutputTokens : (model.maxOutputTokens || 1024);
+    let presencePenalty: number | undefined = typeof stored?.presencePenalty === "number" ? stored.presencePenalty : 0;
+    let frequencyPenalty: number | undefined = typeof stored?.frequencyPenalty === "number" ? stored.frequencyPenalty : 0;
+    let systemPrompt: string | undefined = typeof stored?.systemPrompt === "string" ? stored.systemPrompt : undefined;
+    const saveParams = () => {
+      void this.context?.workspaceState.update(presetKey, {
+        temperature,
+        topP,
+        maxOutputTokens,
+        presencePenalty,
+        frequencyPenalty,
+        systemPrompt,
+      });
     };
-  }
 
-  private appendLog(session: DebugSessionState, entry: DebugLogEntry): void {
-    session.logs.push(entry);
-    session.panel.appendLog(entry);
-  }
-
-  private async exportDebugLogs(session: DebugSessionState): Promise<void> {
-    if (session.logs.length === 0) {
-      UserFeedback.showWarning("No logs available for export");
-      return;
+    try {
+      if (!this.context) { throw new Error("No extension context"); }
+      const fileUri = vscode.Uri.joinPath(this.context.extensionUri, "resources", "playground.html");
+      const bytes = await vscode.workspace.fs.readFile(fileUri);
+      let html = new TextDecoder().decode(bytes);
+      // 注入 webview.cspSource 以允许加载本地资源（保留固定 nonce=PLAYGROUND 的 inline script）
+      const cspSource = panel.webview.cspSource;
+      html = html.replace(/script-src 'nonce-PLAYGROUND';/, `script-src 'nonce-PLAYGROUND' ${cspSource};`);
+      panel.webview.html = html;
+    } catch (e) {
+      panel.webview.html = this.createPlaygroundHtml();
+      console.warn('[Addi] Failed to load playground.html from extension path:', e);
     }
 
-    const safeFileName = `addi-${session.provider.name}-${session.model.name}-logs.json`.replace(/[\\/:*?"<>|]/g, "_");
-    const uri = await vscode.window.showSaveDialog({
-      title: "Export Model Debug Logs",
-      filters: { JSON: ["json"] },
-      defaultUri: vscode.Uri.file(safeFileName),
-    });
+    const postInit = () => {
+      panel.webview.postMessage({
+        type: "playgroundInit",
+        payload: {
+          providerId: provider.id,
+          providerName: provider.name,
+          modelId: model.id,
+          modelName: model.name || model.id,
+          params: { temperature, topP, maxOutputTokens, presencePenalty, frequencyPenalty, systemPrompt },
+        },
+      });
+    };
 
-    if (!uri) {
-      return;
-    }
-
-    const data = JSON.stringify(session.logs, null, 2);
-    const encoded = new TextEncoder().encode(data);
-    await vscode.workspace.fs.writeFile(uri, encoded);
-    UserFeedback.showInfo(`Logs exported to ${uri.fsPath}`);
-  }
-
-  private async handleDebugMessage(sessionKey: string, message: DebugPanelContextMessage): Promise<void> {
-    const session = this.debugSessions.get(sessionKey);
-    if (!session) {
-      return;
-    }
-
-    switch (message.type) {
-      case "sendRequest": {
-        const prompt = (message.prompt ?? "").trim();
-        if (!prompt) {
-          session.panel.postError("Please enter a prompt");
-          return;
+    panel.webview.onDidReceiveMessage(async (msg) => {
+      if (msg?.type === "playgroundSend") {
+        const prompt: string = (msg.prompt || "").trim();
+        if (!prompt) { return; }
+        // 每次发送新请求时重置上一次的 abortController
+        let streamAbort: AbortController | undefined;
+        const localTemp = typeof msg.temperature === "number" ? msg.temperature : temperature;
+        temperature = localTemp;
+        if (typeof msg.topP === "number") { topP = Math.min(Math.max(msg.topP, 0), 1); }
+        if (typeof msg.maxOutputTokens === "number") {
+          const v = Math.floor(msg.maxOutputTokens);
+          if (isFinite(v) && v > 0) { maxOutputTokens = Math.min(Math.max(v, 1), 8192); }
         }
-
-        const interactionId = message.interactionId ?? `interaction-${Date.now()}`;
-        const hasTemperature = typeof message.temperature === "number";
-        const temperature = hasTemperature ? (message.temperature as number) : undefined;
-        const history = [...session.history];
-
-        this.appendLog(
-          session,
-          this.createLogEntry("debug", "Preparing to invoke model", {
-            provider: session.provider.name,
-            model: session.model.name,
-            temperature: hasTemperature ? temperature : undefined,
-            historyLength: history.length,
-          })
-        );
-
-        session.panel.postBusyState(true);
-
+        if (typeof msg.presencePenalty === "number") { presencePenalty = Math.min(Math.max(msg.presencePenalty, -2), 2); }
+        if (typeof msg.frequencyPenalty === "number") { frequencyPenalty = Math.min(Math.max(msg.frequencyPenalty, -2), 2); }
+        if (typeof msg.systemPrompt === "string") {
+          const sp = msg.systemPrompt.trim();
+          systemPrompt = sp.length ? sp : undefined;
+        }
         try {
-          const requestOptions: ChatRequestOptions = {
-            prompt,
-            conversation: history,
-          };
-          if (hasTemperature && typeof temperature === "number") {
-            requestOptions.temperature = temperature;
-          }
-
-          const result = await invokeChatCompletion(session.provider, session.model, requestOptions);
-
-          const interaction: DebugInteraction = {
-            id: interactionId,
-            prompt,
-            responseText: result.responseText || "",
-            timestamp: new Date().toLocaleString(),
-            latencyMs: result.latencyMs,
-            requestPayload: result.requestPayload,
-            responsePayload: result.responsePayload,
-          };
-
-          session.panel.postInteraction(interaction);
-          this.appendLog(
-            session,
-            this.createLogEntry("info", `Request sent (${result.providerType})`, {
-              endpoint: result.endpoint,
-              requestPayload: result.requestPayload,
-            })
-          );
-          this.appendLog(
-            session,
-            this.createLogEntry("info", "Received model response", {
-              responseText: interaction.responseText,
-              responsePayload: result.responsePayload,
-              latencyMs: result.latencyMs,
-            })
-          );
-
-          session.history.push({ role: "user", content: prompt });
-          if (interaction.responseText) {
-            session.history.push({ role: "assistant", content: interaction.responseText });
+          const convo = systemPrompt ? [{ role: "system", content: systemPrompt } as ChatMessage, ...history] : [...history];
+          const req: any = { prompt, conversation: convo, temperature: localTemp, overrideMaxOutputTokens: maxOutputTokens };
+          if (typeof topP === "number") { req.topP = topP; }
+          if (typeof presencePenalty === "number") { req.presencePenalty = presencePenalty; }
+          if (typeof frequencyPenalty === "number") { req.frequencyPenalty = frequencyPenalty; }
+          const useStream = msg.stream === true;
+          history.push({ role: "user", content: prompt });
+          if (useStream) {
+            streamAbort = new AbortController();
+            req.signal = streamAbort.signal;
+            (panel as any)._addiCurrentAbort = streamAbort; // 绑定到 panel 实例便于后续 abort
+            let assembled = "";
+            try {
+              for await (const chunk of streamChatCompletion(provider as any, model as any, req)) {
+                if (chunk.type === "delta" && chunk.deltaText) {
+                  assembled += chunk.deltaText;
+                  panel.webview.postMessage({ type: "playgroundStreamDelta", payload: { delta: chunk.deltaText, full: assembled } });
+                } else if (chunk.type === "done") {
+                  history.push({ role: "assistant", content: assembled });
+                  panel.webview.postMessage({ type: "playgroundResponse", payload: { text: assembled } });
+                } else if (chunk.type === "error") {
+                  if (chunk.error === "aborted") {
+                    panel.webview.postMessage({ type: "playgroundError", payload: { message: "aborted" } });
+                  } else {
+                    panel.webview.postMessage({ type: "playgroundError", payload: { message: chunk.error || "stream error" } });
+                  }
+                }
+              }
+            } finally {
+              (panel as any)._addiCurrentAbort = undefined;
+            }
+          } else {
+            const result = await invokeChatCompletion(provider as any, model as any, req);
+            if (result.responseText) { history.push({ role: "assistant", content: result.responseText }); }
+            panel.webview.postMessage({ type: "playgroundResponse", payload: { text: result.responseText || "" } });
           }
         } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error);
-          session.panel.postError(`Model invocation failed: ${msg}`, error instanceof Error ? { stack: error.stack } : undefined);
-          this.appendLog(
-            session,
-            this.createLogEntry("error", `Model invocation failed: ${msg}`, {
-              prompt,
-              temperature: hasTemperature ? temperature : undefined,
-            })
-          );
-        } finally {
-          session.panel.postBusyState(false);
+          panel.webview.postMessage({ type: "playgroundError", payload: { message: error instanceof Error ? error.message : String(error) } });
         }
-        break;
+      } else if (msg?.type === "playgroundSetParams") {
+        if (typeof msg.temperature === "number") { temperature = msg.temperature; }
+        if (typeof msg.topP === "number") { topP = Math.min(Math.max(msg.topP, 0), 1); }
+        if (typeof msg.maxOutputTokens === "number") {
+          const v = Math.floor(msg.maxOutputTokens);
+          if (isFinite(v) && v > 0) { maxOutputTokens = Math.min(Math.max(v, 1), 8192); }
+        }
+        if (typeof msg.presencePenalty === "number") { presencePenalty = Math.min(Math.max(msg.presencePenalty, -2), 2); }
+        if (typeof msg.frequencyPenalty === "number") { frequencyPenalty = Math.min(Math.max(msg.frequencyPenalty, -2), 2); }
+        if (typeof msg.systemPrompt === "string") {
+          const sp = msg.systemPrompt.trim();
+          systemPrompt = sp.length ? sp : undefined;
+        }
+        saveParams();
+      } else if (msg?.type === "playgroundReset") {
+          const ac: AbortController | undefined = (panel as any)._addiCurrentAbort;
+          if (ac) {
+            ac.abort();
+            (panel as any)._addiCurrentAbort = undefined;
+          }
+        history.length = 0;
+        panel.webview.postMessage({ type: "playgroundResetAck" });
+      } else if (msg?.type === "playgroundAbort") {
+        const ac: AbortController | undefined = (panel as any)._addiCurrentAbort;
+        if (ac) {
+          ac.abort();
+          (panel as any)._addiCurrentAbort = undefined;
+        }
       }
-      case "clearLog":
-        session.logs = [];
-        break;
-      case "exportLog":
-        await this.exportDebugLogs(session);
-        break;
-      default:
-        break;
-    }
-  }
-
-  async useModel(item: ModelTreeItem): Promise<void> {
-    const result = this.manager.findModel(item.model.id);
-    if (!result) {
-      UserFeedback.showError("Cannot find the specified model");
-      return;
-    }
-
-    const { provider, model } = result;
-    const sessionKey = this.getSessionKey(provider.id, model.id);
-
-    const panel = ModelDebugPanel.createOrShow(this.context, provider, model, (message) => {
-      void this.handleDebugMessage(sessionKey, message);
     });
 
-    let session = this.debugSessions.get(sessionKey);
-
-    if (!session) {
-      session = {
-        panel,
-        provider,
-        model,
-        history: [],
-        logs: [],
-      };
-      this.debugSessions.set(sessionKey, session);
-      panel.onDidDispose(() => this.debugSessions.delete(sessionKey));
-      this.appendLog(
-        session,
-        this.createLogEntry("info", "Model debug panel opened", {
-          provider: provider.name,
-          model: model.name,
-        })
-      );
-    } else {
-      session.panel = panel;
-      session.provider = provider;
-      session.model = model;
-    }
+    // 初始化消息
+    postInit();
   }
 
   async addProvider(): Promise<void> {

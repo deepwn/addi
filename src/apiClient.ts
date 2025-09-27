@@ -12,6 +12,10 @@ export interface ChatRequestOptions {
   temperature?: number;
   conversation?: ChatMessage[];
   maxOutputTokens?: number;
+  topP?: number;
+  overrideMaxOutputTokens?: number;
+  presencePenalty?: number;
+  frequencyPenalty?: number;
   signal?: AbortSignal;
 }
 
@@ -22,6 +26,112 @@ export interface ChatResponse {
   responsePayload: unknown;
   responseText: string;
   latencyMs: number;
+}
+
+export interface ChatStreamChunk {
+  type: "delta" | "done" | "error";
+  deltaText?: string;
+  fullText?: string;
+  error?: string;
+}
+
+/**
+ * 将 OpenAI / 兼容 SSE 行解析成 json 对象（忽略空行与以 : 开头的注释）
+ */
+export function parseSseLine(line: string): any | undefined {
+  if (!line) { return undefined; }
+  if (line.startsWith(":")) { return undefined; }
+  const prefix = "data:";
+  if (!line.startsWith(prefix)) { return undefined; }
+  const data = line.slice(prefix.length).trim();
+  if (data === "[DONE]") { return { done: true }; }
+  try {
+    return JSON.parse(data);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * OpenAI / 兼容 SSE 流式调用（目前仅支持 chat.completions 风格）。
+ * Anthropic / Google 暂未接入流式（后续可扩展）。
+ */
+export async function *streamChatCompletion(provider: Provider, model: Model, options: ChatRequestOptions): AsyncGenerator<ChatStreamChunk> {
+  const apiEndpoint = provider.apiEndpoint?.trim();
+  const apiKey = provider.apiKey?.trim();
+  if (!apiEndpoint) { yield { type: "error", error: "unconfigured API endpoint" }; return; }
+  if (!apiKey) { yield { type: "error", error: "unconfigured API key" }; return; }
+  if (!(isOpenAiEndpoint(apiEndpoint) || !isAnthropicEndpoint(apiEndpoint) && !isGoogleEndpoint(apiEndpoint))) {
+    // 仅在 openai 或 generic 情况下启用，其他 provider 回退错误（可未来扩展）
+    yield { type: "error", error: "Streaming currently only supported for OpenAI / OpenAI-compatible endpoints" };
+    return;
+  }
+  const messages = buildConversation(options.conversation ?? [], options.prompt);
+  const requestedMax = options.overrideMaxOutputTokens ?? options.maxOutputTokens ?? model.maxOutputTokens;
+  const maxOutputTokens = ensureMaxTokens(requestedMax);
+  const modelIdentifier = resolveModelIdentifier(model);
+  const temperature = typeof options.temperature === "number" ? options.temperature : undefined;
+
+  const url = resolveChatCompletionsUrl(apiEndpoint, "https://api.openai.com/v1");
+  const payload: Record<string, unknown> = {
+    model: modelIdentifier,
+    messages: toOpenAiMessages(messages),
+    max_tokens: maxOutputTokens,
+    stream: true,
+  };
+  if (typeof temperature === "number") { payload["temperature"] = temperature; }
+  if (typeof options.topP === "number") { payload["top_p"] = Math.min(Math.max(options.topP, 0), 1); }
+  if (typeof options.presencePenalty === "number") { payload["presence_penalty"] = Math.min(Math.max(options.presencePenalty, -2), 2); }
+  if (typeof options.frequencyPenalty === "number") { payload["frequency_penalty"] = Math.min(Math.max(options.frequencyPenalty, -2), 2); }
+
+  // startedAt 可在后续需要 latency 时启用
+  let full = "";
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+      signal: options.signal ?? null,
+    });
+    if (!response.ok || !response.body) {
+      const errText = !response.ok ? await readResponseError(response) : "Readable stream not supported";
+      yield { type: "error", error: errText };
+      return;
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+  if (done) { break; }
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, idx).trim();
+        buffer = buffer.slice(idx + 1);
+        const parsed = parseSseLine(line);
+  if (!parsed) { continue; }
+        if (parsed.done) { break; }
+        const delta = parsed?.choices?.[0]?.delta?.content;
+        if (typeof delta === "string" && delta.length) {
+          full += delta;
+          yield { type: "delta", deltaText: delta, fullText: full };
+        }
+      }
+    }
+    // 完成
+    yield { type: "done", fullText: full };
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      yield { type: "error", error: "aborted" };
+    } else {
+      yield { type: "error", error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+  // latency 可在最后一帧由调用端计算，如需可扩展。
 }
 
 export async function invokeChatCompletion(provider: Provider, model: Model, options: ChatRequestOptions): Promise<ChatResponse> {
@@ -37,24 +147,25 @@ export async function invokeChatCompletion(provider: Provider, model: Model, opt
   }
 
   const messages = buildConversation(options.conversation ?? [], options.prompt);
-  const maxOutputTokens = ensureMaxTokens(options.maxOutputTokens ?? model.maxOutputTokens);
+  const requestedMax = options.overrideMaxOutputTokens ?? options.maxOutputTokens ?? model.maxOutputTokens;
+  const maxOutputTokens = ensureMaxTokens(requestedMax);
   const modelIdentifier = resolveModelIdentifier(model);
   const temperature = typeof options.temperature === "number" ? options.temperature : undefined;
   const signal = options.signal;
 
   if (isOpenAiEndpoint(apiEndpoint)) {
-    return await callOpenAi(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, signal);
+  return await callOpenAi(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, options.presencePenalty, options.frequencyPenalty, signal);
   }
 
   if (isAnthropicEndpoint(apiEndpoint)) {
-    return await callAnthropic(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, signal);
+  return await callAnthropic(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, signal);
   }
 
   if (isGoogleEndpoint(apiEndpoint)) {
-    return await callGoogle(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, signal);
+  return await callGoogle(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, signal);
   }
 
-  return await callGenericCompatible(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, signal);
+  return await callGenericCompatible(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, options.presencePenalty, options.frequencyPenalty, signal);
 }
 
 function buildConversation(history: ChatMessage[], prompt: string): ChatMessage[] {
@@ -186,6 +297,9 @@ async function callOpenAi(
   messages: ChatMessage[],
   maxOutputTokens: number,
   temperature: number | undefined,
+  topP: number | undefined,
+  presencePenalty: number | undefined,
+  frequencyPenalty: number | undefined,
   signal: AbortSignal | undefined
 ): Promise<ChatResponse> {
   const url = resolveChatCompletionsUrl(apiEndpoint, "https://api.openai.com/v1");
@@ -197,6 +311,17 @@ async function callOpenAi(
   };
   if (typeof temperature === "number") {
     requestPayload["temperature"] = temperature;
+  }
+  if (typeof topP === "number") {
+    // clamp 0..1 just in case
+    const v = Math.min(Math.max(topP, 0), 1);
+    requestPayload["top_p"] = v;
+  }
+  if (typeof presencePenalty === "number") {
+    requestPayload["presence_penalty"] = Math.min(Math.max(presencePenalty, -2), 2);
+  }
+  if (typeof frequencyPenalty === "number") {
+    requestPayload["frequency_penalty"] = Math.min(Math.max(frequencyPenalty, -2), 2);
   }
 
   const startedAt = Date.now();
@@ -233,6 +358,9 @@ async function callGenericCompatible(
   messages: ChatMessage[],
   maxOutputTokens: number,
   temperature: number | undefined,
+  topP: number | undefined,
+  presencePenalty: number | undefined,
+  frequencyPenalty: number | undefined,
   signal: AbortSignal | undefined
 ): Promise<ChatResponse> {
   const url = resolveChatCompletionsUrl(apiEndpoint, "https://api.openai.com/v1");
@@ -244,6 +372,16 @@ async function callGenericCompatible(
   };
   if (typeof temperature === "number") {
     requestPayload["temperature"] = temperature;
+  }
+  if (typeof topP === "number") {
+    const v = Math.min(Math.max(topP, 0), 1);
+    requestPayload["top_p"] = v;
+  }
+  if (typeof presencePenalty === "number") {
+    requestPayload["presence_penalty"] = Math.min(Math.max(presencePenalty, -2), 2);
+  }
+  if (typeof frequencyPenalty === "number") {
+    requestPayload["frequency_penalty"] = Math.min(Math.max(frequencyPenalty, -2), 2);
   }
 
   const startedAt = Date.now();
@@ -280,6 +418,7 @@ async function callAnthropic(
   messages: ChatMessage[],
   maxOutputTokens: number,
   temperature: number | undefined,
+  topP: number | undefined,
   signal: AbortSignal | undefined
 ): Promise<ChatResponse> {
   const baseUrl = normalizeBaseUrl(apiEndpoint, "https://api.anthropic.com");
@@ -296,6 +435,10 @@ async function callAnthropic(
   }
   if (typeof temperature === "number") {
     requestPayload["temperature"] = temperature;
+  }
+  if (typeof topP === "number") {
+    const v = Math.min(Math.max(topP, 0), 1);
+    requestPayload["top_p"] = v;
   }
 
   const startedAt = Date.now();
@@ -334,6 +477,7 @@ async function callGoogle(
   messages: ChatMessage[],
   maxOutputTokens: number,
   temperature: number | undefined,
+  topP: number | undefined,
   signal: AbortSignal | undefined
 ): Promise<ChatResponse> {
   const baseUrl = normalizeBaseUrl(apiEndpoint, "https://generativelanguage.googleapis.com/v1beta");
@@ -343,6 +487,10 @@ async function callGoogle(
   };
   if (typeof temperature === "number") {
     generationConfig["temperature"] = temperature;
+  }
+  if (typeof topP === "number") {
+    const v = Math.min(Math.max(topP, 0), 1);
+    generationConfig["topP"] = v; // Google uses camelCase topP
   }
 
   const requestPayload: Record<string, unknown> = {

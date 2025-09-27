@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; script-src 'nonce-PLAYGROUND';"
+    />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Addi Playground</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #101013;
+        --fg: #e4e6eb;
+        --muted: #9ca3af;
+        --border: rgba(118, 118, 128, 0.24);
+        --accent: #4c8bf5;
+        --surface: rgba(26, 26, 32, 0.85);
+        --surface-strong: rgba(18, 18, 24, 0.94);
+        --bubble-user: #2f3542;
+        --bubble-ai: #1f1f24;
+        --radius-lg: 16px;
+        font-family: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: radial-gradient(circle at top, rgba(76, 139, 245, 0.12), transparent 55%), var(--bg);
+        color: var(--fg);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        transition: background 0.4s ease;
+      }
+      body.landing .messages {
+        display: none;
+      }
+      body.landing .composer {
+        transform: translateY(-18vh);
+        padding-bottom: 64px;
+      }
+      body.chat-active .messages {
+        display: flex;
+      }
+      body.chat-active .composer {
+        transform: translateY(0);
+      }
+      body.settings-open {
+        overflow: hidden;
+      }
+
+      .app {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+
+      .top-bar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 24px 12px;
+        -webkit-backdrop-filter: blur(16px);
+        backdrop-filter: blur(16px);
+        background: linear-gradient(180deg, rgba(16, 16, 20, 0.95) 0%, rgba(16, 16, 20, 0.82) 60%, transparent 100%);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      }
+      .brand {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        font-weight: 600;
+        letter-spacing: 0.4px;
+      }
+      .brand-title {
+        font-size: 16px;
+        text-transform: uppercase;
+        opacity: 0.9;
+      }
+      .brand-model {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .top-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .model-chip {
+        font-size: 12px;
+        padding: 5px 10px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 999px;
+        opacity: 0.8;
+      }
+      .icon-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        background: transparent;
+        border: none;
+        color: var(--fg);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        transition: color 0.2s ease, transform 0.2s ease;
+      }
+      .icon-btn:hover {
+        color: #ffffff;
+        transform: translateY(-1px);
+      }
+      .icon-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .chat-shell {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0 16px 160px;
+        position: relative;
+      }
+      .hero {
+        max-width: 720px;
+        text-align: center;
+        margin: 72px auto 48px;
+        transition: opacity 0.35s ease, transform 0.35s ease;
+      }
+      .hero h1 {
+        margin: 0 0 14px;
+        font-size: 32px;
+        font-weight: 650;
+        letter-spacing: 0.5px;
+      }
+      .hero .subtitle {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+      body.chat-active .hero {
+        opacity: 0;
+        transform: translateY(-24px);
+        pointer-events: none;
+        height: 0;
+        margin: 0;
+      }
+
+      .settings-overlay {
+        position: fixed;
+        inset: 0;
+        display: none;
+        z-index: 100;
+      }
+      body.settings-open .settings-overlay {
+        display: block;
+      }
+      .settings-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(10, 10, 14, 0.6);
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+        opacity: 0;
+        animation: overlayFade 0.25s forwards ease;
+      }
+      .settings-drawer {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: min(420px, 90vw);
+        height: 100%;
+        background: rgba(20, 20, 28, 0.96);
+        border-left: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: -18px 0 60px rgba(0, 0, 0, 0.45);
+        padding: 28px 28px 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+        transform: translateX(100%);
+        animation: drawerSlide 0.3s forwards ease;
+      }
+      .settings-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .settings-title {
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .settings-close {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--fg);
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+      .settings-section {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        overflow-y: auto;
+        padding-right: 6px;
+      }
+      .settings-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 18px;
+      }
+      .field-group {
+        font-size: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field-label {
+        opacity: 0.75;
+      }
+      .code-val {
+        font-weight: 600;
+      }
+      .number-input,
+      .system-prompt,
+      input[type="range"] {
+        background: rgba(36, 36, 42, 0.95);
+        color: var(--fg);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 6px 10px;
+      }
+      input[type="range"] {
+        padding: 0;
+      }
+      .system-prompt {
+        min-height: 60px;
+        resize: vertical;
+        font-size: 12px;
+      }
+      .inline {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .checkbox {
+        transform: scale(1.05);
+      }
+      .narrow {
+        max-width: 140px;
+      }
+
+      .messages {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        width: 100%;
+        max-width: 860px;
+        overflow-y: auto;
+        padding: 16px 4px 140px;
+        scroll-behavior: smooth;
+      }
+      .msg {
+        display: flex;
+        gap: 12px;
+        width: 100%;
+      }
+      .msg.user {
+        justify-content: flex-end;
+      }
+      .msg.assistant {
+        justify-content: flex-start;
+      }
+      .bubble {
+        max-width: 90%;
+        padding: 14px 16px;
+        border-radius: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        line-height: 1.6;
+        font-size: 14px;
+        white-space: pre-wrap;
+      }
+      .msg.user .bubble {
+        background: var(--bubble-user);
+        border-bottom-right-radius: 8px;
+      }
+      .msg.assistant .bubble {
+        background: var(--bubble-ai);
+        border-bottom-left-radius: 8px;
+      }
+
+      .composer {
+        position: sticky;
+        bottom: 0;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        padding: 14px 16px 24px;
+        background: linear-gradient(180deg, transparent 0%, rgba(16, 16, 20, 0.85) 40%, rgba(16, 16, 20, 0.95) 100%);
+        transition: transform 0.35s ease, padding 0.3s ease, background 0.35s ease;
+        -webkit-backdrop-filter: blur(18px);
+        backdrop-filter: blur(18px);
+        z-index: 25;
+      }
+      .composer-shell {
+        width: 100%;
+        max-width: 860px;
+        background: rgba(22, 22, 28, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        padding: 12px 14px 12px 18px;
+        display: flex;
+        gap: 14px;
+        /* 垂直居中子项，使单行 textarea 在容器内看起来更居中 */
+        align-items: center;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+      }
+      textarea#chatInput {
+        flex: 1;
+        background: transparent;
+        border: none;
+        resize: none;
+        color: var(--fg);
+        font-size: 14px;
+        line-height: 20px;
+        /* 增加上下内边距并设定行高，使占位符在单行时视觉垂直居中 */
+        padding: 8px 0;
+        min-height: 38px;
+        max-height: 220px;
+      }
+      textarea#chatInput:focus {
+        outline: none;
+      }
+
+      .composer-actions {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+      }
+      button.send {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        padding: 0 20px;
+        height: 38px;
+        border-radius: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      button.send:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(76, 139, 245, 0.35);
+      }
+      button.send:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+      }
+
+      .cancel {
+        background: #b34747;
+        display: none;
+      }
+      .cancel:hover {
+        background: #c15a5a;
+        box-shadow: 0 6px 18px rgba(224, 101, 101, 0.35);
+      }
+
+      @keyframes overlayFade {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes drawerSlide {
+        from {
+          transform: translateX(16%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+    </style>
+  </head>
+  <body class="landing">
+    <div class="app">
+      <header class="top-bar">
+        <div class="brand">
+          <span class="brand-title">Addi Playground</span>
+          <span
+            class="brand-model"
+            id="chatTitle"
+          ></span>
+        </div>
+        <div class="top-actions">
+          <span
+            class="model-chip"
+            id="modelTag"
+          ></span>
+          <button
+            class="icon-btn"
+            id="headerSettings"
+            title="参数设置"
+          >
+            ⚙
+          </button>
+        </div>
+      </header>
+      <main class="chat-shell">
+        <section
+          class="hero"
+          id="hero"
+        >
+          <h1>快速测试你的自定义模型</h1>
+          <p class="subtitle">输入第一条提示词，实时查看响应。右上角的设置按钮可以调整温度、Top P、最大输出 Token 等参数。</p>
+        </section>
+        <section
+          class="messages"
+          id="messages"
+        ></section>
+      </main>
+      <footer
+        class="composer"
+        id="composer"
+      >
+        <div class="composer-shell">
+          <textarea
+            id="chatInput"
+            rows="1"
+            placeholder="输入你的问题... (Ctrl+Enter 快速发送)"
+          ></textarea>
+          <div class="composer-actions">
+            <button
+              class="send"
+              id="sendBtn"
+            >
+              发送
+            </button>
+            <button
+              class="send cancel"
+              id="cancelBtn"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      </footer>
+      <div
+        class="settings-overlay"
+        id="settingsOverlay"
+        aria-hidden="true"
+      >
+        <div
+          class="settings-backdrop"
+          id="settingsBackdrop"
+        ></div>
+        <aside
+          class="settings-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="settingsTitle"
+        >
+          <div class="settings-header">
+            <span
+              class="settings-title"
+              id="settingsTitle"
+              >参数设置</span
+            >
+            <button
+              class="settings-close"
+              id="settingsClose"
+              title="关闭设置"
+            >
+              ✕
+            </button>
+          </div>
+          <div class="settings-section">
+            <div class="settings-grid">
+              <label class="field-group">
+                <span class="field-label"
+                  >Temperature
+                  <span
+                    id="tempValue"
+                    class="code-val"
+                    >0.7</span
+                  ></span
+                >
+                <input
+                  id="temperature"
+                  type="range"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  value="0.7"
+                />
+              </label>
+              <label class="field-group">
+                <span class="field-label"
+                  >Top P
+                  <span
+                    id="topPValue"
+                    class="code-val"
+                    >1.0</span
+                  ></span
+                >
+                <input
+                  id="topP"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value="1"
+                />
+              </label>
+              <label class="field-group">
+                <span class="field-label">Max Output Tokens</span>
+                <input
+                  id="maxOut"
+                  class="number-input"
+                  type="number"
+                  min="1"
+                  max="4096"
+                  value="1024"
+                />
+              </label>
+              <label class="field-group">
+                <span class="field-label"
+                  >Presence Penalty
+                  <span
+                    id="presenceValue"
+                    class="code-val"
+                    >0</span
+                  ></span
+                >
+                <input
+                  id="presencePenalty"
+                  type="range"
+                  min="-2"
+                  max="2"
+                  step="0.1"
+                  value="0"
+                />
+              </label>
+              <label class="field-group">
+                <span class="field-label"
+                  >Frequency Penalty
+                  <span
+                    id="frequencyValue"
+                    class="code-val"
+                    >0</span
+                  ></span
+                >
+                <input
+                  id="frequencyPenalty"
+                  type="range"
+                  min="-2"
+                  max="2"
+                  step="0.1"
+                  value="0"
+                />
+              </label>
+              <label class="field-group narrow">
+                <span class="field-label">Streaming</span>
+                <div class="inline">
+                  <input
+                    id="useStream"
+                    class="checkbox"
+                    type="checkbox"
+                    checked
+                  />
+                </div>
+              </label>
+            </div>
+            <label class="field-group">
+              <span class="field-label">System Prompt</span>
+              <textarea
+                id="systemPrompt"
+                class="system-prompt"
+                placeholder="(可选) 指定系统指令，例如: 你是一个专业的助手"
+              ></textarea>
+            </label>
+          </div>
+        </aside>
+      </div>
+    </div>
+    <script nonce="PLAYGROUND">
+      (function () {
+        const vscode = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : undefined;
+        const root = document.body;
+        const messagesEl = document.getElementById("messages");
+        const chatInput = document.getElementById("chatInput");
+        const sendBtn = document.getElementById("sendBtn");
+        const cancelBtn = document.getElementById("cancelBtn");
+        const modelTag = document.getElementById("modelTag");
+        const chatTitle = document.getElementById("chatTitle");
+        const settingsOverlay = document.getElementById("settingsOverlay");
+        const settingsBackdrop = document.getElementById("settingsBackdrop");
+        const settingsClose = document.getElementById("settingsClose");
+        const headerSettings = document.getElementById("headerSettings");
+        let busy = false;
+        let started = false;
+        let focusTimer;
+
+        if (cancelBtn) {
+          cancelBtn.style.display = "none";
+        }
+
+        function ensureStarted() {
+          if (started) {
+            return;
+          }
+          started = true;
+          root.classList.remove("landing");
+          root.classList.add("chat-active");
+          setTimeout(() => {
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+          }, 120);
+          focusComposer(200);
+        }
+
+        function autoResize() {
+          if (!chatInput) {
+            return;
+          }
+          chatInput.style.height = "auto";
+          chatInput.style.height = Math.min(chatInput.scrollHeight, 220) + "px";
+        }
+        if (chatInput) {
+          chatInput.addEventListener("input", autoResize);
+          autoResize();
+          focusComposer(150);
+        }
+
+        function scrollToBottom(behavior = started ? "smooth" : "auto") {
+          messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior });
+        }
+
+        function focusComposer(delay = 0) {
+          if (!chatInput) {
+            return;
+          }
+          if (focusTimer) {
+            clearTimeout(focusTimer);
+          }
+          focusTimer = window.setTimeout(() => {
+            if (!chatInput || root.classList.contains("settings-open")) {
+              return;
+            }
+            try {
+              chatInput.focus({ preventScroll: true });
+            } catch (_error) {
+              try {
+                chatInput.focus();
+              } catch (_inner) {
+                /* ignore */
+              }
+            }
+          }, delay);
+        }
+
+        function append(role, text) {
+          ensureStarted();
+          const wrapper = document.createElement("div");
+          wrapper.className = `msg ${role}`;
+          const bubble = document.createElement("div");
+          bubble.className = "bubble";
+          bubble.textContent = text;
+          wrapper.appendChild(bubble);
+          messagesEl.appendChild(wrapper);
+          scrollToBottom();
+          if (role === "user") {
+            focusComposer(100);
+          }
+          return wrapper;
+        }
+
+        function setBusy(v) {
+          busy = v;
+          if (sendBtn) {
+            sendBtn.disabled = v;
+            sendBtn.style.display = v ? "none" : "inline-flex";
+          }
+          if (cancelBtn) {
+            cancelBtn.style.display = v ? "inline-flex" : "none";
+            cancelBtn.disabled = !v;
+          }
+        }
+
+        if (cancelBtn) {
+          cancelBtn.addEventListener("click", () => {
+            if (!busy) {
+              return;
+            }
+            vscode && vscode.postMessage({ type: "playgroundAbort" });
+          });
+        }
+
+        function openSettings() {
+          if (!settingsOverlay) {
+            return;
+          }
+          root.classList.add("settings-open");
+          settingsOverlay.setAttribute("aria-hidden", "false");
+          setTimeout(() => {
+            const initial = settingsOverlay.querySelector("input, textarea, button");
+            if (initial && typeof initial.focus === "function") {
+              initial.focus();
+            }
+          }, 80);
+        }
+
+        function closeSettings() {
+          if (!settingsOverlay) {
+            return;
+          }
+          root.classList.remove("settings-open");
+          settingsOverlay.setAttribute("aria-hidden", "true");
+          focusComposer(80);
+        }
+
+        if (headerSettings) {
+          headerSettings.addEventListener("click", (event) => {
+            event.preventDefault();
+            if (root.classList.contains("settings-open")) {
+              closeSettings();
+            } else {
+              openSettings();
+            }
+          });
+        }
+
+        if (settingsClose) {
+          settingsClose.addEventListener("click", (event) => {
+            event.preventDefault();
+            closeSettings();
+          });
+        }
+
+        if (settingsOverlay) {
+          settingsOverlay.addEventListener("click", (event) => {
+            if (event.target === settingsOverlay || event.target === settingsBackdrop) {
+              closeSettings();
+            }
+          });
+        }
+
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape" && root.classList.contains("settings-open")) {
+            event.preventDefault();
+            closeSettings();
+          }
+        });
+
+        function currentTemperature() {
+          const el = document.getElementById("temperature");
+          return el ? parseFloat(el.value) : 0.7;
+        }
+        function currentTopP() {
+          const el = document.getElementById("topP");
+          return el ? parseFloat(el.value) : 1.0;
+        }
+        function currentMaxOut() {
+          const el = document.getElementById("maxOut");
+          const v = el ? parseInt(el.value, 10) : 1024;
+          if (!isFinite(v) || v <= 0) return 128;
+          return Math.min(Math.max(v, 1), 8192);
+        }
+        function currentPresence() {
+          const el = document.getElementById("presencePenalty");
+          return el ? parseFloat(el.value) : 0;
+        }
+        function currentFrequency() {
+          const el = document.getElementById("frequencyPenalty");
+          return el ? parseFloat(el.value) : 0;
+        }
+        function currentSystemPrompt() {
+          const el = document.getElementById("systemPrompt");
+          return el ? el.value : "";
+        }
+
+        function sendPrompt(raw) {
+          const prompt = raw.trim();
+          if (!prompt) {
+            return;
+          }
+          append("user", prompt);
+          setBusy(true);
+          const stream = document.getElementById("useStream")?.checked === true;
+          vscode &&
+            vscode.postMessage({
+              type: "playgroundSend",
+              stream,
+              prompt,
+              temperature: currentTemperature(),
+              topP: currentTopP(),
+              maxOutputTokens: currentMaxOut(),
+              presencePenalty: currentPresence(),
+              frequencyPenalty: currentFrequency(),
+              systemPrompt: currentSystemPrompt(),
+            });
+          focusComposer(120);
+        }
+
+        const tempSlider = document.getElementById("temperature");
+        const tempValue = document.getElementById("tempValue");
+        if (tempSlider) {
+          tempSlider.addEventListener("input", () => {
+            if (tempValue) tempValue.textContent = tempSlider.value;
+            vscode && vscode.postMessage({ type: "playgroundSetParams", temperature: currentTemperature() });
+          });
+        }
+        const topPSlider = document.getElementById("topP");
+        const topPValue = document.getElementById("topPValue");
+        if (topPSlider) {
+          topPSlider.addEventListener("input", () => {
+            if (topPValue) topPValue.textContent = topPSlider.value;
+            vscode && vscode.postMessage({ type: "playgroundSetParams", topP: currentTopP() });
+          });
+        }
+        const maxOutInput = document.getElementById("maxOut");
+        if (maxOutInput) {
+          maxOutInput.addEventListener("change", () => {
+            vscode && vscode.postMessage({ type: "playgroundSetParams", maxOutputTokens: currentMaxOut() });
+          });
+        }
+        const presenceSlider = document.getElementById("presencePenalty");
+        const presenceValue = document.getElementById("presenceValue");
+        if (presenceSlider) {
+          presenceSlider.addEventListener("input", () => {
+            if (presenceValue) presenceValue.textContent = presenceSlider.value;
+            vscode && vscode.postMessage({ type: "playgroundSetParams", presencePenalty: currentPresence() });
+          });
+        }
+        const frequencySlider = document.getElementById("frequencyPenalty");
+        const frequencyValue = document.getElementById("frequencyValue");
+        if (frequencySlider) {
+          frequencySlider.addEventListener("input", () => {
+            if (frequencyValue) frequencyValue.textContent = frequencySlider.value;
+            vscode && vscode.postMessage({ type: "playgroundSetParams", frequencyPenalty: currentFrequency() });
+          });
+        }
+        const systemPrompt = document.getElementById("systemPrompt");
+        if (systemPrompt) {
+          systemPrompt.addEventListener("change", () => {
+            vscode && vscode.postMessage({ type: "playgroundSetParams", systemPrompt: currentSystemPrompt() });
+          });
+        }
+
+        function sendFromComposer() {
+          if (!chatInput) return;
+          const value = chatInput.value;
+          if (!value.trim()) return;
+          chatInput.value = "";
+          autoResize();
+          sendPrompt(value);
+        }
+
+        if (sendBtn) {
+          sendBtn.addEventListener("click", sendFromComposer);
+        }
+
+        if (chatInput) {
+          chatInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              sendFromComposer();
+            }
+          });
+        }
+
+        window.addEventListener("message", (event) => {
+          const msg = event.data;
+          if (msg.type === "playgroundInit") {
+            if (modelTag) {
+              modelTag.textContent = `${msg.payload.modelName} @ ${msg.payload.providerName}`;
+            }
+            if (chatTitle) {
+              chatTitle.textContent = `· ${msg.payload.modelName}`;
+            }
+            if (msg.payload.params) {
+              const p = msg.payload.params;
+              const setVal = (id, val, displayId) => {
+                const el = document.getElementById(id);
+                if (el) {
+                  el.value = String(val);
+                }
+                if (displayId) {
+                  const d = document.getElementById(displayId);
+                  if (d) {
+                    d.textContent = String(val);
+                  }
+                }
+              };
+              if (typeof p.temperature === "number") setVal("temperature", p.temperature, "tempValue");
+              if (typeof p.topP === "number") setVal("topP", p.topP, "topPValue");
+              if (typeof p.maxOutputTokens === "number") {
+                const el = document.getElementById("maxOut");
+                if (el) el.value = String(p.maxOutputTokens);
+              }
+              if (typeof p.presencePenalty === "number") setVal("presencePenalty", p.presencePenalty, "presenceValue");
+              if (typeof p.frequencyPenalty === "number") setVal("frequencyPenalty", p.frequencyPenalty, "frequencyValue");
+              if (typeof p.systemPrompt === "string") {
+                const sp = document.getElementById("systemPrompt");
+                if (sp) sp.value = p.systemPrompt;
+              }
+            }
+            focusComposer(200);
+          } else if (msg.type === "playgroundResponse") {
+            const nodes = messagesEl.querySelectorAll(".msg.assistant");
+            const last = nodes[nodes.length - 1];
+            if (last && last.getAttribute("data-stream-final") !== "true") {
+              const bubble = last.querySelector(".bubble") || last;
+              const existing = bubble.textContent ? bubble.textContent.trim() : "";
+              if (existing.length > 0) {
+                last.setAttribute("data-stream-final", "true");
+              } else {
+                bubble.textContent = msg.payload.text || "[空响应]";
+                last.setAttribute("data-stream-final", "true");
+              }
+            } else {
+              const wrapper = append("assistant", msg.payload.text || "[空响应]");
+              if (wrapper) {
+                wrapper.setAttribute("data-stream-final", "true");
+              }
+            }
+            setBusy(false);
+          } else if (msg.type === "playgroundError") {
+            if (msg.payload.message === "aborted") {
+              append("assistant", "[已取消]");
+            } else {
+              append("assistant", "错误: " + msg.payload.message);
+            }
+            setBusy(false);
+          } else if (msg.type === "playgroundStreamDelta") {
+            let nodes = messagesEl.querySelectorAll(".msg.assistant");
+            let target = nodes[nodes.length - 1];
+            if (!target || target.getAttribute("data-stream-final") === "true") {
+              append("assistant", "");
+              nodes = messagesEl.querySelectorAll(".msg.assistant");
+              target = nodes[nodes.length - 1];
+            }
+            const bubble = target.querySelector(".bubble") || target;
+            bubble.textContent = msg.payload.full || "";
+            scrollToBottom();
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

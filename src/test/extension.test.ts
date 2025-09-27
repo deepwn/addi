@@ -37,11 +37,13 @@ const mockWorkspace = {
   },
 };
 
-// 设置模拟
-Object.defineProperty(vscode, "workspace", {
-  value: mockWorkspace,
-  configurable: true,
-});
+// 设置模拟：仅在属性可配置或尚未定义时重写，避免 VS Code 运行时抛出 Cannot redefine property
+try {
+  const desc = Object.getOwnPropertyDescriptor(vscode, 'workspace');
+  if(!desc || desc.configurable){
+    Object.defineProperty(vscode, "workspace", { value: mockWorkspace, configurable: true });
+  }
+} catch { /* ignore override issues in real host */ }
 
 suite("Extension Test Suite", () => {
   vscode.window.showInformationMessage("Start all tests.");
@@ -228,24 +230,24 @@ suite("Extension Test Suite", () => {
   suite("InputValidator", () => {
     test("should validate name", () => {
       assert.strictEqual(InputValidator.validateName("Valid Name"), null);
-      assert.strictEqual(InputValidator.validateName(""), "名称不能为空");
-      assert.strictEqual(InputValidator.validateName("   "), "名称不能为空");
+      assert.strictEqual(InputValidator.validateName(""), "Name cannot be empty");
+      assert.strictEqual(InputValidator.validateName("   "), "Name cannot be empty");
     });
 
     test("should validate version", () => {
       assert.strictEqual(InputValidator.validateVersion("1.0.0"), null);
       assert.strictEqual(InputValidator.validateVersion("2.1"), null);
       assert.strictEqual(InputValidator.validateVersion("3"), null);
-      assert.strictEqual(InputValidator.validateVersion("invalid"), "版本号格式不正确，应为数字和点号组成");
-      assert.strictEqual(InputValidator.validateVersion("1.0."), "版本号格式不正确，应为数字和点号组成");
+      assert.strictEqual(InputValidator.validateVersion("invalid"), "Version format is invalid, it should consist of numbers and dots");
+      assert.strictEqual(InputValidator.validateVersion("1.0."), "Version format is invalid, it should consist of numbers and dots");
     });
 
     test("should validate tokens", () => {
       assert.strictEqual(InputValidator.validateTokens("4096"), null);
       assert.strictEqual(InputValidator.validateTokens("1024"), null);
-      assert.strictEqual(InputValidator.validateTokens("0"), "Token数必须是正整数");
-      assert.strictEqual(InputValidator.validateTokens("-1"), "Token数必须是正整数");
-      assert.strictEqual(InputValidator.validateTokens("invalid"), "Token数必须是正整数");
+      assert.strictEqual(InputValidator.validateTokens("0"), "Token count must be a positive integer");
+      assert.strictEqual(InputValidator.validateTokens("-1"), "Token count must be a positive integer");
+      assert.strictEqual(InputValidator.validateTokens("invalid"), "Token count must be a positive integer");
     });
   });
 

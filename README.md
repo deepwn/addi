@@ -290,3 +290,64 @@ npm run package ; npx vsce package
 ## 免责声明
 
 使用本项目时，您需自行承担风险。我们不对因使用本项目而导致的任何直接或间接损失负责。
+
+## Playground 参数支持（最新扩展）
+
+Playground 目前支持以下可调节参数（通过折叠的“参数设置”面板）：
+
+- Temperature (0 ~ 2)
+- Top P (0 ~ 1)
+- Max Output Tokens (1 ~ 8192，按 Provider 能力有效)
+- Presence Penalty (-2 ~ 2)
+- Frequency Penalty (-2 ~ 2)
+- System Prompt（可选，作为对话第一条 system 消息）
+
+参数变更通过前端向扩展发送 `playgroundSetParams` 消息；发送消息时使用最新参数集合调用后端 `invokeChatCompletion`。不被某些 Provider 支持的字段将被安全忽略。OpenAI 及兼容端点会收到 `top_p / presence_penalty / frequency_penalty`，Google 端点映射为 `topP`，Anthropic 目前仅使用 temperature / top_p（若其版本支持）与 max_tokens。
+
+### 流式响应 (Streaming)
+
+Playground 现在支持对 OpenAI / OpenAI 兼容端点进行 **SSE 流式输出**：
+
+1. 在“参数设置”面板勾选 `Streaming`（默认已勾选）。
+2. 发送消息后，模型回复将逐字增量出现在最新的 assistant 消息块中。
+3. 最终完成后该消息被标记为 `data-stream-final`（内部属性）。
+
+不支持流的 Provider（如当前的 Anthropic / Google 非兼容接口）会回退到普通非流式调用或返回错误提示。
+
+### 取消流式请求
+
+流式生成过程中可点击“取消”按钮：
+
+- 前端发送 `playgroundAbort` 消息，后端使用 `AbortController` 终止 Fetch。
+- 被取消的响应会在消息区显示 `[已取消]`。
+- 取消后可立即再次发送新请求。
+
+### 参数持久化
+
+Playground 使用 `workspaceState` 保存最近一次使用的参数集合（temperature / topP / maxOutputTokens / presencePenalty / frequencyPenalty / systemPrompt）。关闭并重新打开 VS Code 或新开 Playground 面板时会自动加载。
+
+### 错误处理
+
+- 网络 / API 错误会追加一条 `错误: <message>`。
+- 取消操作返回 `aborted` 并被格式化为 `[已取消]`。
+
+### 测试覆盖
+
+新增测试：
+
+- `streaming.test.ts`：验证 `parseSseLine` 与 `streamChatCompletion` 的增量拼接逻辑。
+- `persistence.test.ts`：验证参数裁剪与持久化规则（范围、上下限与空白处理）。
+
+执行命令（开发环境）：
+
+```powershell
+npm install
+npm test
+```
+
+### 后续可扩展方向
+
+- Anthropic / Google 流式接入
+- 前端 markdown 渲染（代码高亮）
+- Token 计数与速率限制提示
+- 参数预设多配置集（保存/切换多个 profile）
