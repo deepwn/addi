@@ -8,7 +8,28 @@ export class ProviderModelManager {
   constructor(private context: vscode.ExtensionContext) {}
 
   getProviders(): Provider[] {
-    return this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
+    const stored = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
+    let mutated = false;
+    for (const p of stored) {
+      if (!(p as any).providerType) {
+        // infer from apiEndpoint
+        const endpoint = (p.apiEndpoint || "").toLowerCase();
+        if (endpoint.includes("openai.com")) {
+          (p as any).providerType = "openai";
+        } else if (endpoint.includes("anthropic.com")) {
+          (p as any).providerType = "anthropic";
+        } else if (endpoint.includes("googleapis.com")) {
+          (p as any).providerType = "google";
+        } else {
+          (p as any).providerType = "generic";
+        }
+        mutated = true;
+      }
+    }
+    if (mutated) {
+      void this.saveProviders(stored); // fire-and-forget, no await in getter
+    }
+    return stored as Provider[];
   }
 
   async saveProviders(providers: Provider[]): Promise<void> {
@@ -22,6 +43,10 @@ export class ProviderModelManager {
       id: Date.now().toString(),
       models: [],
     };
+    // 确保 providerType 存在
+    if (!newProvider.providerType) {
+      newProvider.providerType = "generic";
+    }
     providers.push(newProvider);
     await this.saveProviders(providers);
     return newProvider;
@@ -35,6 +60,9 @@ export class ProviderModelManager {
         ...providers[index]!,
         ...providerData,
       };
+      if (!providers[index]!.providerType) {
+        providers[index]!.providerType = "generic";
+      }
       await this.saveProviders(providers);
       return true;
     }
@@ -146,6 +174,9 @@ export class ProviderTreeItem extends vscode.TreeItem {
     }
     if (provider.apiEndpoint) {
       tooltip += `\nAPI Endpoint: ${provider.apiEndpoint}`;
+    }
+    if (provider.providerType) {
+      tooltip += `\nType: ${provider.providerType}`;
     }
     this.tooltip = tooltip;
   }

@@ -64,22 +64,20 @@ export class CommandHandler {
     const subscription = token.onCancellationRequested(() => abortController.abort());
 
     try {
-      if (this.isOpenAiEndpoint(apiEndpoint)) {
-        await this.testOpenAiApi(apiEndpoint, apiKey, modelDraft, abortController.signal);
-        return;
+      switch (provider.providerType) {
+        case "openai":
+          await this.testOpenAiApi(apiEndpoint, apiKey, modelDraft, abortController.signal);
+          return;
+        case "anthropic":
+          await this.testAnthropicApi(apiEndpoint, apiKey, modelDraft, abortController.signal);
+          return;
+        case "google":
+          await this.testGoogleApi(apiEndpoint, apiKey, modelDraft, abortController.signal);
+          return;
+        default:
+          await this.testGenericOpenAiCompatibleApi(apiEndpoint, apiKey, modelDraft, abortController.signal);
+          return;
       }
-
-      if (this.isAnthropicEndpoint(apiEndpoint)) {
-        await this.testAnthropicApi(apiEndpoint, apiKey, modelDraft, abortController.signal);
-        return;
-      }
-
-      if (this.isGoogleEndpoint(apiEndpoint)) {
-        await this.testGoogleApi(apiEndpoint, apiKey, modelDraft, abortController.signal);
-        return;
-      }
-
-      await this.testGenericOpenAiCompatibleApi(apiEndpoint, apiKey, modelDraft, abortController.signal);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         throw new Error("Model API test canceled");
@@ -90,17 +88,7 @@ export class CommandHandler {
     }
   }
 
-  private isOpenAiEndpoint(endpoint: string): boolean {
-    return endpoint.includes("openai.com");
-  }
-
-  private isAnthropicEndpoint(endpoint: string): boolean {
-    return endpoint.includes("anthropic.com");
-  }
-
-  private isGoogleEndpoint(endpoint: string): boolean {
-    return endpoint.includes("googleapis.com");
-  }
+  // Endpoint pattern helpers removed: providerType 现在由用户显式选择，不再通过 endpoint 推断。
 
   private normalizeBaseUrl(endpoint: string | undefined, fallback: string): string {
     const base = (endpoint && endpoint.trim()) || fallback;
@@ -492,9 +480,42 @@ export class CommandHandler {
       value: "",
     });
 
+    // 先选择 providerType，再决定是否需要/如何填写 endpoint
+    const typePick = await vscode.window.showQuickPick(
+      [
+        { label: "OpenAI", value: "openai" },
+        { label: "Anthropic", value: "anthropic" },
+        { label: "Google", value: "google" },
+        { label: "Generic (OpenAI Compatible)", value: "generic" },
+      ],
+      { placeHolder: "Select provider type", canPickMany: false, title: "Provider Type" }
+    );
+    if (!typePick) {
+      UserFeedback.showWarning("Provider creation canceled (no type selected)");
+      return;
+    }
+    const providerType = typePick.value as Provider["providerType"];
+
+    // 不同类型给出默认 endpoint 建议（用户可修改）
+    let suggestedEndpoint = "";
+    switch (providerType) {
+      case "openai":
+        suggestedEndpoint = "https://api.openai.com/v1";
+        break;
+      case "anthropic":
+        suggestedEndpoint = "https://api.anthropic.com";
+        break;
+      case "google":
+        suggestedEndpoint = "https://generativelanguage.googleapis.com/v1beta";
+        break;
+      default:
+        suggestedEndpoint = ""; // generic 不强制
+        break;
+    }
+
     const apiEndpoint = await UserFeedback.showInputBox({
-      prompt: "Please enter the API endpoint (optional)",
-      value: "",
+      prompt: providerType === "generic" ? "Please enter the API endpoint" : "API endpoint (auto-filled, you can adjust)",
+      value: suggestedEndpoint,
     });
 
     const apiKey = await UserFeedback.showInputBox({
@@ -504,7 +525,7 @@ export class CommandHandler {
     });
 
     try {
-      const providerData: Omit<Provider, "id" | "models"> = { name };
+  const providerData: Omit<Provider, "id" | "models"> = { name, providerType };
 
       if (description) {
         providerData.description = description;
@@ -517,6 +538,9 @@ export class CommandHandler {
       }
       if (apiKey) {
         providerData.apiKey = apiKey;
+      }
+      if (providerType) {
+        providerData.providerType = providerType;
       }
 
       await this.manager.addProvider(providerData);
@@ -548,9 +572,41 @@ export class CommandHandler {
       value: item.provider.website || "",
     });
 
+    // 先选择 / 修改 providerType
+    const currentType = item.provider.providerType || "generic";
+    const typePick = await vscode.window.showQuickPick(
+      [
+        { label: "OpenAI", value: "openai", picked: currentType === "openai" },
+        { label: "Anthropic", value: "anthropic", picked: currentType === "anthropic" },
+        { label: "Google", value: "google", picked: currentType === "google" },
+        { label: "Generic (OpenAI Compatible)", value: "generic", picked: currentType === "generic" },
+      ],
+      { placeHolder: "Select provider type", canPickMany: false, title: "Provider Type" }
+    );
+    const providerType: Provider["providerType"] = (typePick?.value as Provider["providerType"]) || currentType;
+
+    // 如果之前没有 endpoint，且类型是已知的，给出默认建议
+    let suggestedEndpoint = item.provider.apiEndpoint || "";
+    if (!suggestedEndpoint) {
+      switch (providerType) {
+        case "openai":
+          suggestedEndpoint = "https://api.openai.com/v1";
+          break;
+        case "anthropic":
+          suggestedEndpoint = "https://api.anthropic.com";
+          break;
+        case "google":
+          suggestedEndpoint = "https://generativelanguage.googleapis.com/v1beta";
+          break;
+        default:
+          suggestedEndpoint = "";
+          break;
+      }
+    }
+
     const apiEndpoint = await UserFeedback.showInputBox({
-      prompt: "Edit API endpoint (optional)",
-      value: item.provider.apiEndpoint || "",
+      prompt: providerType === "generic" ? "Edit API endpoint (optional)" : "Edit API endpoint (auto-suggested; adjust if needed)",
+      value: suggestedEndpoint,
     });
 
     const apiKey = await UserFeedback.showInputBox({
@@ -560,7 +616,7 @@ export class CommandHandler {
     });
 
     try {
-      const providerData: Partial<Omit<Provider, "id" | "models">> = { name };
+  const providerData: Partial<Omit<Provider, "id" | "models">> = { name, providerType };
 
       if (description) {
         providerData.description = description;
@@ -574,6 +630,7 @@ export class CommandHandler {
       if (apiKey) {
         providerData.apiKey = apiKey;
       }
+      providerData.providerType = providerType;
 
       const success = await this.manager.updateProvider(item.provider.id, providerData);
       if (success) {
@@ -658,14 +715,8 @@ export class CommandHandler {
     // family 不再让用户输入，统一使用默认 "addi"。如后续需要多家族扩展，可在设置中开启高级模式再暴露输入。
     const family = "addi";
 
-    const version = await UserFeedback.showInputBox({
-      prompt: "Enter model version",
-      value: ConfigManager.getDefaultModelVersion(),
-      validateInput: InputValidator.validateVersion,
-    });
-    if (!version) {
-      return;
-    }
+    // 版本隐藏，默认 1.0.0
+    const version = "1.0.0";
 
     const maxInputTokensStr = await UserFeedback.showInputBox({
       prompt: "Enter max input tokens",
@@ -768,14 +819,8 @@ export class CommandHandler {
     // 编辑时同样隐藏 family，保持原值；若原值为空则回退 addi
     const family = (model.family && model.family.trim()) || "addi";
 
-    const version = await UserFeedback.showInputBox({
-      prompt: "Edit model version",
-      value: model.version,
-      validateInput: InputValidator.validateVersion,
-    });
-    if (!version) {
-      return;
-    }
+    // 编辑时隐藏版本，沿用原值，缺失则设为 1.0.0
+    const version = model.version || "1.0.0";
 
     const maxInputTokensStr = await UserFeedback.showInputBox({
       prompt: "Enter max input tokens",

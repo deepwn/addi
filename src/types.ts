@@ -9,9 +9,12 @@ export interface Model {
   toolCalling?: boolean;
 }
 
+export type ProviderType = "openai" | "anthropic" | "google" | "generic";
+
 export interface Provider {
   id: string;
   name: string;
+  providerType: ProviderType;
   description?: string;
   website?: string;
   apiEndpoint?: string;

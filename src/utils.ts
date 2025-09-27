@@ -20,16 +20,16 @@ export class ConfigManager {
 
 export class InputValidator {
   static validateName(name: string): string | null {
-    return name.trim().length > 0 ? null : "名称不能为空";
+    return name.trim().length > 0 ? null : "Name cannot be empty";
   }
 
   static validateVersion(version: string): string | null {
-    return /^\d+(\.\d+)*$/.test(version) ? null : "版本号格式不正确，应为数字和点号组成";
+    return /^\d+(\.\d+)*$/.test(version) ? null : "Version format is invalid, it should consist of numbers and dots";
   }
 
   static validateTokens(value: string): string | null {
     const num = Number(value);
-    return !isNaN(num) && num > 0 && Number.isInteger(num) ? null : "Token数必须是正整数";
+    return !isNaN(num) && num > 0 && Number.isInteger(num) ? null : "Token count must be a positive integer";
   }
 }
 
@@ -65,7 +65,7 @@ export class UserFeedback {
   }
 
   static async showConfirmDialog(message: string, modal: boolean = true): Promise<boolean> {
-    const result = await vscode.window.showWarningMessage(message, { modal }, "确定", "取消");
-    return result === "确定";
+    const result = await vscode.window.showWarningMessage(message, { modal }, "Confirm", "Cancel");
+    return result === "Confirm";
   }
 }
