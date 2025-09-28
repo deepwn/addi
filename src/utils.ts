@@ -13,6 +13,10 @@ export class ConfigManager {
     return this.getConfiguration().get<number>("defaultMaxOutputTokens", 1024);
   }
 
+  static getDefaultModelFamily(): string {
+    return this.getConfiguration().get<string>("defaultModelFamily", "Addi");
+  }
+
   static getDefaultModelVersion(): string {
     return this.getConfiguration().get<string>("defaultModelVersion", "1.0.0");
   }

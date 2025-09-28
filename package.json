@@ -151,6 +151,11 @@
           "default": 1024,
           "description": "Max output tokens"
         },
+        "addi.defaultModelFamily": {
+          "type": "string",
+          "default": "Addi",
+          "description": "Default model family to use for AI providers"
+        },
         "addi.defaultModelVersion": {
           "type": "string",
           "default": "1.0.0",
@@ -230,6 +235,12 @@
         "icon": "$(config-import-icon)",
         "category": "Addi"
       }
+    ,
+    {
+      "command": "addi.debug.printSettingsSyncState",
+      "title": "Addi: Print Settings Sync State",
+      "category": "Addi"
+    }
     ],
     "languageModelChatProviders": [
       {

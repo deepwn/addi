@@ -679,10 +679,10 @@ export class CommandHandler {
     }
 
     // family 不再让用户输入，统一使用默认 "addi"。如后续需要多家族扩展，可在设置中开启高级模式再暴露输入。
-    const family = "addi";
+    const family = ConfigManager.getDefaultModelFamily().trim() || "addi";
 
     // 版本隐藏，默认 1.0.0
-    const version = "1.0.0";
+    const version = ConfigManager.getDefaultModelVersion().trim() || "1.0.0";
 
     const maxInputTokensStr = await UserFeedback.showInputBox({
       prompt: "Enter max input tokens",

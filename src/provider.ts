@@ -3,7 +3,8 @@ import { Model, Provider } from "./types";
 import { ModelTreeItem } from "./model";
 
 export class ProviderModelManager {
-  private static readonly STORAGE_KEY = "addi.providers";
+  // Key used to persist providers in globalState and optionally sync via Settings Sync
+  public static readonly STORAGE_KEY = "addi.providers";
   private syncEnabled = false;
 
   constructor(private context: vscode.ExtensionContext) {}
@@ -18,6 +19,13 @@ export class ProviderModelManager {
     } else {
       this.context.globalState.setKeysForSync([]);
     }
+  }
+
+  /**
+   * 返回当前 settings sync 是否处于启用状态（由 extension 在激活阶段或配置变更时设置）
+   */
+  isSettingsSyncEnabled(): boolean {
+    return this.syncEnabled;
   }
 
   getProviders(): Provider[] {
