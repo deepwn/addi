@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as crypto from "crypto";
 import { ProviderModelManager, ProviderTreeItem, AddiTreeDataProvider } from "./provider";
 import { ModelTreeItem } from "./model";
 import { ConfigManager, InputValidator, UserFeedback } from "./utils";
@@ -880,6 +881,137 @@ export class CommandHandler {
     }
   }
 
+  private adjustExportUriForEncryption(uri: vscode.Uri, encrypted: boolean): vscode.Uri {
+    const lowerPath = uri.path.toLowerCase();
+    if (encrypted) {
+      if (lowerPath.endsWith(".encrypt.txt")) {
+        return uri;
+      }
+      const withoutExtension = uri.path.replace(/(\.[^/]+)?$/, "");
+      return uri.with({ path: `${withoutExtension}.encrypt.txt` });
+    }
+
+    if (lowerPath.endsWith(".encrypt.txt")) {
+      const base = uri.path.slice(0, -".encrypt.txt".length);
+      return uri.with({ path: `${base}.json` });
+    }
+
+    return uri;
+  }
+
+  private encodeProvidersForExport(providers: Provider[], password?: string): string {
+    const plainJson = JSON.stringify(providers, null, 2);
+    const plainBuffer = Buffer.from(plainJson, "utf8");
+
+    if (!password) {
+      return `b64:${plainBuffer.toString("base64")}`;
+    }
+
+    const salt = crypto.randomBytes(16);
+    const iv = crypto.randomBytes(12);
+    const key = crypto.pbkdf2Sync(password, salt, 100000, 32, "sha256");
+    const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+    const encrypted = Buffer.concat([cipher.update(plainBuffer), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+
+    const payload = {
+      v: 1,
+      salt: salt.toString("base64"),
+      iv: iv.toString("base64"),
+      tag: authTag.toString("base64"),
+      data: encrypted.toString("base64"),
+    } satisfies {
+      v: number;
+      salt: string;
+      iv: string;
+      tag: string;
+      data: string;
+    };
+
+    const payloadBuffer = Buffer.from(JSON.stringify(payload), "utf8");
+    return `aes:${payloadBuffer.toString("base64")}`;
+  }
+
+  private decodeProvidersFromContent(content: string, password?: string): Provider[] {
+    const trimmed = content.trim();
+
+    if (trimmed.startsWith("aes:")) {
+      if (!password) {
+        throw new Error("Password is required to import this encrypted configuration");
+      }
+
+      const payloadBase64 = trimmed.slice(4);
+      let payloadJson: string;
+      try {
+        payloadJson = Buffer.from(payloadBase64, "base64").toString("utf8");
+      } catch {
+        throw new Error("Encrypted configuration is not valid base64");
+      }
+
+      let payload:
+        | {
+            v: number;
+            salt: string;
+            iv: string;
+            tag: string;
+            data: string;
+          }
+        | undefined;
+      try {
+        payload = JSON.parse(payloadJson);
+      } catch {
+        throw new Error("Encrypted configuration payload is malformed");
+      }
+
+      if (!payload || payload.v !== 1 || !payload.salt || !payload.iv || !payload.tag || !payload.data) {
+        throw new Error("Encrypted configuration payload is incomplete");
+      }
+
+      let salt: Buffer;
+      let iv: Buffer;
+      let tag: Buffer;
+      let encrypted: Buffer;
+      try {
+        salt = Buffer.from(payload.salt, "base64");
+        iv = Buffer.from(payload.iv, "base64");
+        tag = Buffer.from(payload.tag, "base64");
+        encrypted = Buffer.from(payload.data, "base64");
+      } catch {
+        throw new Error("Encrypted configuration payload contains invalid base64 data");
+      }
+
+      const key = crypto.pbkdf2Sync(password, salt, 100000, 32, "sha256");
+      const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+      decipher.setAuthTag(tag);
+
+      let decrypted: Buffer;
+      try {
+        decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+      } catch {
+        throw new Error("Failed to decrypt configuration: invalid password or corrupted data");
+      }
+
+      try {
+        return JSON.parse(decrypted.toString("utf8")) as Provider[];
+      } catch {
+        throw new Error("Decrypted configuration has invalid format");
+      }
+    }
+
+    if (trimmed.startsWith("b64:")) {
+      const base64Payload = trimmed.slice(4);
+      let json: string;
+      try {
+        json = Buffer.from(base64Payload, "base64").toString("utf8");
+      } catch {
+        throw new Error("Configuration is not valid base64");
+      }
+      return JSON.parse(json) as Provider[];
+    }
+
+    return JSON.parse(trimmed) as Provider[];
+  }
+
   async exportConfig(): Promise<void> {
     try {
       const providers = this.manager.getProviders();
@@ -888,21 +1020,49 @@ export class CommandHandler {
         return;
       }
 
-      const uri = await vscode.window.showSaveDialog({
-        filters: { JSON: ["json"] },
-        title: "Export Configuration",
-        defaultUri: vscode.Uri.file("addi-config.json"),
+      const passwordInput = await UserFeedback.showInputBox({
+        prompt: "Enter password to encrypt configuration (optional)",
+        placeHolder: "Leave empty to export without encryption",
+        password: true,
+        value: "",
+        ignoreFocusOut: true,
       });
+
+      if (passwordInput === undefined) {
+        return;
+      }
+
+      const password = passwordInput.length > 0 ? passwordInput : undefined;
+      const encrypted = Boolean(password);
+
+      const defaultFileName = encrypted ? "addi-config.encrypt.txt" : "addi-config.json";
+      const firstWorkspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri;
+      const defaultUri = firstWorkspaceFolder ? vscode.Uri.joinPath(firstWorkspaceFolder, defaultFileName) : undefined;
+
+      const saveDialogOptions: vscode.SaveDialogOptions = {
+        filters: {
+          "Config Files": ["json", "txt"],
+          "All Files": ["*"]
+        },
+        title: "Export Configuration",
+      };
+
+      if (defaultUri) {
+        saveDialogOptions.defaultUri = defaultUri;
+      }
+
+      const uri = await vscode.window.showSaveDialog(saveDialogOptions);
 
       if (!uri) {
         return;
       }
 
+      const targetUri = this.adjustExportUriForEncryption(uri, encrypted);
+
       await UserFeedback.showProgress("Exporting configuration...", async (_progress, _token) => {
-        const data = JSON.stringify(providers, null, 2);
-        const encoded = new TextEncoder().encode(data);
-        await vscode.workspace.fs.writeFile(uri, encoded);
-        UserFeedback.showInfo(`Configuration exported to ${uri.fsPath}`);
+        const encoded = this.encodeProvidersForExport(providers, password);
+        await vscode.workspace.fs.writeFile(targetUri, Buffer.from(encoded, "utf8"));
+        UserFeedback.showInfo(`Configuration exported${password ? " (encrypted)" : ""} to ${targetUri.fsPath}`);
       });
     } catch (error) {
       UserFeedback.showError(`Failed to export configuration: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -921,10 +1081,32 @@ export class CommandHandler {
         return;
       }
 
+      const data = await vscode.workspace.fs.readFile(uri[0]!);
+      const content = new TextDecoder().decode(data);
+      const trimmedContent = content.trim();
+
+      let password: string | undefined;
+      if (trimmedContent.startsWith("aes:")) {
+        const passwordInput = await UserFeedback.showInputBox({
+          prompt: "Enter password to decrypt configuration",
+          password: true,
+          value: "",
+        });
+
+        if (passwordInput === undefined) {
+          return;
+        }
+
+        if (passwordInput.length === 0) {
+          UserFeedback.showError("Password is required to import encrypted configuration");
+          return;
+        }
+
+        password = passwordInput;
+      }
+
       await UserFeedback.showProgress("Importing configuration...", async (_progress, _token) => {
-        const data = await vscode.workspace.fs.readFile(uri[0]!);
-        const content = new TextDecoder().decode(data);
-        const providers = JSON.parse(content) as Provider[];
+        const providers = this.decodeProvidersFromContent(trimmedContent, password);
 
         if (!Array.isArray(providers)) {
           throw new Error("Configuration format is invalid");
