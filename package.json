@@ -215,67 +215,78 @@
     "commands": [
       {
         "command": "addi.manage",
-        "title": "Manage Sidebar",
+        "title": "Provider & Model Management",
+        "shortTitle": "Management",
         "icon": "$(settings-gear)",
         "category": "Addi"
       },
       {
         "command": "addi.addProvider",
         "title": "Add Provider",
+        "shortTitle": "Add",
         "icon": "$(add)",
         "category": "Addi"
       },
       {
         "command": "addi.editProvider",
         "title": "Edit Provider",
+        "shortTitle": "Edit",
         "icon": "$(edit)",
         "category": "Addi"
       },
       {
         "command": "addi.deleteProvider",
         "title": "Delete Provider",
+        "shortTitle": "Delete",
         "icon": "$(trash)",
         "category": "Addi"
       },
       {
         "command": "addi.addModel",
         "title": "Add Model",
+        "shortTitle": "Add",
         "icon": "$(add)",
         "category": "Addi"
       },
       {
         "command": "addi.editModel",
         "title": "Edit Model",
+        "shortTitle": "Edit",
         "icon": "$(edit)",
         "category": "Addi"
       },
       {
         "command": "addi.deleteModel",
         "title": "Delete Model",
+        "shortTitle": "Delete",
         "icon": "$(trash)",
         "category": "Addi"
       },
       {
         "command": "addi.useModel",
         "title": "Use Model",
+        "shortTitle": "Use",
         "icon": "$(use-model-icon)",
         "category": "Addi"
       },
       {
         "command": "addi.editApiKey",
         "title": "Edit API Key",
+        "shortTitle": "Key",
         "icon": "$(key)",
         "category": "Addi"
       },
       {
         "command": "addi.exportConfig",
         "title": "Export Configuration",
+        "shortTitle": "Export",
         "icon": "$(config-export-icon)",
         "category": "Addi"
       },
       {
         "command": "addi.importConfig",
         "title": "Import Configuration",
+        "shortTitle": "Import",
         "icon": "$(config-import-icon)",
         "category": "Addi"
       },
@@ -299,7 +310,7 @@
     "compile": "webpack",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
-    "vsix": "yarn package && npx --yes @vscode/vsce package --out addi.vsix",
+    "vsix": "yarn package && vsce package --baseImagesUrl https://raw.githubusercontent.com/deepwn/addi/refs/heads/main/resources/ --yarn",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "yarn compile-tests && yarn compile && yarn lint",
