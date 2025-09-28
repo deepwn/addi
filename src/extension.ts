@@ -6,6 +6,21 @@ import { ModelTreeItem } from "./model";
 
 export function activate(context: vscode.ExtensionContext) {
   const manager = new ProviderModelManager(context);
+  const applySettingsSyncPreference = () => {
+    const config = vscode.workspace.getConfiguration("addi");
+    const enableSync = config.get<boolean>("saveConfigToSettingsSync", true);
+    manager.setSettingsSync(Boolean(enableSync));
+  };
+
+  applySettingsSyncPreference();
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("addi.saveConfigToSettingsSync")) {
+        applySettingsSyncPreference();
+      }
+    })
+  );
 
   vscode.lm.registerLanguageModelChatProvider("addi-provider", new AddiChatProvider(manager));
 

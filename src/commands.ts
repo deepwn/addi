@@ -1041,7 +1041,7 @@ export class CommandHandler {
 
       const saveDialogOptions: vscode.SaveDialogOptions = {
         filters: {
-          "Config Files": ["json", "txt"],
+          "Config Files": ["json", "encrypt.txt"],
           "All Files": ["*"]
         },
         title: "Export Configuration",
@@ -1071,11 +1071,16 @@ export class CommandHandler {
 
   async importConfig(): Promise<void> {
     try {
-      const uri = await vscode.window.showOpenDialog({
-        filters: { JSON: ["json"] },
+      const openDialogOptions: vscode.OpenDialogOptions = {
+        filters: {
+          "Config Files": ["json", "encrypt.txt"],
+          "All Files": ["*"]
+        },
         title: "Import Configuration",
         canSelectMany: false,
-      });
+      };
+
+      const uri = await vscode.window.showOpenDialog(openDialogOptions);
 
       if (!uri || uri.length === 0) {
         return;

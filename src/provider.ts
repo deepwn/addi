@@ -4,8 +4,21 @@ import { ModelTreeItem } from "./model";
 
 export class ProviderModelManager {
   private static readonly STORAGE_KEY = "addi.providers";
+  private syncEnabled = false;
 
   constructor(private context: vscode.ExtensionContext) {}
+
+  setSettingsSync(enabled: boolean): void {
+    if (this.syncEnabled === enabled) {
+      return;
+    }
+    this.syncEnabled = enabled;
+    if (enabled) {
+      this.context.globalState.setKeysForSync([ProviderModelManager.STORAGE_KEY]);
+    } else {
+      this.context.globalState.setKeysForSync([]);
+    }
+  }
 
   getProviders(): Provider[] {
     const stored = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);

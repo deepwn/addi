@@ -25,6 +25,29 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "icons": {
+      "addi-icon": {
+        "description": "Addi Icon",
+        "default": {
+          "fontPath": "resources/icon.min.svg",
+          "fontCharacter": "\\e001"
+        }
+      },
+      "config-export-icon": {
+        "description": "Config Export Icon",
+        "default": {
+          "fontPath": "resources/export.min.svg",
+          "fontCharacter": "\\e002"
+        }
+      },
+      "config-import-icon": {
+        "description": "Config Import Icon",
+        "default": {
+          "fontPath": "resources/import.min.svg",
+          "fontCharacter": "\\e003"
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -129,64 +152,69 @@
           "type": "string",
           "default": "1.0.0",
           "description": "Default model version to use for AI providers"
+        },
+        "addi.saveConfigToSettingsSync": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to save the addi configuration to the vscode settings sync cloud"
         }
       }
     },
     "commands": [
       {
         "command": "addi.manage",
-        "title": "Manage AI Providers & Models",
-        "icon": "$(settings-gear)"
+        "title": "Addi: Manage Sidebar",
+        "icon": "$(addi-icon)"
       },
       {
         "command": "addi.addProvider",
-        "title": "Add Provider",
+        "title": "Addi: Add Provider",
         "icon": "$(add)"
       },
       {
         "command": "addi.editProvider",
-        "title": "Edit Provider",
+        "title": "Addi: Edit Provider",
         "icon": "$(edit)"
       },
       {
         "command": "addi.deleteProvider",
-        "title": "Delete Provider",
+        "title": "Addi: Delete Provider",
         "icon": "$(trash)"
       },
       {
         "command": "addi.addModel",
-        "title": "Add Model",
+        "title": "Addi: Add Model",
         "icon": "$(add)"
       },
       {
         "command": "addi.editModel",
-        "title": "Edit Model",
+        "title": "Addi: Edit Model",
         "icon": "$(edit)"
       },
       {
         "command": "addi.deleteModel",
-        "title": "Delete Model",
+        "title": "Addi: Delete Model",
         "icon": "$(trash)"
       },
       {
         "command": "addi.useModel",
-        "title": "Use Model",
+        "title": "Addi: Use Model",
         "icon": "$(play)"
       },
       {
         "command": "addi.editApiKey",
-        "title": "Edit API Key",
+        "title": "Addi: Edit API Key",
         "icon": "$(key)"
       },
       {
         "command": "addi.exportConfig",
-        "title": "Export Configuration",
-        "icon": "$(desktop-download)"
+        "title": "Addi: Export Configuration",
+        "icon": "$(config-export-icon)"
       },
       {
         "command": "addi.importConfig",
-        "title": "Import Configuration",
-        "icon": "$(cloud-upload)"
+        "title": "Addi: Import Configuration",
+        "icon": "$(config-import-icon)"
       }
     ],
     "languageModelChatProviders": [
