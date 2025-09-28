@@ -34,16 +34,18 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "addiProviders",
+        "contents": "Welcome to Addi!\n\nGet started by adding your first AI provider. Or first check [Docs](https://github.com/deepwn/addi)\n\n[Add Provider](command:addi.addProvider)\n\n[Import Config](command:addi.importConfig)"
+      }
+    ],
     "views": {
       "addiSidebar": [
         {
           "icon": "resources/icon.min.svg",
           "id": "addiProviders",
           "name": "AI Providers & Models",
-          "welcome": {
-            "value": "$(add) Add and manage your AI providers and models here.\n\nClick the button below to get started.",
-            "command": "addi.addProvider"
-          },
           "commands": [
             {
               "command": "addi.addProvider",
