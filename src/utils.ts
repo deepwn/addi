@@ -35,19 +35,23 @@ export class InputValidator {
 
 export class UserFeedback {
   static showInfo(message: string): void {
-    vscode.window.showInformationMessage(message);
+    void vscode.window.showInformationMessage(message, { modal: false });
   }
 
   static showError(message: string): void {
-    vscode.window.showErrorMessage(message);
+    void vscode.window.showErrorMessage(message, { modal: false });
   }
 
   static showWarning(message: string): void {
-    vscode.window.showWarningMessage(message);
+    void vscode.window.showWarningMessage(message, { modal: false });
   }
 
   static async showInputBox(options: vscode.InputBoxOptions): Promise<string | undefined> {
-    return await vscode.window.showInputBox(options);
+    const finalOptions: vscode.InputBoxOptions = {
+      ignoreFocusOut: true,
+      ...options,
+    };
+    return await vscode.window.showInputBox(finalOptions);
   }
 
   static async showProgress<T>(
@@ -64,8 +68,17 @@ export class UserFeedback {
     );
   }
 
-  static async showConfirmDialog(message: string, modal: boolean = true): Promise<boolean> {
-    const result = await vscode.window.showWarningMessage(message, { modal }, "Confirm", "Cancel");
-    return result === "Confirm";
+  static async showConfirmDialog(message: string, _modal: boolean = true): Promise<boolean> {
+    const items: Array<vscode.QuickPickItem & { value: boolean }> = [
+      { label: "Confirm", value: true },
+      { label: "Cancel", value: false },
+    ];
+
+    const selection = await vscode.window.showQuickPick(items, {
+      placeHolder: message,
+      ignoreFocusOut: true,
+    });
+
+    return selection?.value ?? false;
   }
 }
