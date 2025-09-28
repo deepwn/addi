@@ -16,6 +16,19 @@
   "engines": {
     "vscode": "^1.104.0"
   },
+  "keywords": [
+    "AI",
+    "ChatGPT",
+    "Copilot",
+    "OpenAI",
+    "GPT-4",
+    "GPT-3.5",
+    "LLM",
+    "Language Model",
+    "Machine Learning",
+    "Custom",
+    "OAI"
+  ],
   "categories": [
     "AI",
     "Chat",
@@ -30,14 +43,21 @@
         "description": "Config Export Icon",
         "default": {
           "fontPath": "resources/bootstrap-icons.woff",
-          "fontCharacter": "\\F525"
+          "fontCharacter": "\\F29B"
         }
       },
       "config-import-icon": {
         "description": "Config Import Icon",
         "default": {
           "fontPath": "resources/bootstrap-icons.woff",
-          "fontCharacter": "\\F603"
+          "fontCharacter": "\\F358"
+        }
+      },
+      "use-model-icon": {
+        "description": "Use Model Icon",
+        "default": {
+          "fontPath": "resources/bootstrap-icons.woff",
+          "fontCharacter": "\\F268"
         }
       }
     },
@@ -61,7 +81,7 @@
         {
           "icon": "resources/icon.min.svg",
           "id": "addiProviders",
-          "name": "AI Providers & Models",
+          "name": "Panel",
           "commands": [
             {
               "command": "addi.addProvider",
@@ -80,25 +100,49 @@
           "group": "navigation@1"
         },
         {
-          "command": "addi.exportConfig",
+          "command": "addi.importConfig",
           "when": "view == addiProviders",
           "group": "navigation@2"
         },
         {
-          "command": "addi.importConfig",
+          "command": "addi.exportConfig",
           "when": "view == addiProviders",
           "group": "navigation@3"
         }
       ],
       "commandPalette": [
-        { "command": "addi.addProvider", "when": "false" },
-        { "command": "addi.editProvider", "when": "false" },
-        { "command": "addi.deleteProvider", "when": "false" },
-        { "command": "addi.addModel", "when": "false" },
-        { "command": "addi.editModel", "when": "false" },
-        { "command": "addi.deleteModel", "when": "false" },
-        { "command": "addi.useModel", "when": "false" },
-        { "command": "addi.editApiKey", "when": "false" }
+        {
+          "command": "addi.addProvider",
+          "when": "false"
+        },
+        {
+          "command": "addi.editProvider",
+          "when": "false"
+        },
+        {
+          "command": "addi.deleteProvider",
+          "when": "false"
+        },
+        {
+          "command": "addi.addModel",
+          "when": "false"
+        },
+        {
+          "command": "addi.editModel",
+          "when": "false"
+        },
+        {
+          "command": "addi.deleteModel",
+          "when": "false"
+        },
+        {
+          "command": "addi.useModel",
+          "when": "false"
+        },
+        {
+          "command": "addi.editApiKey",
+          "when": "false"
+        }
       ],
       "view/item/context": [
         {
@@ -214,7 +258,7 @@
       {
         "command": "addi.useModel",
         "title": "Use Model",
-        "icon": "$(play)",
+        "icon": "$(use-model-icon)",
         "category": "Addi"
       },
       {
@@ -234,13 +278,13 @@
         "title": "Import Configuration",
         "icon": "$(config-import-icon)",
         "category": "Addi"
+      },
+      {
+        "command": "addi.debug.printSettingsSyncState",
+        "title": "Print Settings Sync State",
+        "icon": "$(bug)",
+        "category": "Addi"
       }
-    ,
-    {
-      "command": "addi.debug.printSettingsSyncState",
-      "title": "Addi: Print Settings Sync State",
-      "category": "Addi"
-    }
     ],
     "languageModelChatProviders": [
       {
@@ -251,29 +295,29 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run package",
+    "vscode:prepublish": "yarn package",
     "compile": "webpack",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
-    "vsix": "npm run package && npx --yes @vscode/vsce package --out addi.vsix",
+    "vsix": "yarn package && npx --yes @vscode/vsce package --out addi.vsix",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "pretest": "yarn compile-tests && yarn compile && yarn lint",
     "lint": "eslint src",
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.104.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
+    "@types/vscode": "^1.104.0",
     "@typescript-eslint/eslint-plugin": "^8.42.0",
     "@typescript-eslint/parser": "^8.42.0",
-    "eslint": "^9.34.0",
-    "typescript": "^5.9.2",
-    "ts-loader": "^9.5.4",
-    "webpack": "^5.101.3",
-    "webpack-cli": "^6.0.1",
     "@vscode/test-cli": "^0.0.11",
-    "@vscode/test-electron": "^2.5.2"
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.34.0",
+    "ts-loader": "^9.5.4",
+    "typescript": "^5.9.2",
+    "webpack": "^5.101.3",
+    "webpack-cli": "^6.0.1"
   }
 }
