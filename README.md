@@ -1,4 +1,4 @@
-<div style="text-align: center; background-color: lightblue; padding: 40px 40px; border-radius: 10px; margin-bottom: 20px;">
+<center style="text-align: center; background-color: lightblue; padding: 40px 40px; border-radius: 10px; margin-bottom: 20px;">
   <img src="resources/icon-bg.min.png" width="128" height="128" alt="Addi Logo" />
 
   <h1>Addi — Extend Your VS Code Copilot</h1>
@@ -8,7 +8,7 @@
     <a href="https://github.com/deepwn/addi/issues"><img alt="Issues" src="https://img.shields.io/github/issues/deepwn/addi" /></a>
     <a href="https://github.com/deepwn/addi/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/deepwn/addi" /></a>
   </p>
-</div>
+</center>
 
 ---
 
