@@ -26,25 +26,18 @@
   "main": "./dist/extension.js",
   "contributes": {
     "icons": {
-      "addi-icon": {
-        "description": "Addi Icon",
-        "default": {
-          "fontPath": "resources/icon.min.svg",
-          "fontCharacter": "\\e001"
-        }
-      },
       "config-export-icon": {
         "description": "Config Export Icon",
         "default": {
-          "fontPath": "resources/export.min.svg",
-          "fontCharacter": "\\e002"
+          "fontPath": "resources/bootstrap-icons.woff",
+          "fontCharacter": "\\F525"
         }
       },
       "config-import-icon": {
         "description": "Config Import Icon",
         "default": {
-          "fontPath": "resources/import.min.svg",
-          "fontCharacter": "\\e003"
+          "fontPath": "resources/bootstrap-icons.woff",
+          "fontCharacter": "\\F603"
         }
       }
     },
@@ -96,6 +89,16 @@
           "when": "view == addiProviders",
           "group": "navigation@3"
         }
+      ],
+      "commandPalette": [
+        { "command": "addi.addProvider", "when": "false" },
+        { "command": "addi.editProvider", "when": "false" },
+        { "command": "addi.deleteProvider", "when": "false" },
+        { "command": "addi.addModel", "when": "false" },
+        { "command": "addi.editModel", "when": "false" },
+        { "command": "addi.deleteModel", "when": "false" },
+        { "command": "addi.useModel", "when": "false" },
+        { "command": "addi.editApiKey", "when": "false" }
       ],
       "view/item/context": [
         {
@@ -163,58 +166,69 @@
     "commands": [
       {
         "command": "addi.manage",
-        "title": "Addi: Manage Sidebar",
-        "icon": "$(addi-icon)"
+        "title": "Manage Sidebar",
+        "icon": "$(settings-gear)",
+        "category": "Addi"
       },
       {
         "command": "addi.addProvider",
-        "title": "Addi: Add Provider",
-        "icon": "$(add)"
+        "title": "Add Provider",
+        "icon": "$(add)",
+        "category": "Addi"
       },
       {
         "command": "addi.editProvider",
-        "title": "Addi: Edit Provider",
-        "icon": "$(edit)"
+        "title": "Edit Provider",
+        "icon": "$(edit)",
+        "category": "Addi"
       },
       {
         "command": "addi.deleteProvider",
-        "title": "Addi: Delete Provider",
-        "icon": "$(trash)"
+        "title": "Delete Provider",
+        "icon": "$(trash)",
+        "category": "Addi"
       },
       {
         "command": "addi.addModel",
-        "title": "Addi: Add Model",
-        "icon": "$(add)"
+        "title": "Add Model",
+        "icon": "$(add)",
+        "category": "Addi"
       },
       {
         "command": "addi.editModel",
-        "title": "Addi: Edit Model",
-        "icon": "$(edit)"
+        "title": "Edit Model",
+        "icon": "$(edit)",
+        "category": "Addi"
       },
       {
         "command": "addi.deleteModel",
-        "title": "Addi: Delete Model",
-        "icon": "$(trash)"
+        "title": "Delete Model",
+        "icon": "$(trash)",
+        "category": "Addi"
       },
       {
         "command": "addi.useModel",
-        "title": "Addi: Use Model",
-        "icon": "$(play)"
+        "title": "Use Model",
+        "icon": "$(play)",
+        "category": "Addi"
       },
       {
         "command": "addi.editApiKey",
-        "title": "Addi: Edit API Key",
-        "icon": "$(key)"
+        "title": "Edit API Key",
+        "icon": "$(key)",
+        "category": "Addi"
       },
       {
         "command": "addi.exportConfig",
-        "title": "Addi: Export Configuration",
-        "icon": "$(config-export-icon)"
+        "title": "Export Configuration",
+        "icon": "$(config-export-icon)",
+        "category": "Addi"
       },
       {
         "command": "addi.importConfig",
-        "title": "Addi: Import Configuration",
-        "icon": "$(config-import-icon)"
+        "title": "Import Configuration",
+        "icon": "$(config-import-icon)",
+        "category": "Addi"
       }
     ],
     "languageModelChatProviders": [
