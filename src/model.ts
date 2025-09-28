@@ -5,7 +5,25 @@ export class ModelTreeItem extends vscode.TreeItem {
   constructor(public model: Model) {
     super(model.name, vscode.TreeItemCollapsibleState.None);
     this.contextValue = "model";
-    this.tooltip = `name: ${model.name}\nfamily: ${model.family}\nversion: ${model.version}\nmaxInputTokens: ${model.maxInputTokens}\nmaxOutputTokens: ${model.maxOutputTokens}`;
+    const capabilityHints: string[] = [];
+    if (model.capabilities?.imageInput) {
+      capabilityHints.push("vision");
+    }
+    if (model.capabilities?.toolCalling !== undefined) {
+      const toolValue = model.capabilities.toolCalling;
+      capabilityHints.push(`tool:${typeof toolValue === "number" ? toolValue : toolValue ? "yes" : "no"}`);
+    }
+    let tooltip = `name: ${model.name}\nfamily: ${model.family}\nversion: ${model.version}\nmaxInputTokens: ${model.maxInputTokens}\nmaxOutputTokens: ${model.maxOutputTokens}`;
+    if (model.tooltip) {
+      tooltip += `\ntooltip: ${model.tooltip}`;
+    }
+    if (model.detail) {
+      tooltip += `\ndetail: ${model.detail}`;
+    }
+    if (capabilityHints.length > 0) {
+      tooltip += `\ncapabilities: ${capabilityHints.join(", ")}`;
+    }
+    this.tooltip = tooltip;
     this.description = `${model.family} v${model.version}`;
   }
 }
@@ -24,11 +42,11 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
         version: m.version,
         maxInputTokens: m.maxInputTokens,
         maxOutputTokens: m.maxOutputTokens,
-        tooltip: `${p.name} - ${m.maxInputTokens}↑/${m.maxOutputTokens}↓`,
-        detail: `${m.maxInputTokens}↑/${m.maxOutputTokens}↓`,
+  tooltip: m.tooltip ?? `${p.name} - ${m.maxInputTokens}↑/${m.maxOutputTokens}↓`,
+  detail: m.detail ?? `${m.maxInputTokens}↑/${m.maxOutputTokens}↓`,
         capabilities: {
-          imageInput: !!m.imageInput,
-          toolCalling: !!m.toolCalling,
+          imageInput: !!m.capabilities?.imageInput,
+          toolCalling: m.capabilities?.toolCalling,
         },
       }))
     );

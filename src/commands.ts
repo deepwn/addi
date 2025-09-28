@@ -731,8 +731,10 @@ export class CommandHandler {
       version,
       maxInputTokens,
       maxOutputTokens,
-      imageInput,
-      toolCalling,
+      capabilities: {
+        imageInput,
+        toolCalling,
+      },
     };
 
     const proceed = await this.promptModelApiTest(item.provider, modelDraft, "Still add");
@@ -835,8 +837,10 @@ export class CommandHandler {
       version,
       maxInputTokens,
       maxOutputTokens,
-      imageInput,
-      toolCalling,
+      capabilities: {
+        imageInput,
+        toolCalling,
+      },
     };
 
     const proceed = await this.promptModelApiTest(provider, modelDraft, "still update");
@@ -901,16 +905,16 @@ export class CommandHandler {
 
   private encodeProvidersForExport(providers: Provider[], password?: string): string {
     const plainJson = JSON.stringify(providers, null, 2);
-    const plainBuffer = Buffer.from(plainJson, "utf8");
 
     if (!password) {
-      return `b64:${plainBuffer.toString("base64")}`;
+      return plainJson;
     }
 
     const salt = crypto.randomBytes(16);
     const iv = crypto.randomBytes(12);
     const key = crypto.pbkdf2Sync(password, salt, 100000, 32, "sha256");
     const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+    const plainBuffer = Buffer.from(plainJson, "utf8");
     const encrypted = Buffer.concat([cipher.update(plainBuffer), cipher.final()]);
     const authTag = cipher.getAuthTag();
 
@@ -1125,6 +1129,27 @@ export class CommandHandler {
           for (const model of provider.models) {
             if (!model.id || !model.name || !model.family || !model.version || typeof model.maxInputTokens !== "number" || typeof model.maxOutputTokens !== "number") {
               throw new Error("Configuration format is invalid");
+            }
+
+            const hasCapabilitiesObject = typeof (model as any).capabilities === "object" && (model as any).capabilities !== null;
+            const hasLegacyCapabilities = "imageInput" in (model as any) || "toolCalling" in (model as any);
+
+            if (!hasCapabilitiesObject && !hasLegacyCapabilities) {
+              throw new Error("Configuration capabilities definition is missing");
+            }
+
+            if (hasCapabilitiesObject) {
+              const caps = (model as any).capabilities as Record<string, unknown>;
+              if ("imageInput" in caps && typeof caps["imageInput"] !== "boolean") {
+                throw new Error("Configuration capability imageInput must be boolean");
+              }
+              if (
+                "toolCalling" in caps &&
+                typeof caps["toolCalling"] !== "boolean" &&
+                typeof caps["toolCalling"] !== "number"
+              ) {
+                throw new Error("Configuration capability toolCalling must be boolean or number");
+              }
             }
           }
         }

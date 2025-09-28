@@ -1,3 +1,8 @@
+export interface ModelCapabilities {
+  imageInput?: boolean;
+  toolCalling?: boolean | number;
+}
+
 export interface Model {
   id: string;
   name: string;
@@ -5,8 +10,9 @@ export interface Model {
   version: string;
   maxInputTokens: number;
   maxOutputTokens: number;
-  imageInput?: boolean;
-  toolCalling?: boolean;
+  tooltip?: string;
+  detail?: string;
+  capabilities: ModelCapabilities;
 }
 
 export type ProviderType = "openai" | "anthropic" | "google" | "generic";
@@ -29,8 +35,9 @@ export type ModelDraft = {
   version: string;
   maxInputTokens: number;
   maxOutputTokens: number;
-  imageInput: boolean;
-  toolCalling: boolean;
+  tooltip?: string;
+  detail?: string;
+  capabilities: ModelCapabilities;
 };
 
 export interface ProviderRepository {

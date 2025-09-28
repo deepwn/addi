@@ -163,8 +163,14 @@ export class ModelDebugPanel {
         version: model.version,
         maxInputTokens: model.maxInputTokens,
         maxOutputTokens: model.maxOutputTokens,
-        imageInput: !!model.imageInput,
-        toolCalling: !!model.toolCalling,
+        tooltip: model.tooltip ?? "",
+        detail: model.detail ?? "",
+        capabilities: {
+          imageInput: !!model.capabilities?.imageInput,
+          toolCalling: model.capabilities?.toolCalling,
+        },
+        imageInput: !!model.capabilities?.imageInput,
+        toolCalling: model.capabilities?.toolCalling ?? false,
       },
     };
   }

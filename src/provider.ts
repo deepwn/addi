@@ -21,40 +21,126 @@ export class ProviderModelManager {
     }
   }
 
-  /**
-   * 返回当前 settings sync 是否处于启用状态（由 extension 在激活阶段或配置变更时设置）
-   */
   isSettingsSyncEnabled(): boolean {
     return this.syncEnabled;
   }
 
   getProviders(): Provider[] {
     const stored = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
-    let mutated = false;
-    for (const p of stored) {
-      if (!(p as any).providerType) {
-        // infer from apiEndpoint
-        const endpoint = (p.apiEndpoint || "").toLowerCase();
-        if (endpoint.includes("openai.com")) {
-          (p as any).providerType = "openai";
-        } else if (endpoint.includes("anthropic.com")) {
-          (p as any).providerType = "anthropic";
-        } else if (endpoint.includes("googleapis.com")) {
-          (p as any).providerType = "google";
-        } else {
-          (p as any).providerType = "generic";
-        }
-        mutated = true;
-      }
-    }
+    const mutated = this.normalizeProvidersInPlace(stored as Array<Provider & Record<string, any>>);
     if (mutated) {
-      void this.saveProviders(stored); // fire-and-forget, no await in getter
+      void this.context.globalState.update(ProviderModelManager.STORAGE_KEY, stored);
     }
     return stored as Provider[];
   }
 
   async saveProviders(providers: Provider[]): Promise<void> {
+    this.normalizeProvidersInPlace(providers as Array<Provider & Record<string, any>>);
     await this.context.globalState.update(ProviderModelManager.STORAGE_KEY, providers);
+  }
+
+  private normalizeProvidersInPlace(providers: Array<Provider & Record<string, any>>): boolean {
+    let mutated = false;
+
+    for (const provider of providers) {
+      if (!provider.providerType) {
+        const endpoint = (provider.apiEndpoint || "").toLowerCase();
+        if (endpoint.includes("openai.com")) {
+          provider.providerType = "openai";
+        } else if (endpoint.includes("anthropic.com")) {
+          provider.providerType = "anthropic";
+        } else if (endpoint.includes("googleapis.com")) {
+          provider.providerType = "google";
+        } else {
+          provider.providerType = "generic";
+        }
+        mutated = true;
+      }
+
+      if (!Array.isArray(provider.models)) {
+        provider.models = [];
+        mutated = true;
+        continue;
+      }
+
+      provider.models = provider.models.map((model) => {
+        const mutableModel = model as unknown as Record<string, any>;
+        let changed = false;
+
+        if (!mutableModel["capabilities"] || typeof mutableModel["capabilities"] !== "object") {
+          mutableModel["capabilities"] = {};
+          changed = true;
+        }
+
+        const capabilitiesRecord = mutableModel["capabilities"] as Record<string, any>;
+
+        if (capabilitiesRecord["imageInput"] === undefined && typeof mutableModel["imageInput"] === "boolean") {
+          capabilitiesRecord["imageInput"] = mutableModel["imageInput"];
+          changed = true;
+        }
+
+        if (capabilitiesRecord["toolCalling"] === undefined && mutableModel["toolCalling"] !== undefined) {
+          const legacyToolCalling = mutableModel["toolCalling"];
+          capabilitiesRecord["toolCalling"] = typeof legacyToolCalling === "number" ? legacyToolCalling : Boolean(legacyToolCalling);
+          changed = true;
+        }
+
+        if ("imageInput" in mutableModel) {
+          delete mutableModel["imageInput"];
+          changed = true;
+        }
+
+        if ("toolCalling" in mutableModel) {
+          delete mutableModel["toolCalling"];
+          changed = true;
+        }
+
+        if (mutableModel["tooltip"] !== undefined && typeof mutableModel["tooltip"] !== "string") {
+          delete mutableModel["tooltip"];
+          changed = true;
+        }
+
+        if (mutableModel["detail"] !== undefined && typeof mutableModel["detail"] !== "string") {
+          delete mutableModel["detail"];
+          changed = true;
+        }
+
+        const normalizedCapabilities = this.normalizeCapabilities(capabilitiesRecord as Model["capabilities"]);
+        if (
+          normalizedCapabilities.imageInput !== capabilitiesRecord["imageInput"] ||
+          normalizedCapabilities.toolCalling !== capabilitiesRecord["toolCalling"]
+        ) {
+          changed = true;
+        }
+        mutableModel["capabilities"] = normalizedCapabilities;
+
+        if (!changed) {
+          return model;
+        }
+
+        mutated = true;
+        return mutableModel as unknown as Model;
+      });
+    }
+
+    return mutated;
+  }
+
+  private normalizeCapabilities(source?: Model["capabilities"], fallback?: Model["capabilities"]): Model["capabilities"] {
+    const normalized: Model["capabilities"] = {};
+    const base = fallback ?? {};
+    const candidate = source ?? {};
+
+    if (candidate.imageInput !== undefined || base.imageInput !== undefined) {
+      normalized.imageInput = Boolean(candidate.imageInput ?? base.imageInput);
+    }
+
+    const toolSource = candidate.toolCalling ?? base.toolCalling;
+    if (toolSource !== undefined) {
+      normalized.toolCalling = typeof toolSource === "number" ? toolSource : Boolean(toolSource);
+    }
+
+    return normalized;
   }
 
   async addProvider(providerData: Omit<Provider, "id" | "models">): Promise<Provider> {
@@ -111,9 +197,14 @@ export class ProviderModelManager {
         version: modelData.version,
         maxInputTokens: modelData.maxInputTokens,
         maxOutputTokens: modelData.maxOutputTokens,
-        imageInput: modelData.imageInput ?? false,
-        toolCalling: modelData.toolCalling ?? false,
+        capabilities: this.normalizeCapabilities(modelData.capabilities),
       };
+      if (modelData.tooltip !== undefined) {
+        newModel.tooltip = modelData.tooltip;
+      }
+      if (modelData.detail !== undefined) {
+        newModel.detail = modelData.detail;
+      }
       providers[providerIndex]!.models.push(newModel);
       await this.saveProviders(providers);
       return newModel;
@@ -128,16 +219,24 @@ export class ProviderModelManager {
       const modelIndex = providers[providerIndex]!.models.findIndex((m) => m.id === modelId);
       if (modelIndex >= 0) {
         const existingModel = providers[providerIndex]!.models[modelIndex]!;
-        providers[providerIndex]!.models[modelIndex] = {
+        const updatedModel: Model = {
           id: (modelData.id ?? existingModel.id) as string,
           name: modelData.name ?? existingModel.name,
           family: modelData.family ?? existingModel.family,
           version: modelData.version ?? existingModel.version,
           maxInputTokens: modelData.maxInputTokens ?? existingModel.maxInputTokens,
           maxOutputTokens: modelData.maxOutputTokens ?? existingModel.maxOutputTokens,
-          imageInput: modelData.imageInput !== undefined ? modelData.imageInput : existingModel.imageInput !== undefined ? existingModel.imageInput : false,
-          toolCalling: modelData.toolCalling !== undefined ? modelData.toolCalling : existingModel.toolCalling !== undefined ? existingModel.toolCalling : false,
+          capabilities: this.normalizeCapabilities(modelData.capabilities, existingModel.capabilities),
         };
+        const tooltip = modelData.tooltip !== undefined ? modelData.tooltip : existingModel.tooltip;
+        if (tooltip !== undefined) {
+          updatedModel.tooltip = tooltip;
+        }
+        const detail = modelData.detail !== undefined ? modelData.detail : existingModel.detail;
+        if (detail !== undefined) {
+          updatedModel.detail = detail;
+        }
+        providers[providerIndex]!.models[modelIndex] = updatedModel;
         await this.saveProviders(providers);
         return true;
       }

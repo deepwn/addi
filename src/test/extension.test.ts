@@ -130,6 +130,10 @@ suite("Extension Test Suite", () => {
         version: "1.0.0",
         maxInputTokens: 4096,
         maxOutputTokens: 1024,
+        capabilities: {
+          imageInput: false,
+          toolCalling: false,
+        },
       });
 
       assert.notStrictEqual(model, null);
@@ -157,6 +161,10 @@ suite("Extension Test Suite", () => {
         version: "1.0.0",
         maxInputTokens: 4096,
         maxOutputTokens: 1024,
+        capabilities: {
+          imageInput: false,
+          toolCalling: false,
+        },
       });
 
       assert.notStrictEqual(model, null);
@@ -186,6 +194,10 @@ suite("Extension Test Suite", () => {
         version: "1.0.0",
         maxInputTokens: 4096,
         maxOutputTokens: 1024,
+        capabilities: {
+          imageInput: false,
+          toolCalling: false,
+        },
       });
 
       assert.notStrictEqual(model, null);
@@ -213,6 +225,10 @@ suite("Extension Test Suite", () => {
         version: "1.0.0",
         maxInputTokens: 4096,
         maxOutputTokens: 1024,
+        capabilities: {
+          imageInput: false,
+          toolCalling: false,
+        },
       });
 
       assert.notStrictEqual(model, null);
@@ -293,6 +309,10 @@ suite("Extension Test Suite", () => {
         version: "1.0.0",
         maxInputTokens: 4096,
         maxOutputTokens: 1024,
+        capabilities: {
+          imageInput: false,
+          toolCalling: false,
+        },
       });
       await manager.addModel(provider.id, {
         name: "Test Model 2",
@@ -300,6 +320,10 @@ suite("Extension Test Suite", () => {
         version: "2.0.0",
         maxInputTokens: 8192,
         maxOutputTokens: 2048,
+        capabilities: {
+          imageInput: false,
+          toolCalling: false,
+        },
       });
 
       // 验证数据
