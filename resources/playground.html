@@ -296,7 +296,64 @@
         line-height: 1.6;
         font-size: 14px;
         white-space: pre-wrap;
+        word-break: break-word;
+        overflow-wrap: anywhere;
       }
+      /* 内联 code 和 链接 的样式优化 */
+      .bubble code.inline-code {
+        background: rgba(255,255,255,0.04);
+        padding: 2px 6px;
+        border-radius: 6px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
+        font-size: 12px;
+        color: #f8f8f8;
+      }
+      .bubble a {
+        color: var(--accent);
+        text-decoration: underline;
+        word-break: break-word;
+      }
+      /* 代码块样式：更易读且带水平滚动，避免破坏布局 */
+      .bubble pre {
+        background: rgba(0,0,0,0.06);
+        padding: 12px;
+        border-radius: 10px;
+        overflow: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
+        font-size: 13px;
+        line-height: 1.5;
+        margin: 10px 0;
+        border: 1px solid rgba(255,255,255,0.03);
+        color: var(--fg);
+        white-space: pre;
+      }
+      .bubble pre code { background: transparent; padding: 0; border-radius: 0; }
+      /* 代码块顶部语言标签 */
+      .code-lang {
+        display: inline-block;
+        background: rgba(255,255,255,0.04);
+        color: var(--muted);
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        margin-bottom: 6px;
+        margin-left: 6px;
+      }
+      .pre-with-lang { position: relative; padding-top: 18px; }
+      /* place copy button at top-left of code block, label slightly lower-right */
+      .pre-with-lang .copy-btn {
+        position: absolute;
+        top: 6px;
+        left: 8px;
+        background: rgba(255,255,255,0.03);
+        color: var(--fg);
+        border: 1px solid rgba(255,255,255,0.04);
+        padding: 4px 8px;
+        font-size: 12px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .pre-with-lang .code-lang { position: absolute; top: 8px; right: 12px; }
       .msg.user .bubble {
         background: var(--bubble-user);
         border-bottom-right-radius: 8px;
@@ -894,6 +951,68 @@
           });
         }
 
+        // Helper: detect code blocks with language classes and decorate with a small language label
+        function decorateCodeBlocks(container) {
+          try {
+            const pres = (container.querySelectorAll ? container.querySelectorAll('pre') : []);
+            pres.forEach((pre) => {
+              // find first code child with language-xxx
+              const code = pre.querySelector && pre.querySelector('code');
+              if (!code) return;
+              const cls = Array.from(code.classList || []).find(c => c.indexOf('language-') === 0);
+              if (cls) {
+                const lang = cls.replace('language-', '').toUpperCase();
+                pre.classList.add('pre-with-lang');
+                // remove existing label/button if any
+                const old = pre.querySelector('.code-lang');
+                if (old) old.remove();
+                const oldBtn = pre.querySelector('.copy-btn');
+                if (oldBtn) oldBtn.remove();
+                // create copy button
+                const btn = document.createElement('button');
+                btn.className = 'copy-btn';
+                btn.type = 'button';
+                btn.textContent = '复制';
+                btn.setAttribute('aria-label', '复制代码');
+                // click handler: copy underlying code text
+                btn.addEventListener('click', async (e) => {
+                  e.preventDefault();
+                  try {
+                    const txt = code ? (code.textContent || '') : '';
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                      await navigator.clipboard.writeText(txt);
+                    } else {
+                      // fallback
+                      const ta = document.createElement('textarea');
+                      ta.value = txt;
+                      document.body.appendChild(ta);
+                      ta.select();
+                      document.execCommand('copy');
+                      document.body.removeChild(ta);
+                    }
+                    const orig = btn.textContent;
+                    btn.textContent = '✓ 已复制';
+                    btn.disabled = true;
+                    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1200);
+                  } catch (_err) {
+                    // show brief failure
+                    const orig = btn.textContent;
+                    btn.textContent = '失败';
+                    setTimeout(() => { btn.textContent = orig; }, 1200);
+                  }
+                });
+                pre.insertBefore(btn, pre.firstChild);
+                const label = document.createElement('span');
+                label.className = 'code-lang';
+                label.textContent = lang;
+                pre.insertBefore(label, pre.firstChild);
+              }
+            });
+          } catch (_e) {
+            // ignore
+          }
+        }
+
         window.addEventListener("message", (event) => {
           const msg = event.data;
           if (msg.type === "playgroundInit") {
@@ -932,21 +1051,40 @@
             }
             focusComposer(200);
           } else if (msg.type === "playgroundResponse") {
-            const nodes = messagesEl.querySelectorAll(".msg.assistant");
-            const last = nodes[nodes.length - 1];
-            if (last && last.getAttribute("data-stream-final") !== "true") {
-              const bubble = last.querySelector(".bubble") || last;
-              const existing = bubble.textContent ? bubble.textContent.trim() : "";
-              if (existing.length > 0) {
-                last.setAttribute("data-stream-final", "true");
+            // 优先复用被标记为 data-streaming 的气泡（流式创建），避免出现两个气泡：
+            // 一个是空文本的未渲染气泡，另一个是渲染后新创建的气泡。
+            const streamingNodes = messagesEl.querySelectorAll('.msg.assistant[data-streaming="true"]');
+            let targetStreaming = streamingNodes && streamingNodes.length ? streamingNodes[streamingNodes.length - 1] : null;
+            if (targetStreaming) {
+              const bubble = targetStreaming.querySelector('.bubble') || targetStreaming;
+              if (msg.payload && msg.payload.html) {
+                bubble.innerHTML = msg.payload.html;
+                decorateCodeBlocks(bubble);
               } else {
-                bubble.textContent = msg.payload.text || "[空响应]";
-                last.setAttribute("data-stream-final", "true");
+                bubble.textContent = msg.payload.text || '[空响应]';
               }
+              targetStreaming.removeAttribute('data-streaming');
+              targetStreaming.setAttribute('data-stream-final', 'true');
             } else {
-              const wrapper = append("assistant", msg.payload.text || "[空响应]");
-              if (wrapper) {
-                wrapper.setAttribute("data-stream-final", "true");
+              // 没有 streaming 气泡时，复用最后一个未 final 的气泡；若无，则创建新的
+              const nodes = messagesEl.querySelectorAll('.msg.assistant');
+              const last = nodes && nodes.length ? nodes[nodes.length - 1] : null;
+              if (last && last.getAttribute('data-stream-final') !== 'true') {
+                const bubble = last.querySelector('.bubble') || last;
+                if (msg.payload && msg.payload.html) {
+                  bubble.innerHTML = msg.payload.html;
+                } else {
+                  bubble.textContent = msg.payload.text || '[空响应]';
+                }
+                last.setAttribute('data-stream-final', 'true');
+              } else {
+                const wrapper = append('assistant', msg.payload && msg.payload.text ? msg.payload.text : '[空响应]');
+                if (wrapper && msg.payload && msg.payload.html) {
+                  const bubble = wrapper.querySelector('.bubble') || wrapper;
+                  bubble.innerHTML = msg.payload.html;
+                  decorateCodeBlocks(bubble);
+                }
+                if (wrapper) wrapper.setAttribute('data-stream-final', 'true');
               }
             }
             setBusy(false);
@@ -958,15 +1096,25 @@
             }
             setBusy(false);
           } else if (msg.type === "playgroundStreamDelta") {
+            // 对于流式 delta，只在最近未完成的 assistant 气泡上做更新；
+            // 如果没有正在进行的未完成气泡，则创建一个新的未完成气泡并更新它。
             let nodes = messagesEl.querySelectorAll(".msg.assistant");
-            let target = nodes[nodes.length - 1];
+            let target = nodes.length ? nodes[nodes.length - 1] : null;
             if (!target || target.getAttribute("data-stream-final") === "true") {
+              // create a new assistant bubble that is not final yet
               append("assistant", "");
               nodes = messagesEl.querySelectorAll(".msg.assistant");
               target = nodes[nodes.length - 1];
+              // mark this new bubble as streaming so that final response can reuse it
+              if (target) target.setAttribute('data-streaming', 'true');
             }
             const bubble = target.querySelector(".bubble") || target;
-            bubble.textContent = msg.payload.full || "";
+            if (msg.payload && msg.payload.html) {
+              bubble.innerHTML = msg.payload.html;
+              decorateCodeBlocks(bubble);
+            } else {
+              bubble.textContent = msg.payload.full || "";
+            }
             scrollToBottom();
           }
         });

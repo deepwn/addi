@@ -42,8 +42,8 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
         version: m.version,
         maxInputTokens: m.maxInputTokens,
         maxOutputTokens: m.maxOutputTokens,
-  tooltip: m.tooltip ?? `${p.name} - ${m.maxInputTokens}↑/${m.maxOutputTokens}↓`,
-  detail: m.detail ?? `${m.maxInputTokens}↑/${m.maxOutputTokens}↓`,
+        tooltip: m.tooltip ?? `${p.name} - ${m.maxInputTokens}↑/${m.maxOutputTokens}↓`,
+        detail: m.detail ?? `${m.maxInputTokens}↑/${m.maxOutputTokens}↓`,
         capabilities: {
           imageInput: !!m.capabilities?.imageInput,
           toolCalling: m.capabilities?.toolCalling,
@@ -98,6 +98,14 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     if (typeof text === "string") {
       const words = text.split(/\s+/).length;
       return Math.ceil(words * 1.3);
+    }
+    // If a message is provided, stringify only text parts
+    if (typeof text === "object" && text && Array.isArray((text as any).content)) {
+      const parts = (text as any).content
+        .filter((p: any) => p instanceof vscode.LanguageModelTextPart)
+        .map((p: vscode.LanguageModelTextPart) => p.value)
+        .join("");
+      return Math.ceil(parts.length / 4);
     }
     const textContent = JSON.stringify(text);
     return Math.ceil(textContent.length / 4);
@@ -270,14 +278,30 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
   private toOpenAiMessages(messages: readonly any[]): Array<{ role: string; content: string }> {
     return messages.map((msg) => ({
       role: msg.role === vscode.LanguageModelChatMessageRole.User ? "user" : "assistant",
-      content: typeof msg.content === "string" ? msg.content : msg.content.map((part: any) => part.value).join(""),
+      content: typeof msg.content === "string"
+        ? msg.content
+        : Array.isArray(msg.content)
+        ? msg.content
+            .filter((p: any) => p instanceof vscode.LanguageModelTextPart)
+            .map((p: vscode.LanguageModelTextPart) => p.value)
+            .join("")
+        : String(msg.content),
     }));
   }
 
   private extractSystemMessage(messages: readonly any[]): string {
     for (const msg of messages) {
       if (msg.name === "system") {
-        return typeof msg.content === "string" ? msg.content : msg.content.map((part: any) => part.value).join("");
+        if (typeof msg.content === "string") {
+          return msg.content;
+        }
+        if (Array.isArray(msg.content)) {
+          return msg.content
+            .filter((p: any) => p instanceof vscode.LanguageModelTextPart)
+            .map((p: vscode.LanguageModelTextPart) => p.value)
+            .join("");
+        }
+        return String(msg.content);
       }
     }
     return "";
@@ -290,7 +314,14 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
         continue;
       }
       const role = msg.role === vscode.LanguageModelChatMessageRole.User ? "user" : "assistant";
-      const content = typeof msg.content === "string" ? msg.content : msg.content.map((part: any) => part.value).join("");
+      const content = typeof msg.content === "string"
+        ? msg.content
+        : Array.isArray(msg.content)
+        ? msg.content
+            .filter((p: any) => p instanceof vscode.LanguageModelTextPart)
+            .map((p: vscode.LanguageModelTextPart) => p.value)
+            .join("")
+        : String(msg.content);
       result.push({ role, content });
     }
     return result;
@@ -303,7 +334,14 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
 
     messages.forEach((msg) => {
       const role = msg.role === vscode.LanguageModelChatMessageRole.User ? "user" : "model";
-      const content = typeof msg.content === "string" ? msg.content : msg.content.map((part: any) => part.value).join("");
+      const content = typeof msg.content === "string"
+        ? msg.content
+        : Array.isArray(msg.content)
+        ? msg.content
+            .filter((p: any) => p instanceof vscode.LanguageModelTextPart)
+            .map((p: vscode.LanguageModelTextPart) => p.value)
+            .join("")
+        : String(msg.content);
 
       if (role !== currentRole && currentParts.length > 0) {
         contents.push({

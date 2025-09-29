@@ -4,7 +4,8 @@ import { ProviderModelManager, ProviderTreeItem, AddiTreeDataProvider } from "./
 import { ModelTreeItem } from "./model";
 import { ConfigManager, InputValidator, UserFeedback } from "./utils";
 import { ModelDraft, Provider, Model } from "./types";
-import { invokeChatCompletion, ChatMessage, streamChatCompletion } from "./apiClient";
+// playground logic moved to src/playground.ts
+import PlaygroundManager from "./playground";
 
 export class CommandHandler {
   constructor(private readonly manager: ProviderModelManager, private readonly treeDataProvider: AddiTreeDataProvider, private readonly context?: vscode.ExtensionContext) {}
@@ -269,161 +270,14 @@ export class CommandHandler {
     }
   }
 
-  // playground 模式不再需要 session key
-
-  private createPlaygroundHtml(): string {
-    // 直接读取 resources/playground.html 的内容更好；此处简化为占位，实际载入文件以支持 CSP。
-    // 为保持简单，这里内联 minimal 占位，将很快被真正的文件替换（我们使用本地文件读取更可靠）。
-    return `<!DOCTYPE html><html><body><p>Loading playground...</p></body></html>`;
-  }
+  // playground logic moved to PlaygroundManager
 
   async openPlayground(provider: Provider, model: Model | (ModelDraft & { id?: string; name?: string })): Promise<void> {
-    const panel = vscode.window.createWebviewPanel(
-      "addiPlayground",
-      `Playground · ${model.name || model.id || "model"}`,
-      vscode.ViewColumn.Active,
-      { enableScripts: true, retainContextWhenHidden: true }
-    );
-
-    const history: ChatMessage[] = [];
-    const presetKey = `addi.playground.params`; // global per workspace
-    const stored = this.context?.workspaceState.get<any>(presetKey);
-    let temperature = typeof stored?.temperature === "number" ? stored.temperature : 0.7;
-    let topP: number | undefined = typeof stored?.topP === "number" ? stored.topP : 1.0;
-    let maxOutputTokens: number | undefined = typeof stored?.maxOutputTokens === "number" ? stored.maxOutputTokens : (model.maxOutputTokens || 1024);
-    let presencePenalty: number | undefined = typeof stored?.presencePenalty === "number" ? stored.presencePenalty : 0;
-    let frequencyPenalty: number | undefined = typeof stored?.frequencyPenalty === "number" ? stored.frequencyPenalty : 0;
-    let systemPrompt: string | undefined = typeof stored?.systemPrompt === "string" ? stored.systemPrompt : undefined;
-    const saveParams = () => {
-      void this.context?.workspaceState.update(presetKey, {
-        temperature,
-        topP,
-        maxOutputTokens,
-        presencePenalty,
-        frequencyPenalty,
-        systemPrompt,
-      });
-    };
-
-    try {
-      if (!this.context) { throw new Error("No extension context"); }
-      const fileUri = vscode.Uri.joinPath(this.context.extensionUri, "resources", "playground.html");
-      const bytes = await vscode.workspace.fs.readFile(fileUri);
-      let html = new TextDecoder().decode(bytes);
-      // 注入 webview.cspSource 以允许加载本地资源（保留固定 nonce=PLAYGROUND 的 inline script）
-      const cspSource = panel.webview.cspSource;
-      html = html.replace(/script-src 'nonce-PLAYGROUND';/, `script-src 'nonce-PLAYGROUND' ${cspSource};`);
-      panel.webview.html = html;
-    } catch (e) {
-      panel.webview.html = this.createPlaygroundHtml();
-      console.warn('[Addi] Failed to load playground.html from extension path:', e);
-    }
-
-    const postInit = () => {
-      panel.webview.postMessage({
-        type: "playgroundInit",
-        payload: {
-          providerId: provider.id,
-          providerName: provider.name,
-          modelId: model.id,
-          modelName: model.name || model.id,
-          params: { temperature, topP, maxOutputTokens, presencePenalty, frequencyPenalty, systemPrompt },
-        },
-      });
-    };
-
-    panel.webview.onDidReceiveMessage(async (msg) => {
-      if (msg?.type === "playgroundSend") {
-        const prompt: string = (msg.prompt || "").trim();
-        if (!prompt) { return; }
-        // 每次发送新请求时重置上一次的 abortController
-        let streamAbort: AbortController | undefined;
-        const localTemp = typeof msg.temperature === "number" ? msg.temperature : temperature;
-        temperature = localTemp;
-        if (typeof msg.topP === "number") { topP = Math.min(Math.max(msg.topP, 0), 1); }
-        if (typeof msg.maxOutputTokens === "number") {
-          const v = Math.floor(msg.maxOutputTokens);
-          if (isFinite(v) && v > 0) { maxOutputTokens = Math.min(Math.max(v, 1), 8192); }
-        }
-        if (typeof msg.presencePenalty === "number") { presencePenalty = Math.min(Math.max(msg.presencePenalty, -2), 2); }
-        if (typeof msg.frequencyPenalty === "number") { frequencyPenalty = Math.min(Math.max(msg.frequencyPenalty, -2), 2); }
-        if (typeof msg.systemPrompt === "string") {
-          const sp = msg.systemPrompt.trim();
-          systemPrompt = sp.length ? sp : undefined;
-        }
-        try {
-          const convo = systemPrompt ? [{ role: "system", content: systemPrompt } as ChatMessage, ...history] : [...history];
-          const req: any = { prompt, conversation: convo, temperature: localTemp, overrideMaxOutputTokens: maxOutputTokens };
-          if (typeof topP === "number") { req.topP = topP; }
-          if (typeof presencePenalty === "number") { req.presencePenalty = presencePenalty; }
-          if (typeof frequencyPenalty === "number") { req.frequencyPenalty = frequencyPenalty; }
-          const useStream = msg.stream === true;
-          history.push({ role: "user", content: prompt });
-          if (useStream) {
-            streamAbort = new AbortController();
-            req.signal = streamAbort.signal;
-            (panel as any)._addiCurrentAbort = streamAbort; // 绑定到 panel 实例便于后续 abort
-            let assembled = "";
-            try {
-              for await (const chunk of streamChatCompletion(provider as any, model as any, req)) {
-                if (chunk.type === "delta" && chunk.deltaText) {
-                  assembled += chunk.deltaText;
-                  panel.webview.postMessage({ type: "playgroundStreamDelta", payload: { delta: chunk.deltaText, full: assembled } });
-                } else if (chunk.type === "done") {
-                  history.push({ role: "assistant", content: assembled });
-                  panel.webview.postMessage({ type: "playgroundResponse", payload: { text: assembled } });
-                } else if (chunk.type === "error") {
-                  if (chunk.error === "aborted") {
-                    panel.webview.postMessage({ type: "playgroundError", payload: { message: "aborted" } });
-                  } else {
-                    panel.webview.postMessage({ type: "playgroundError", payload: { message: chunk.error || "stream error" } });
-                  }
-                }
-              }
-            } finally {
-              (panel as any)._addiCurrentAbort = undefined;
-            }
-          } else {
-            const result = await invokeChatCompletion(provider as any, model as any, req);
-            if (result.responseText) { history.push({ role: "assistant", content: result.responseText }); }
-            panel.webview.postMessage({ type: "playgroundResponse", payload: { text: result.responseText || "" } });
-          }
-        } catch (error) {
-          panel.webview.postMessage({ type: "playgroundError", payload: { message: error instanceof Error ? error.message : String(error) } });
-        }
-      } else if (msg?.type === "playgroundSetParams") {
-        if (typeof msg.temperature === "number") { temperature = msg.temperature; }
-        if (typeof msg.topP === "number") { topP = Math.min(Math.max(msg.topP, 0), 1); }
-        if (typeof msg.maxOutputTokens === "number") {
-          const v = Math.floor(msg.maxOutputTokens);
-          if (isFinite(v) && v > 0) { maxOutputTokens = Math.min(Math.max(v, 1), 8192); }
-        }
-        if (typeof msg.presencePenalty === "number") { presencePenalty = Math.min(Math.max(msg.presencePenalty, -2), 2); }
-        if (typeof msg.frequencyPenalty === "number") { frequencyPenalty = Math.min(Math.max(msg.frequencyPenalty, -2), 2); }
-        if (typeof msg.systemPrompt === "string") {
-          const sp = msg.systemPrompt.trim();
-          systemPrompt = sp.length ? sp : undefined;
-        }
-        saveParams();
-      } else if (msg?.type === "playgroundReset") {
-          const ac: AbortController | undefined = (panel as any)._addiCurrentAbort;
-          if (ac) {
-            ac.abort();
-            (panel as any)._addiCurrentAbort = undefined;
-          }
-        history.length = 0;
-        panel.webview.postMessage({ type: "playgroundResetAck" });
-      } else if (msg?.type === "playgroundAbort") {
-        const ac: AbortController | undefined = (panel as any)._addiCurrentAbort;
-        if (ac) {
-          ac.abort();
-          (panel as any)._addiCurrentAbort = undefined;
-        }
-      }
-    });
-
-    // 初始化消息
-    postInit();
+    if (!this.context) { throw new Error("No extension context"); }
+    const mgr = new PlaygroundManager(this.context);
+    // ensure model has the shape of Model
+    const realModel = model as Model;
+    await mgr.openPlayground(provider, realModel);
   }
 
   async addProvider(): Promise<void> {
