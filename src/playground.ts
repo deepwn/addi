@@ -48,12 +48,11 @@ export class PlaygroundManager {
 
     // 优化内联代码渲染，添加 class 便于前端样式调整
     try {
-      // @ts-ignore - renderer.rules 类型 在某些版本里可能为 any
       md.renderer.rules = md.renderer.rules || {};
       // code_inline rule
-      // @ts-ignore
-      md.renderer.rules.code_inline = (tokens: any, idx: number) => {
-        const content = tokens[idx] && tokens[idx].content ? tokens[idx].content : "";
+      md.renderer.rules.code_inline = (tokens: readonly unknown[], idx: number) => {
+        const entry = tokens && Array.isArray(tokens) ? tokens[idx] as Record<string, unknown> | undefined : undefined;
+        const content = entry && typeof entry["content"] === "string" ? entry["content"] as string : "";
         return `<code class="inline-code">${escapeHtml(String(content))}</code>`;
       };
     } catch (_e) {
@@ -62,13 +61,22 @@ export class PlaygroundManager {
 
     const history: ChatMessage[] = [];
     const presetKey = `addi.playground.params`;
-    const stored = this.context?.workspaceState.get<any>(presetKey);
-    let temperature = typeof stored?.temperature === "number" ? stored.temperature : 0.7;
-    let topP: number | undefined = typeof stored?.topP === "number" ? stored.topP : 1.0;
-    let maxOutputTokens: number | undefined = typeof stored?.maxOutputTokens === "number" ? stored.maxOutputTokens : (model.maxOutputTokens || 1024);
-    let presencePenalty: number | undefined = typeof stored?.presencePenalty === "number" ? stored.presencePenalty : 0;
-    let frequencyPenalty: number | undefined = typeof stored?.frequencyPenalty === "number" ? stored.frequencyPenalty : 0;
-    let systemPrompt: string | undefined = typeof stored?.systemPrompt === "string" ? stored.systemPrompt : undefined;
+    const stored = this.context?.workspaceState.get<unknown>(presetKey);
+    let temperature = 0.7;
+    let topP: number | undefined = 1.0;
+    let maxOutputTokens: number | undefined = model.maxOutputTokens || 1024;
+    let presencePenalty: number | undefined = 0;
+    let frequencyPenalty: number | undefined = 0;
+    let systemPrompt: string | undefined = undefined;
+    if (stored && typeof stored === "object") {
+      const s = stored as Record<string, unknown>;
+      if (typeof s["temperature"] === "number") { temperature = s["temperature"] as number; }
+      if (typeof s["topP"] === "number") { topP = s["topP"] as number; }
+      if (typeof s["maxOutputTokens"] === "number") { maxOutputTokens = s["maxOutputTokens"] as number; }
+      if (typeof s["presencePenalty"] === "number") { presencePenalty = s["presencePenalty"] as number; }
+      if (typeof s["frequencyPenalty"] === "number") { frequencyPenalty = s["frequencyPenalty"] as number; }
+      if (typeof s["systemPrompt"] === "string") { systemPrompt = s["systemPrompt"] as string; }
+    }
 
     const saveParams = () => {
       void this.context?.workspaceState.update(presetKey, {
@@ -126,7 +134,7 @@ export class PlaygroundManager {
         }
         try {
           const convo = systemPrompt ? [{ role: "system", content: systemPrompt } as ChatMessage, ...history] : [...history];
-          const req: any = { prompt, conversation: convo, temperature: localTemp, overrideMaxOutputTokens: maxOutputTokens };
+          const req = { prompt, conversation: convo, temperature: localTemp, overrideMaxOutputTokens: maxOutputTokens } as import("./apiClient").ChatRequestOptions;
           if (typeof topP === "number") { req.topP = topP; }
           if (typeof presencePenalty === "number") { req.presencePenalty = presencePenalty; }
           if (typeof frequencyPenalty === "number") { req.frequencyPenalty = frequencyPenalty; }
@@ -135,10 +143,11 @@ export class PlaygroundManager {
           if (useStream) {
             streamAbort = new AbortController();
             req.signal = streamAbort.signal;
-            (panel as any)._addiCurrentAbort = streamAbort;
+            // attach abort controller as a non-standard property on the panel for housekeeping
+            (panel as unknown as Record<string, unknown>)["_addiCurrentAbort"] = streamAbort;
             let assembled = "";
             try {
-              for await (const chunk of streamChatCompletion(provider as any, model as any, req)) {
+              for await (const chunk of streamChatCompletion(provider, model, req)) {
                 if (chunk.type === "delta" && chunk.deltaText) {
                   assembled += chunk.deltaText;
                   // 使用 renderInline 回退 / 渲染
@@ -156,10 +165,10 @@ export class PlaygroundManager {
                 }
               }
             } finally {
-              (panel as any)._addiCurrentAbort = undefined;
+              (panel as unknown as Record<string, unknown>)["_addiCurrentAbort"] = undefined;
             }
           } else {
-            const result = await invokeChatCompletion(provider as any, model as any, req);
+            const result = await invokeChatCompletion(provider, model, req);
             if (result.responseText) { history.push({ role: "assistant", content: result.responseText }); }
             panel.webview.postMessage({ type: "playgroundResponse", payload: { text: result.responseText || "", html: render(result.responseText || "") } });
           }
@@ -181,18 +190,18 @@ export class PlaygroundManager {
         }
         saveParams();
       } else if (msg?.type === "playgroundReset") {
-        const ac: AbortController | undefined = (panel as any)._addiCurrentAbort;
+  const ac: AbortController | undefined = (panel as unknown as Record<string, unknown>)["_addiCurrentAbort"] as AbortController | undefined;
         if (ac) {
           ac.abort();
-          (panel as any)._addiCurrentAbort = undefined;
+          (panel as unknown as Record<string, unknown>)["_addiCurrentAbort"] = undefined;
         }
         history.length = 0;
         panel.webview.postMessage({ type: "playgroundResetAck" });
       } else if (msg?.type === "playgroundAbort") {
-        const ac: AbortController | undefined = (panel as any)._addiCurrentAbort;
+  const ac: AbortController | undefined = (panel as unknown as Record<string, unknown>)["_addiCurrentAbort"] as AbortController | undefined;
         if (ac) {
           ac.abort();
-          (panel as any)._addiCurrentAbort = undefined;
+          (panel as unknown as Record<string, unknown>)["_addiCurrentAbort"] = undefined;
         }
       }
     });

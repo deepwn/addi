@@ -173,10 +173,15 @@ export class CommandHandler {
       throw new Error(await this.readResponseError(response));
     }
 
-    const data: any = await response.json();
-    if (!Array.isArray(data?.choices) || data.choices.length === 0) {
-      throw new Error("OpenAI API response format error");
-    }
+      const data: unknown = await response.json();
+      if (!data || typeof data !== "object") {
+        throw new Error("OpenAI API response format error");
+      }
+      const record = data as Record<string, unknown>;
+      const choices = record["choices"] as unknown;
+      if (!Array.isArray(choices) || choices.length === 0) {
+        throw new Error("OpenAI API response format error");
+      }
   }
 
   private async testAnthropicApi(apiEndpoint: string, apiKey: string, modelDraft: ModelDraft, signal: AbortSignal): Promise<void> {
@@ -203,10 +208,14 @@ export class CommandHandler {
       throw new Error(await this.readResponseError(response));
     }
 
-    const data: any = await response.json();
-    if (!data?.content) {
-      throw new Error("Anthropic API response format error");
-    }
+      const data: unknown = await response.json();
+      if (!data || typeof data !== "object") {
+        throw new Error("Anthropic API response format error");
+      }
+      const record = data as Record<string, unknown>;
+      if (!("content" in record)) {
+        throw new Error("Anthropic API response format error");
+      }
   }
 
   private async testGoogleApi(apiEndpoint: string, apiKey: string, modelDraft: ModelDraft, signal: AbortSignal): Promise<void> {
@@ -236,10 +245,15 @@ export class CommandHandler {
       throw new Error(await this.readResponseError(response));
     }
 
-    const data: any = await response.json();
-    if (!Array.isArray(data?.candidates) || data.candidates.length === 0) {
-      throw new Error("Google API response format error");
-    }
+      const data: unknown = await response.json();
+      if (!data || typeof data !== "object") {
+        throw new Error("Google API response format error");
+      }
+      const record = data as Record<string, unknown>;
+      const candidates = record["candidates"] as unknown;
+      if (!Array.isArray(candidates) || candidates.length === 0) {
+        throw new Error("Google API response format error");
+      }
   }
 
   private async testGenericOpenAiCompatibleApi(apiEndpoint: string, apiKey: string, modelDraft: ModelDraft, signal: AbortSignal): Promise<void> {
@@ -264,8 +278,13 @@ export class CommandHandler {
       throw new Error(await this.readResponseError(response));
     }
 
-    const data: any = await response.json();
-    if (!Array.isArray(data?.choices) || data.choices.length === 0) {
+    const data: unknown = await response.json();
+    if (!data || typeof data !== "object") {
+      throw new Error("OpenAI compatible API response format error");
+    }
+    const record = data as Record<string, unknown>;
+    const choices = record["choices"] as unknown;
+    if (!Array.isArray(choices) || choices.length === 0) {
       throw new Error("OpenAI compatible API response format error");
     }
   }
@@ -981,19 +1000,24 @@ export class CommandHandler {
           }
 
           for (const model of provider.models) {
-            if (!model.id || !model.name || !model.family || !model.version || typeof model.maxInputTokens !== "number" || typeof model.maxOutputTokens !== "number") {
+            if (!model || typeof model !== "object") {
+              throw new Error("Configuration format is invalid");
+            }
+            const mm = model as unknown as Record<string, unknown>;
+            if (!mm["id"] || !mm["name"] || !mm["family"] || !mm["version"] || typeof mm["maxInputTokens"] !== "number" || typeof mm["maxOutputTokens"] !== "number") {
               throw new Error("Configuration format is invalid");
             }
 
-            const hasCapabilitiesObject = typeof (model as any).capabilities === "object" && (model as any).capabilities !== null;
-            const hasLegacyCapabilities = "imageInput" in (model as any) || "toolCalling" in (model as any);
+            const capabilitiesValue = mm["capabilities"];
+            const hasCapabilitiesObject = typeof capabilitiesValue === "object" && capabilitiesValue !== null;
+            const hasLegacyCapabilities = "imageInput" in mm || "toolCalling" in mm;
 
             if (!hasCapabilitiesObject && !hasLegacyCapabilities) {
               throw new Error("Configuration capabilities definition is missing");
             }
 
             if (hasCapabilitiesObject) {
-              const caps = (model as any).capabilities as Record<string, unknown>;
+              const caps = capabilitiesValue as Record<string, unknown>;
               if ("imageInput" in caps && typeof caps["imageInput"] !== "boolean") {
                 throw new Error("Configuration capability imageInput must be boolean");
               }

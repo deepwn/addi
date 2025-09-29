@@ -38,7 +38,7 @@ export interface ChatStreamChunk {
 /**
  * 将 OpenAI / 兼容 SSE 行解析成 json 对象（忽略空行与以 : 开头的注释）
  */
-export function parseSseLine(line: string): any | undefined {
+export function parseSseLine(line: string): unknown | undefined {
   if (!line) { return undefined; }
   if (line.startsWith(":")) { return undefined; }
   const prefix = "data:";
@@ -46,7 +46,7 @@ export function parseSseLine(line: string): any | undefined {
   const data = line.slice(prefix.length).trim();
   if (data === "[DONE]") { return { done: true }; }
   try {
-    return JSON.parse(data);
+    return JSON.parse(data) as unknown;
   } catch {
     return undefined;
   }
@@ -113,9 +113,12 @@ export async function *streamChatCompletion(provider: Provider, model: Model, op
         const line = buffer.slice(0, idx).trim();
         buffer = buffer.slice(idx + 1);
         const parsed = parseSseLine(line);
-  if (!parsed) { continue; }
-        if (parsed.done) { break; }
-        const delta = parsed?.choices?.[0]?.delta?.content;
+        if (!parsed || typeof parsed !== "object") { continue; }
+        // Narrow to expected OpenAI-compatible SSE shape
+        type OpenAiSse = { done?: boolean; choices?: Array<{ delta?: { content?: string }; message?: { content?: string } }> };
+        const p = parsed as OpenAiSse;
+        if (p.done) { break; }
+        const delta = p.choices?.[0]?.delta?.content ?? p.choices?.[0]?.message?.content;
         if (typeof delta === "string" && delta.length) {
           full += delta;
           yield { type: "delta", deltaText: delta, fullText: full };
@@ -124,8 +127,9 @@ export async function *streamChatCompletion(provider: Provider, model: Model, op
     }
     // 完成
     yield { type: "done", fullText: full };
-  } catch (e: any) {
-    if (e?.name === "AbortError") {
+  } catch (e: unknown) {
+    const err = e as { name?: string } | undefined;
+    if (err?.name === "AbortError") {
       yield { type: "error", error: "aborted" };
     } else {
       yield { type: "error", error: e instanceof Error ? e.message : String(e) };
@@ -265,14 +269,14 @@ function splitAnthropicMessages(messages: ChatMessage[]): { system: string | und
   return { system, messages: rest };
 }
 
-function toGoogleContents(messages: ChatMessage[]): any[] {
-  const contents: any[] = [];
+function toGoogleContents(messages: ChatMessage[]): Array<{ role: string; parts: Array<{ text: string }> }> {
+  const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
   let currentRole = "";
-  let currentParts: any[] = [];
+  let currentParts: Array<{ text: string }> = [];
 
   messages.forEach((message) => {
-    const role = message.role === "assistant" ? "model" : message.role;
-    const content = message.content;
+  const role = message.role === "assistant" ? "model" : message.role;
+  const content = message.content;
 
     if (role !== currentRole && currentParts.length > 0) {
       contents.push({ role: currentRole, parts: currentParts });
@@ -339,8 +343,12 @@ async function callOpenAi(
     throw new Error(await readResponseError(response));
   }
 
-  const responsePayload: any = await response.json();
-  const responseText = responsePayload?.choices?.[0]?.message?.content ?? "";
+  const responsePayload: unknown = await response.json();
+  let responseText = "";
+  if (typeof responsePayload === "object" && responsePayload) {
+    const p = responsePayload as { choices?: Array<{ message?: { content?: string } }> };
+    responseText = p.choices?.[0]?.message?.content ?? "";
+  }
   return {
     providerType: "openai",
     endpoint: url,
@@ -399,8 +407,12 @@ async function callGenericCompatible(
     throw new Error(await readResponseError(response));
   }
 
-  const responsePayload: any = await response.json();
-  const responseText = responsePayload?.choices?.[0]?.message?.content ?? "";
+  const responsePayload: unknown = await response.json();
+  let responseText = "";
+  if (typeof responsePayload === "object" && responsePayload) {
+    const p = responsePayload as { choices?: Array<{ message?: { content?: string } }> };
+    responseText = p.choices?.[0]?.message?.content ?? "";
+  }
   return {
     providerType: "generic",
     endpoint: url,
@@ -457,8 +469,17 @@ async function callAnthropic(
     throw new Error(await readResponseError(response));
   }
 
-  const responsePayload: any = await response.json();
-  const responseText = Array.isArray(responsePayload?.content) ? responsePayload.content.map((item: any) => (typeof item?.text === "string" ? item.text : "")).join("") : "";
+  const responsePayload: unknown = await response.json();
+  let responseText = "";
+  if (typeof responsePayload === "object" && responsePayload !== null) {
+    const rp = responsePayload as Record<string, unknown>;
+  const content = rp["content"];
+    if (Array.isArray(content)) {
+      type AnthropicContentItem = { text?: string };
+      const arr = content as Array<AnthropicContentItem>;
+      responseText = arr.map((item) => (typeof item?.text === "string" ? item.text : "")).join("");
+    }
+  }
 
   return {
     providerType: "anthropic",
@@ -512,13 +533,19 @@ async function callGoogle(
     throw new Error(await readResponseError(response));
   }
 
-  const responsePayload: any = await response.json();
-  const responseText = Array.isArray(responsePayload?.candidates)
-    ? responsePayload.candidates
-        .flatMap((candidate: any) => candidate?.content?.parts ?? [])
-        .map((part: any) => (typeof part?.text === "string" ? part.text : ""))
-        .join("")
-    : "";
+  const responsePayload: unknown = await response.json();
+  let responseText = "";
+  if (typeof responsePayload === "object" && responsePayload !== null) {
+    const rp = responsePayload as Record<string, unknown>;
+  const candidates = rp["candidates"];
+    if (Array.isArray(candidates)) {
+      type GooglePart = { text?: string };
+      type GoogleCandidate = { content?: { parts?: GooglePart[] } };
+      const cands = candidates as GoogleCandidate[];
+      const parts = cands.flatMap((candidate) => candidate?.content?.parts ?? [] as GooglePart[]);
+      responseText = parts.map((part) => (typeof part?.text === "string" ? part.text : "")).join("");
+    }
+  }
 
   return {
     providerType: "google",

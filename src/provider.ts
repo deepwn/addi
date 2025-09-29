@@ -26,8 +26,8 @@ export class ProviderModelManager {
   }
 
   getProviders(): Provider[] {
-    const stored = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
-    const mutated = this.normalizeProvidersInPlace(stored as Array<Provider & Record<string, any>>);
+  const stored = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
+  const mutated = this.normalizeProvidersInPlace(stored as Array<Provider & Record<string, unknown>>);
     if (mutated) {
       void this.context.globalState.update(ProviderModelManager.STORAGE_KEY, stored);
     }
@@ -35,11 +35,11 @@ export class ProviderModelManager {
   }
 
   async saveProviders(providers: Provider[]): Promise<void> {
-    this.normalizeProvidersInPlace(providers as Array<Provider & Record<string, any>>);
+  this.normalizeProvidersInPlace(providers as Array<Provider & Record<string, unknown>>);
     await this.context.globalState.update(ProviderModelManager.STORAGE_KEY, providers);
   }
 
-  private normalizeProvidersInPlace(providers: Array<Provider & Record<string, any>>): boolean {
+  private normalizeProvidersInPlace(providers: Array<Provider & Record<string, unknown>>): boolean {
     let mutated = false;
 
     for (const provider of providers) {
@@ -64,24 +64,24 @@ export class ProviderModelManager {
       }
 
       provider.models = provider.models.map((model) => {
-        const mutableModel = model as unknown as Record<string, any>;
+        const mutableModel = model as unknown as Record<string, unknown>;
         let changed = false;
 
         if (!mutableModel["capabilities"] || typeof mutableModel["capabilities"] !== "object") {
-          mutableModel["capabilities"] = {};
+          mutableModel["capabilities"] = {} as Record<string, unknown>;
           changed = true;
         }
 
-        const capabilitiesRecord = mutableModel["capabilities"] as Record<string, any>;
+        const capabilitiesRecord = mutableModel["capabilities"] as Record<string, unknown>;
 
         if (capabilitiesRecord["imageInput"] === undefined && typeof mutableModel["imageInput"] === "boolean") {
-          capabilitiesRecord["imageInput"] = mutableModel["imageInput"];
+          (capabilitiesRecord as Record<string, unknown>)["imageInput"] = mutableModel["imageInput"];
           changed = true;
         }
 
         if (capabilitiesRecord["toolCalling"] === undefined && mutableModel["toolCalling"] !== undefined) {
           const legacyToolCalling = mutableModel["toolCalling"];
-          capabilitiesRecord["toolCalling"] = typeof legacyToolCalling === "number" ? legacyToolCalling : Boolean(legacyToolCalling);
+          (capabilitiesRecord as Record<string, unknown>)["toolCalling"] = typeof legacyToolCalling === "number" ? legacyToolCalling : Boolean(legacyToolCalling);
           changed = true;
         }
 

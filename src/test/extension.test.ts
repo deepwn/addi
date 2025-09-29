@@ -5,18 +5,18 @@ import { ConfigManager, InputValidator } from "../utils";
 
 // 模拟vscode模块
 class MockExtensionContext {
-  private _globalState = new Map<string, any>();
+  private _globalState = new Map<string, unknown>();
 
   get globalState() {
     return {
-      get: (key: string, defaultValue?: any) => {
+      get: (key: string, defaultValue?: unknown) => {
         return this._globalState.get(key) ?? defaultValue;
       },
-      update: (key: string, value: any) => {
+      update: (key: string, value: unknown) => {
         this._globalState.set(key, value);
         return Promise.resolve();
       },
-    };
+    } as unknown as vscode.Memento;
   }
 }
 
@@ -24,14 +24,14 @@ class MockExtensionContext {
 const mockWorkspace = {
   getConfiguration: (section?: string) => {
     return {
-      get: (key: string, defaultValue?: any) => {
-        const config: Record<string, any> = {
+      get: (key: string, defaultValue?: unknown) => {
+        const config: Record<string, unknown> = {
           "addi.defaultMaxInputTokens": 4096,
           "addi.defaultMaxOutputTokens": 1024,
           "addi.defaultModelVersion": "1.0.0",
         };
         const fullKey = section ? `${section}.${key}` : key;
-        return config[fullKey] ?? defaultValue;
+        return (config as Record<string, unknown>)[fullKey] ?? defaultValue;
       },
     };
   },
@@ -54,7 +54,7 @@ suite("Extension Test Suite", () => {
 
     setup(() => {
       context = new MockExtensionContext();
-      manager = new ProviderModelManager(context as any);
+      manager = new ProviderModelManager(context as unknown as vscode.ExtensionContext);
     });
 
     test("should add provider", async () => {
@@ -290,7 +290,7 @@ suite("Extension Test Suite", () => {
 
     setup(() => {
       context = new MockExtensionContext();
-      manager = new ProviderModelManager(context as any);
+      manager = new ProviderModelManager(context as unknown as vscode.ExtensionContext);
     });
 
     test("should create provider with models and export/import", async () => {
@@ -347,6 +347,41 @@ suite("Extension Test Suite", () => {
       assert.strictEqual(providers[0]?.models.length, 2);
       assert.strictEqual(providers[0]?.models[0]?.name, "Test Model 1");
       assert.strictEqual(providers[0]?.models[1]?.name, "Test Model 2");
+    });
+
+    test("should normalize legacy model fields on import (imageInput/toolCalling)", async () => {
+      const legacyProvider = {
+        id: 'legacy-1',
+        name: 'Legacy Provider',
+        providerType: 'generic',
+        apiEndpoint: 'https://api.legacy',
+        apiKey: 'key',
+        models: [
+          {
+            id: 'm-legacy',
+            name: 'LegacyModel',
+            family: 'legacy',
+            version: '1.0',
+            // legacy placement of capabilities
+            imageInput: true,
+            toolCalling: 1,
+          },
+        ],
+      };
+
+      // simulate JSON import roundtrip to produce a plain object
+      const imported = JSON.parse(JSON.stringify([legacyProvider]));
+      await manager.saveProviders(imported as any);
+
+  const providers = manager.getProviders();
+  assert.strictEqual(providers.length, 1);
+  assert.ok(providers[0]);
+  assert.ok(Array.isArray(providers[0].models) && providers[0].models.length > 0);
+  const normalizedModel = providers[0].models[0]!;
+  assert.ok(normalizedModel.capabilities !== undefined);
+  assert.strictEqual(normalizedModel.capabilities?.imageInput, true);
+  // legacy numeric flag should be preserved as number by normalizeCapabilities
+  assert.strictEqual(normalizedModel.capabilities?.toolCalling, 1);
     });
   });
 });

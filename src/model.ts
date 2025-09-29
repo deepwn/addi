@@ -31,7 +31,7 @@ export class ModelTreeItem extends vscode.TreeItem {
 export class AddiChatProvider implements vscode.LanguageModelChatProvider {
   constructor(private repository: ProviderRepository) {}
 
-  async provideLanguageModelChatInformation(options: { silent: boolean }, _token: vscode.CancellationToken): Promise<any[]> {
+  async provideLanguageModelChatInformation(options: { silent: boolean }, _token: vscode.CancellationToken): Promise<vscode.LanguageModelChatInformation[]> {
     const providers = this.repository.getProviders();
     const filterProviders = options.silent ? providers.filter((p) => p.apiKey && p.apiKey.trim() !== "") : providers;
     return filterProviders.flatMap((p) =>
@@ -46,13 +46,20 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
         detail: m.detail ?? `${m.maxInputTokens}↑/${m.maxOutputTokens}↓`,
         capabilities: {
           imageInput: !!m.capabilities?.imageInput,
-          toolCalling: m.capabilities?.toolCalling,
+          // LanguageModelChatInformation.capabilities.toolCalling expects number | boolean
+          toolCalling: (m.capabilities?.toolCalling ?? false) as number | boolean,
         },
       }))
     );
   }
 
-  async provideLanguageModelChatResponse(model: any, messages: readonly any[], _options: any, progress: vscode.Progress<any>, token: vscode.CancellationToken): Promise<void> {
+  async provideLanguageModelChatResponse(
+    model: vscode.LanguageModelChatInformation,
+    messages: readonly vscode.LanguageModelChatRequestMessage[],
+    _options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
+    progress: vscode.Progress<vscode.LanguageModelResponsePart>,
+    token: vscode.CancellationToken
+  ): Promise<void> {
     const modelId = typeof model.id === "string" && model.id.startsWith("addi-provider:") ? model.id.replace("addi-provider:", "") : model.id;
     const result = this.repository.findModel(modelId);
     if (!result) {
@@ -94,18 +101,21 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     }
   }
 
-  async provideTokenCount(_model: any, text: string | any, _token: vscode.CancellationToken): Promise<number> {
+  async provideTokenCount(_model: vscode.LanguageModelChatInformation, text: string | vscode.LanguageModelChatRequestMessage, _token: vscode.CancellationToken): Promise<number> {
     if (typeof text === "string") {
       const words = text.split(/\s+/).length;
       return Math.ceil(words * 1.3);
     }
     // If a message is provided, stringify only text parts
-    if (typeof text === "object" && text && Array.isArray((text as any).content)) {
-      const parts = (text as any).content
-        .filter((p: any) => p instanceof vscode.LanguageModelTextPart)
-        .map((p: vscode.LanguageModelTextPart) => p.value)
-        .join("");
-      return Math.ceil(parts.length / 4);
+    if (typeof text === "object" && text) {
+      const maybe = text as { content?: unknown };
+      if (Array.isArray(maybe.content)) {
+        const parts = (maybe.content as readonly unknown[])
+          .filter((p): p is vscode.LanguageModelTextPart => p instanceof vscode.LanguageModelTextPart)
+          .map((p: vscode.LanguageModelTextPart) => p.value)
+          .join("");
+        return Math.ceil(parts.length / 4);
+      }
     }
     const textContent = JSON.stringify(text);
     return Math.ceil(textContent.length / 4);
@@ -218,8 +228,15 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     }
 
     await this.streamSseResponse(response, token, (data) => {
-      if (data.type === "content_block_delta" && data.delta && data.delta.text) {
-        progress.report(new vscode.LanguageModelTextPart(data.delta.text));
+      const obj = data as Record<string, unknown> | undefined;
+      if (!obj) {
+        return;
+      }
+      if (obj["type"] === "content_block_delta") {
+        const delta = obj["delta"] as Record<string, unknown> | undefined;
+        if (delta && typeof delta["text"] === "string") {
+          progress.report(new vscode.LanguageModelTextPart(delta["text"] as string));
+        }
       }
     });
   }
@@ -259,12 +276,25 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     }
 
     await this.streamLineDelimitedJson(response, token, (data) => {
-      if (Array.isArray(data?.candidates)) {
-        for (const candidate of data.candidates) {
-          for (const part of candidate?.content?.parts ?? []) {
-            if (part?.text) {
-              progress.report(new vscode.LanguageModelTextPart(part.text));
-            }
+      const obj = data as Record<string, unknown> | undefined;
+      if (!obj) {
+        return;
+      }
+      const candidates = obj["candidates"];
+      if (!Array.isArray(candidates)) {
+        return;
+      }
+      for (const candidate of candidates) {
+        const cand = candidate as Record<string, unknown> | undefined;
+        const content = cand?.["content"] as Record<string, unknown> | undefined;
+        const parts = content?.["parts"] as unknown;
+        if (!Array.isArray(parts)) {
+          continue;
+        }
+        for (const part of parts as unknown[]) {
+          const p = part as Record<string, unknown> | undefined;
+          if (p && typeof p["text"] === "string") {
+            progress.report(new vscode.LanguageModelTextPart(p["text"] as string));
           }
         }
       }
@@ -300,30 +330,31 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     );
   }
 
-  private toOpenAiMessages(messages: readonly any[]): Array<{ role: string; content: string }> {
+  private toOpenAiMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): Array<{ role: string; content: string }> {
     return messages.map((msg) => ({
       role: msg.role === vscode.LanguageModelChatMessageRole.User ? "user" : "assistant",
-      content: typeof msg.content === "string"
-        ? msg.content
-        : Array.isArray(msg.content)
-        ? msg.content
-            .filter((p: any) => p instanceof vscode.LanguageModelTextPart)
-            .map((p: vscode.LanguageModelTextPart) => p.value)
-            .join("")
-        : String(msg.content),
+      content:
+        typeof msg.content === "string"
+          ? msg.content
+          : Array.isArray(msg.content)
+          ? (msg.content as Array<unknown>)
+              .filter((p): p is vscode.LanguageModelTextPart => p instanceof vscode.LanguageModelTextPart)
+              .map((p) => p.value)
+              .join("")
+          : String(msg.content),
     }));
   }
 
-  private extractSystemMessage(messages: readonly any[]): string {
+  private extractSystemMessage(messages: readonly vscode.LanguageModelChatRequestMessage[]): string {
     for (const msg of messages) {
       if (msg.name === "system") {
         if (typeof msg.content === "string") {
           return msg.content;
         }
         if (Array.isArray(msg.content)) {
-          return msg.content
-            .filter((p: any) => p instanceof vscode.LanguageModelTextPart)
-            .map((p: vscode.LanguageModelTextPart) => p.value)
+          return (msg.content as Array<unknown>)
+            .filter((p): p is vscode.LanguageModelTextPart => p instanceof vscode.LanguageModelTextPart)
+            .map((p) => p.value)
             .join("");
         }
         return String(msg.content);
@@ -332,7 +363,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     return "";
   }
 
-  private toAnthropicMessages(messages: readonly any[]): Array<{ role: string; content: string }> {
+  private toAnthropicMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): Array<{ role: string; content: string }> {
     const result: Array<{ role: string; content: string }> = [];
     for (const msg of messages) {
       if (msg.name === "system") {
@@ -343,7 +374,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
         ? msg.content
         : Array.isArray(msg.content)
         ? msg.content
-            .filter((p: any) => p instanceof vscode.LanguageModelTextPart)
+            .filter((p): p is vscode.LanguageModelTextPart => p instanceof vscode.LanguageModelTextPart)
             .map((p: vscode.LanguageModelTextPart) => p.value)
             .join("")
         : String(msg.content);
@@ -352,19 +383,19 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     return result;
   }
 
-  private toGoogleMessages(messages: readonly any[]): any[] {
-    const contents: any[] = [];
+  private toGoogleMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): Array<{ role: string; parts: Array<{ text: string }> }> {
+    const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
     let currentRole = "";
-    let currentParts: any[] = [];
+    let currentParts: Array<{ text: string }> = [];
 
     messages.forEach((msg) => {
       const role = msg.role === vscode.LanguageModelChatMessageRole.User ? "user" : "model";
       const content = typeof msg.content === "string"
         ? msg.content
         : Array.isArray(msg.content)
-        ? msg.content
-            .filter((p: any) => p instanceof vscode.LanguageModelTextPart)
-            .map((p: vscode.LanguageModelTextPart) => p.value)
+        ? (msg.content as Array<unknown>)
+            .filter((p): p is vscode.LanguageModelTextPart => p instanceof vscode.LanguageModelTextPart)
+            .map((p) => p.value)
             .join("")
         : String(msg.content);
 
@@ -391,7 +422,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
   }
 
   private async streamOpenAiCompatibleResponse(
-    request: { url: string; headers: Record<string, string>; body: Record<string, any> },
+  request: { url: string; headers: Record<string, string>; body: Record<string, unknown> },
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken,
     strict: boolean
@@ -468,7 +499,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     }
   }
 
-  private async streamSseResponse(response: Response, token: vscode.CancellationToken, onData: (data: any) => void): Promise<void> {
+  private async streamSseResponse(response: Response, token: vscode.CancellationToken, onData: (data: unknown) => void): Promise<void> {
     if (!response.body) {
       throw new Error("Response body is empty");
     }
@@ -503,7 +534,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     }
   }
 
-  private async streamLineDelimitedJson(response: Response, token: vscode.CancellationToken, onData: (data: any) => void): Promise<void> {
+  private async streamLineDelimitedJson(response: Response, token: vscode.CancellationToken, onData: (data: unknown) => void): Promise<void> {
     if (!response.body) {
       throw new Error("Response body is empty");
     }
