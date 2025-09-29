@@ -155,7 +155,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     return trimmedId || model.family;
   }
 
-  private async callOpenAiApi(provider: Provider, model: Model, messages: readonly any[], progress: vscode.Progress<any>, token: vscode.CancellationToken): Promise<void> {
+  private async callOpenAiApi(provider: Provider, model: Model, messages: readonly vscode.LanguageModelChatRequestMessage[], progress: vscode.Progress<vscode.LanguageModelResponsePart>, token: vscode.CancellationToken): Promise<void> {
     const url = this.resolveChatCompletionsUrl(provider.apiEndpoint ?? "", "https://api.openai.com/v1");
     const modelIdentifier = this.resolveModelIdentifier(model);
     await this.streamOpenAiCompatibleResponse(
@@ -178,7 +178,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     );
   }
 
-  private async callAnthropicApi(provider: Provider, model: Model, messages: readonly any[], progress: vscode.Progress<any>, token: vscode.CancellationToken): Promise<void> {
+  private async callAnthropicApi(provider: Provider, model: Model, messages: readonly vscode.LanguageModelChatRequestMessage[], progress: vscode.Progress<vscode.LanguageModelResponsePart>, token: vscode.CancellationToken): Promise<void> {
     const baseUrl = this.normalizeBaseUrl(provider.apiEndpoint ?? "", "https://api.anthropic.com");
     const systemMessage = this.extractSystemMessage(messages);
     const userMessages = this.toAnthropicMessages(messages);
@@ -201,6 +201,19 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     });
 
     if (!response.ok) {
+      // Report friendly errors for common HTTP statuses
+      if (response.status === 401 || response.status === 403) {
+        progress.report(new vscode.LanguageModelTextPart("Authentication or consent issue: please check API key or user consent for this model."));
+        return;
+      }
+      if (response.status === 429) {
+        progress.report(new vscode.LanguageModelTextPart("Rate limit or quota exceeded. Please try again later."));
+        return;
+      }
+      if (response.status >= 500) {
+        progress.report(new vscode.LanguageModelTextPart("Server error from model provider. Please try again later."));
+        return;
+      }
       throw new Error(`Anthropic API Error: ${response.status} ${response.statusText}`);
     }
 
@@ -211,7 +224,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     });
   }
 
-  private async callGoogleApi(provider: Provider, model: Model, messages: readonly any[], progress: vscode.Progress<any>, token: vscode.CancellationToken): Promise<void> {
+  private async callGoogleApi(provider: Provider, model: Model, messages: readonly vscode.LanguageModelChatRequestMessage[], progress: vscode.Progress<vscode.LanguageModelResponsePart>, token: vscode.CancellationToken): Promise<void> {
     const baseUrl = this.normalizeBaseUrl(provider.apiEndpoint ?? "", "https://generativelanguage.googleapis.com/v1beta");
     const contents = this.toGoogleMessages(messages);
     const modelIdentifier = this.resolveModelIdentifier(model);
@@ -230,6 +243,18 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     });
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        progress.report(new vscode.LanguageModelTextPart("Authentication or consent issue: please check API key or user consent for this model."));
+        return;
+      }
+      if (response.status === 429) {
+        progress.report(new vscode.LanguageModelTextPart("Rate limit or quota exceeded. Please try again later."));
+        return;
+      }
+      if (response.status >= 500) {
+        progress.report(new vscode.LanguageModelTextPart("Server error from model provider. Please try again later."));
+        return;
+      }
       throw new Error(`Google API Error: ${response.status} ${response.statusText}`);
     }
 
@@ -249,8 +274,8 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
   private async callGenericOpenAiCompatibleApi(
     provider: Provider,
     model: Model,
-    messages: readonly any[],
-    progress: vscode.Progress<any>,
+    messages: readonly vscode.LanguageModelChatRequestMessage[],
+    progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken
   ): Promise<void> {
     const url = this.resolveChatCompletionsUrl(provider.apiEndpoint ?? "", "https://api.openai.com/v1");
@@ -367,7 +392,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
 
   private async streamOpenAiCompatibleResponse(
     request: { url: string; headers: Record<string, string>; body: Record<string, any> },
-    progress: vscode.Progress<any>,
+    progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken,
     strict: boolean
   ): Promise<void> {
@@ -378,11 +403,24 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     });
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        progress.report(new vscode.LanguageModelTextPart("Authentication or consent issue: please check API key or user consent for this model."));
+        return;
+      }
+      if (response.status === 429) {
+        progress.report(new vscode.LanguageModelTextPart("Rate limit or quota exceeded. Please try again later."));
+        return;
+      }
+      if (response.status >= 500) {
+        progress.report(new vscode.LanguageModelTextPart("Server error from model provider. Please try again later."));
+        return;
+      }
       throw new Error(`OpenAI Compatible API Error: ${response.status} ${response.statusText}`);
     }
 
     if (!response.body) {
-      throw new Error("Response body is empty");
+      progress.report(new vscode.LanguageModelTextPart("Model returned an empty response."));
+      return;
     }
 
     const reader = response.body.getReader();
@@ -418,9 +456,12 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
               progress.report(new vscode.LanguageModelTextPart(content));
             }
           } catch (error) {
+            // If strict parsing is required we warn, but also report a textual hint so user sees progress
             if (strict) {
               console.warn("Failed to parse OpenAI compatible stream data:", error);
             }
+            // Optionally surface a non-fatal parse hint
+            // Do not spam progress with every parse error; skip reporting here.
           }
         }
       }
