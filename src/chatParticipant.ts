@@ -35,12 +35,89 @@ export class AddiChatParticipant implements vscode.Disposable {
     try {
       const response = await chatModel.sendRequest(messages, {}, token);
       let aggregated = "";
-      for await (const fragment of response.text) {
-        if (!fragment) {
-          continue;
+
+      // response.text is an async iterable of textual fragments
+      const textReader = (async () => {
+        for await (const fragment of response.text) {
+          if (!fragment) {
+            continue;
+          }
+          aggregated += fragment;
         }
-        aggregated += fragment;
-      }
+      })();
+
+      // response.parts may contain structured parts such as tool calls / tool results
+      const parts = (response as any).parts;
+      const partsReader = (async () => {
+        if (!parts || typeof (parts as any)[Symbol.asyncIterator] !== "function") {
+          return;
+        }
+
+        for await (const part of parts) {
+          try {
+            // Language model tool call parts should be instances of LanguageModelToolCallPart
+            if (part instanceof (vscode as any).LanguageModelToolCallPart) {
+              const toolPart: any = part;
+              const toolName = toolPart.name ?? "tool";
+              // The part may expose an input or arguments field
+              const toolInput = toolPart.input ?? toolPart.arguments ?? {};
+
+              // Invoke the registered tool and pass the chat request's toolInvocationToken so the UI binds it to this chat
+              const invokeOptions = { input: toolInput, toolInvocationToken: request.toolInvocationToken } as unknown as vscode.LanguageModelToolInvocationOptions<object>;
+              try {
+                const toolResult = await vscode.lm.invokeTool(toolName, invokeOptions, token);
+                // Summarize the tool result for the chat stream
+                let summary = "";
+                try {
+                  if (toolResult && Array.isArray((toolResult as any).content)) {
+                    summary = (toolResult as any).content
+                      .map((p: any) => (p instanceof (vscode as any).LanguageModelTextPart ? p.value : String(p)))
+                      .join("");
+                  } else {
+                    summary = String(toolResult ?? "");
+                  }
+                } catch (_err) {
+                  summary = String(toolResult ?? "Tool invoked.");
+                }
+
+                if (summary && summary.trim().length > 0) {
+                  stream.markdown(summary);
+                } else {
+                  stream.markdown(vscode.l10n.t("Tool {0} invoked.", toolName));
+                }
+              } catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                stream.markdown(vscode.l10n.t("Tool invocation failed for {0}: {1}", toolName, message));
+              }
+            }
+            // If the part is a text part, forward it to the aggregated text as well
+            else if (part instanceof (vscode as any).LanguageModelTextPart) {
+              try {
+                const v = (part as any).value ?? String(part);
+                aggregated += String(v);
+              } catch (_e) {
+                // ignore
+              }
+            }
+            // Tool result parts can also be surfaced
+            else if (part instanceof (vscode as any).LanguageModelToolResultPart) {
+              try {
+                const v = (part as any).value ?? String(part);
+                if (v && String(v).trim().length > 0) {
+                  stream.markdown(String(v));
+                }
+              } catch (_e) {
+                // ignore
+              }
+            }
+          } catch (err) {
+            console.warn("Error handling response part:", err);
+          }
+        }
+      })();
+
+      // wait for both readers to finish
+      await Promise.all([textReader, partsReader]);
 
       if (!aggregated.trim()) {
         stream.markdown(vscode.l10n.t("The Addi model did not return any content."));

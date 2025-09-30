@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 import { Provider, Model } from "./types";
 import { ChatMessage } from "./apiClient";
 import { TextDecoder } from "util";
-import MarkdownIt from "markdown-it";
 
 export class PlaygroundManager {
   constructor(private readonly context: vscode.ExtensionContext) {}
@@ -22,45 +21,11 @@ export class PlaygroundManager {
     type AddiPanelState = vscode.WebviewPanel & { _addiCancellation?: vscode.CancellationTokenSource };
     const addiPanel = panel as AddiPanelState;
 
-    // 使用 markdown-it 进行渲染（项目中已安装）
-    // 开启 linkify/typographer，使内联渲染更接近商业化聊天界面效果
-    const md = new MarkdownIt({ html: false, linkify: true, typographer: true });
-    const escapeHtml = (s: string) =>
-      s
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/\"/g, "&quot;")
-        .replace(/'/g, "&#39;");
 
-    const renderInline = (text: string) => {
-      try {
-        return md.renderInline(text);
-      } catch (e) {
-        return `<code>${escapeHtml(text)}</code>`;
-      }
-    };
+      // 使用 VS Code/主机提供的 markdown 渲染（通过 stream.markdown）
+      // playground 将不再对 markdown 进行本地渲染；它只是把原始 markdown 片段转发给前端/主机。
 
-    const render = (text: string) => {
-      try {
-        return md.render(text);
-      } catch (e) {
-        return `<pre>${escapeHtml(text)}</pre>`;
-      }
-    };
-
-    // 优化内联代码渲染，添加 class 便于前端样式调整
-    try {
-      md.renderer.rules = md.renderer.rules || {};
-      // code_inline rule
-      md.renderer.rules.code_inline = (tokens: readonly unknown[], idx: number) => {
-        const entry = tokens && Array.isArray(tokens) ? tokens[idx] as Record<string, unknown> | undefined : undefined;
-        const content = entry && typeof entry["content"] === "string" ? entry["content"] as string : "";
-        return `<code class="inline-code">${escapeHtml(String(content))}</code>`;
-      };
-    } catch (_e) {
-      // ignore if renderer.rules not available for this md version
-    }
+    // 不再在扩展端更改或定制 markdown-it 的渲染规则；前端/主机会自行处理渲染样式
 
     const history: ChatMessage[] = [];
     const presetKey = `addi.playground.params`;
@@ -172,25 +137,35 @@ export class PlaygroundManager {
         try {
           const response = await chatModel.sendRequest(messages, requestOptions, cts.token);
           let assembled = "";
+
+          // Create a small adapter that mimics the ChatResponseStream.markdown behaviour
+          // and forwards HTML-rendered deltas to the playground webview. This keeps
+          // playground rendering semantics close to the official stream.markdown API.
+          const webviewStream = {
+            markdown: (md: string) => {
+              if (typeof md !== "string" || md.length === 0) {
+                return;
+              }
+              assembled += md;
+              if (streaming) {
+                panel.webview.postMessage({
+                  type: "playgroundStreamDelta",
+                  payload: {
+                    delta: md,
+                    full: assembled,
+                  },
+                });
+              }
+            },
+            // progress/other methods could be added later if needed
+          };
+
           for await (const fragment of response.text) {
-            if (typeof fragment !== "string" || fragment.length === 0) {
-              continue;
-            }
-            assembled += fragment;
-            if (streaming) {
-              panel.webview.postMessage({
-                type: "playgroundStreamDelta",
-                payload: {
-                  delta: fragment,
-                  full: assembled,
-                  html: renderInline(assembled),
-                },
-              });
-            }
+            webviewStream.markdown(String(fragment ?? ""));
           }
 
           history.push({ role: "assistant", content: assembled });
-          panel.webview.postMessage({ type: "playgroundResponse", payload: { text: assembled, html: render(assembled) } });
+          panel.webview.postMessage({ type: "playgroundResponse", payload: { text: assembled } });
         } catch (error) {
           const cancelled = cts.token.isCancellationRequested;
           const message = error instanceof Error ? error.message : String(error);

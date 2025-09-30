@@ -1,6 +1,7 @@
 # VSIX packaging ignore list
 .vscode/**
 .vscode-test/**
+.vscode-test.mjs
 out/**
 node_modules/**
 src/**
@@ -8,9 +9,11 @@ src/**
 .gitignore
 .yarnrc
 webpack.config.js
-vsc-extension-quickstart.md
+*.md
+!readme.md
+!README.md
 **/tsconfig.json
 **/eslint.config.mjs
 **/*.map
 **/*.ts
-**/.vscode-test.*
+!**/*.min.(svg|png|jpg|jpeg|gif)

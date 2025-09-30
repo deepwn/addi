@@ -38,6 +38,49 @@ export function activate(context: vscode.ExtensionContext) {
   const chatParticipant = new AddiChatParticipant(context);
   context.subscriptions.push(chatParticipant);
 
+  // Register a simple language model tool that can create a file in the workspace.
+  // This allows LanguageModelToolCallPart emitted by the provider to be handled by the extension.
+  try {
+    const createFileTool: vscode.LanguageModelTool<Record<string, unknown>> = {
+      async invoke(options, _token) {
+        const input = options.input ?? {};
+        // Expect input to have { path: string, content: string }
+        const path = typeof input["path"] === "string" ? (input["path"] as string) : undefined;
+        const content = typeof input["content"] === "string" ? (input["content"] as string) : String(input["content"] ?? "");
+
+        if (!path || path.trim().length === 0) {
+          return { success: false, message: "Missing 'path' in tool input." } as unknown as vscode.LanguageModelToolResult;
+        }
+
+        try {
+          // If workspace folder exists, create file relative to first workspace root; otherwise use extension storagePath
+          const folders = vscode.workspace.workspaceFolders;
+          let baseUri: vscode.Uri | undefined;
+          const firstFolder = folders && folders.length > 0 ? folders[0] : undefined;
+          if (firstFolder && firstFolder.uri) {
+            baseUri = firstFolder.uri;
+          } else {
+            baseUri = context.globalStorageUri;
+          }
+
+          const fileUri = vscode.Uri.joinPath(baseUri, path);
+          const encoder = new TextEncoder();
+          const bytes = encoder.encode(content);
+          await vscode.workspace.fs.writeFile(fileUri, bytes);
+
+          return { success: true, message: `File created: ${fileUri.toString()}`, uri: fileUri.toString() } as unknown as vscode.LanguageModelToolResult;
+        } catch (err) {
+          return { success: false, message: String(err) } as unknown as vscode.LanguageModelToolResult;
+        }
+      },
+    };
+
+  const disposableTool = vscode.lm.registerTool<Record<string, unknown>>("addi.createFile", createFileTool as unknown as vscode.LanguageModelTool<Record<string, unknown>>);
+    context.subscriptions.push(disposableTool);
+  } catch (err) {
+    console.warn("Failed to register createFile tool:", err);
+  }
+
   // 调试命令：输出当前 Settings Sync 状态和存储内容（仅用于开发/验证）
   context.subscriptions.push(
     vscode.commands.registerCommand("addi.debug.printSettingsSyncState", async () => {

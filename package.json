@@ -312,7 +312,8 @@
         "displayName": "Addi",
         "managementCommand": "addi.manage"
       }
-    ]
+    ],
+    "languageModelTools": []
   },
   "scripts": {
     "vscode:prepublish": "yarn package",
