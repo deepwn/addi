@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { Provider, Model } from "./types";
-import { invokeChatCompletion, ChatMessage, streamChatCompletion } from "./apiClient";
+import { ChatMessage } from "./apiClient";
 import { TextDecoder } from "util";
 import MarkdownIt from "markdown-it";
 
@@ -18,6 +18,9 @@ export class PlaygroundManager {
       vscode.ViewColumn.Active,
       { enableScripts: true, retainContextWhenHidden: true }
     );
+
+    type AddiPanelState = vscode.WebviewPanel & { _addiCancellation?: vscode.CancellationTokenSource };
+    const addiPanel = panel as AddiPanelState;
 
     // 使用 markdown-it 进行渲染（项目中已安装）
     // 开启 linkify/typographer，使内联渲染更接近商业化聊天界面效果
@@ -118,7 +121,7 @@ export class PlaygroundManager {
       if (msg?.type === "playgroundSend") {
         const prompt: string = (msg.prompt || "").trim();
         if (!prompt) { return; }
-        let streamAbort: AbortController | undefined;
+
         const localTemp = typeof msg.temperature === "number" ? msg.temperature : temperature;
         temperature = localTemp;
         if (typeof msg.topP === "number") { topP = Math.min(Math.max(msg.topP, 0), 1); }
@@ -132,48 +135,70 @@ export class PlaygroundManager {
           const sp = msg.systemPrompt.trim();
           systemPrompt = sp.length ? sp : undefined;
         }
+
+        const chatModel = await this.selectChatModel(model);
+        if (!chatModel) {
+          panel.webview.postMessage({ type: "playgroundError", payload: { message: "No Addi chat model is available. Configure a provider first." } });
+          return;
+        }
+
+        const messages = this.createChatMessages(history, prompt, systemPrompt);
+        if (messages.length === 0) {
+          panel.webview.postMessage({ type: "playgroundError", payload: { message: "Unable to build chat prompt." } });
+          return;
+        }
+
+        const requestOptionsInput: {
+          temperature?: number;
+          topP?: number;
+          maxOutputTokens?: number;
+          presencePenalty?: number;
+          frequencyPenalty?: number;
+        } = { temperature: localTemp };
+        if (typeof topP === "number") { requestOptionsInput.topP = topP; }
+        if (typeof maxOutputTokens === "number") { requestOptionsInput.maxOutputTokens = maxOutputTokens; }
+        if (typeof presencePenalty === "number") { requestOptionsInput.presencePenalty = presencePenalty; }
+        if (typeof frequencyPenalty === "number") { requestOptionsInput.frequencyPenalty = frequencyPenalty; }
+
+        const requestOptions = this.createChatRequestOptions(requestOptionsInput);
+
+        const streaming = msg.stream === true;
+  const cts = new vscode.CancellationTokenSource();
+  addiPanel._addiCancellation = cts;
+
+        const priorLength = history.length;
+        history.push({ role: "user", content: prompt });
+
         try {
-          const convo = systemPrompt ? [{ role: "system", content: systemPrompt } as ChatMessage, ...history] : [...history];
-          const req = { prompt, conversation: convo, temperature: localTemp, overrideMaxOutputTokens: maxOutputTokens } as import("./apiClient").ChatRequestOptions;
-          if (typeof topP === "number") { req.topP = topP; }
-          if (typeof presencePenalty === "number") { req.presencePenalty = presencePenalty; }
-          if (typeof frequencyPenalty === "number") { req.frequencyPenalty = frequencyPenalty; }
-          const useStream = msg.stream === true;
-          history.push({ role: "user", content: prompt });
-          if (useStream) {
-            streamAbort = new AbortController();
-            req.signal = streamAbort.signal;
-            // attach abort controller as a non-standard property on the panel for housekeeping
-            (panel as unknown as Record<string, unknown>)["_addiCurrentAbort"] = streamAbort;
-            let assembled = "";
-            try {
-              for await (const chunk of streamChatCompletion(provider, model, req)) {
-                if (chunk.type === "delta" && chunk.deltaText) {
-                  assembled += chunk.deltaText;
-                  // 使用 renderInline 回退 / 渲染
-                  panel.webview.postMessage({ type: "playgroundStreamDelta", payload: { delta: chunk.deltaText, full: assembled, html: renderInline(assembled) } });
-                } else if (chunk.type === "done") {
-                  history.push({ role: "assistant", content: assembled });
-                  // 使用 render 回退 / 渲染
-                  panel.webview.postMessage({ type: "playgroundResponse", payload: { text: assembled, html: render(assembled) } });
-                } else if (chunk.type === "error") {
-                  if (chunk.error === "aborted") {
-                    panel.webview.postMessage({ type: "playgroundError", payload: { message: "aborted" } });
-                  } else {
-                    panel.webview.postMessage({ type: "playgroundError", payload: { message: chunk.error || "stream error" } });
-                  }
-                }
-              }
-            } finally {
-              (panel as unknown as Record<string, unknown>)["_addiCurrentAbort"] = undefined;
+          const response = await chatModel.sendRequest(messages, requestOptions, cts.token);
+          let assembled = "";
+          for await (const fragment of response.text) {
+            if (typeof fragment !== "string" || fragment.length === 0) {
+              continue;
             }
-          } else {
-            const result = await invokeChatCompletion(provider, model, req);
-            if (result.responseText) { history.push({ role: "assistant", content: result.responseText }); }
-            panel.webview.postMessage({ type: "playgroundResponse", payload: { text: result.responseText || "", html: render(result.responseText || "") } });
+            assembled += fragment;
+            if (streaming) {
+              panel.webview.postMessage({
+                type: "playgroundStreamDelta",
+                payload: {
+                  delta: fragment,
+                  full: assembled,
+                  html: renderInline(assembled),
+                },
+              });
+            }
           }
+
+          history.push({ role: "assistant", content: assembled });
+          panel.webview.postMessage({ type: "playgroundResponse", payload: { text: assembled, html: render(assembled) } });
         } catch (error) {
-          panel.webview.postMessage({ type: "playgroundError", payload: { message: error instanceof Error ? error.message : String(error) } });
+          const cancelled = cts.token.isCancellationRequested;
+          const message = error instanceof Error ? error.message : String(error);
+          panel.webview.postMessage({ type: "playgroundError", payload: { message: cancelled ? "Request cancelled" : message } });
+          history.splice(priorLength); // remove pending user entry on error
+        } finally {
+          cts.dispose();
+          delete addiPanel._addiCancellation;
         }
       } else if (msg?.type === "playgroundSetParams") {
         if (typeof msg.temperature === "number") { temperature = msg.temperature; }
@@ -190,23 +215,110 @@ export class PlaygroundManager {
         }
         saveParams();
       } else if (msg?.type === "playgroundReset") {
-  const ac: AbortController | undefined = (panel as unknown as Record<string, unknown>)["_addiCurrentAbort"] as AbortController | undefined;
-        if (ac) {
-          ac.abort();
-          (panel as unknown as Record<string, unknown>)["_addiCurrentAbort"] = undefined;
+        const cts = addiPanel._addiCancellation;
+        if (cts) {
+          try { cts.cancel(); } catch (_e) { /* noop */ }
+          delete addiPanel._addiCancellation;
         }
         history.length = 0;
         panel.webview.postMessage({ type: "playgroundResetAck" });
       } else if (msg?.type === "playgroundAbort") {
-  const ac: AbortController | undefined = (panel as unknown as Record<string, unknown>)["_addiCurrentAbort"] as AbortController | undefined;
-        if (ac) {
-          ac.abort();
-          (panel as unknown as Record<string, unknown>)["_addiCurrentAbort"] = undefined;
+        const cts = addiPanel._addiCancellation;
+        if (cts) {
+          try { cts.cancel(); } catch (_e) { /* noop */ }
+          delete addiPanel._addiCancellation;
         }
       }
     });
 
     postInit();
+  }
+
+  private async selectChatModel(model?: Model): Promise<vscode.LanguageModelChat | undefined> {
+    try {
+      if (model?.id) {
+        const [match] = await vscode.lm.selectChatModels({ id: `addi-provider:${model.id}` });
+        if (match) {
+          return match;
+        }
+      }
+      const [fallback] = await vscode.lm.selectChatModels({ vendor: "addi-provider" });
+      return fallback;
+    } catch (error) {
+      console.warn("[Addi] Failed to select chat model", error);
+      return undefined;
+    }
+  }
+
+  private createChatMessages(history: ChatMessage[], prompt: string, systemPrompt?: string): vscode.LanguageModelChatMessage[] {
+    const factory = vscode.LanguageModelChatMessage as unknown as {
+      User: (value: string) => vscode.LanguageModelChatMessage;
+      Assistant: (value: string) => vscode.LanguageModelChatMessage;
+      System?: (value: string) => vscode.LanguageModelChatMessage;
+    };
+
+    if (!factory || typeof factory.User !== "function" || typeof factory.Assistant !== "function") {
+      return [];
+    }
+
+    const messages: vscode.LanguageModelChatMessage[] = [];
+
+    if (systemPrompt && systemPrompt.trim().length > 0) {
+      const trimmed = systemPrompt.trim();
+      if (typeof factory.System === "function") {
+        messages.push(factory.System(trimmed));
+      } else {
+        messages.push(factory.User(trimmed));
+      }
+    }
+
+    for (const entry of history) {
+      const content = entry.content?.trim();
+      if (!content) {
+        continue;
+      }
+      if (entry.role === "assistant") {
+        messages.push(factory.Assistant(content));
+      } else if (entry.role === "system" && typeof factory.System === "function") {
+        messages.push(factory.System(content));
+      } else {
+        messages.push(factory.User(content));
+      }
+    }
+
+    if (prompt.trim().length > 0) {
+      messages.push(factory.User(prompt.trim()));
+    }
+
+    return messages;
+  }
+
+  private createChatRequestOptions(params: {
+    temperature?: number;
+    topP?: number;
+    maxOutputTokens?: number;
+    presencePenalty?: number;
+    frequencyPenalty?: number;
+  }): Record<string, unknown> {
+    const options: Record<string, unknown> = {};
+
+    if (typeof params.temperature === "number" && Number.isFinite(params.temperature)) {
+      options["temperature"] = params.temperature;
+    }
+    if (typeof params.topP === "number" && Number.isFinite(params.topP)) {
+      options["topP"] = Math.min(Math.max(params.topP, 0), 1);
+    }
+    if (typeof params.maxOutputTokens === "number" && Number.isFinite(params.maxOutputTokens)) {
+      options["maxOutputTokens"] = Math.min(Math.max(Math.floor(params.maxOutputTokens), 1), 8192);
+    }
+    if (typeof params.presencePenalty === "number" && Number.isFinite(params.presencePenalty)) {
+      options["presencePenalty"] = Math.min(Math.max(params.presencePenalty, -2), 2);
+    }
+    if (typeof params.frequencyPenalty === "number" && Number.isFinite(params.frequencyPenalty)) {
+      options["frequencyPenalty"] = Math.min(Math.max(params.frequencyPenalty, -2), 2);
+    }
+
+    return options;
   }
 }
 

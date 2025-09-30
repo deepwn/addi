@@ -3,6 +3,7 @@ import { AddiChatProvider } from "./model";
 import { ProviderModelManager, AddiTreeDataProvider, ProviderTreeItem } from "./provider";
 import { CommandHandler } from "./commands";
 import { ModelTreeItem } from "./model";
+import { AddiChatParticipant } from "./chatParticipant";
 
 export function activate(context: vscode.ExtensionContext) {
   const manager = new ProviderModelManager(context);
@@ -34,6 +35,8 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(treeView);
 
   const commandHandler = new CommandHandler(manager, treeDataProvider, context);
+  const chatParticipant = new AddiChatParticipant(context);
+  context.subscriptions.push(chatParticipant);
 
   // 调试命令：输出当前 Settings Sync 状态和存储内容（仅用于开发/验证）
   context.subscriptions.push(

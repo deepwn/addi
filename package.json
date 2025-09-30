@@ -38,6 +38,15 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "chatParticipants": [
+      {
+        "id": "addi.chat",
+        "name": "addi",
+        "fullName": "Addi Assistant",
+        "description": "Access your custom Addi providers directly in chat",
+        "isSticky": false
+      }
+    ],
     "icons": {
       "config-export-icon": {
         "description": "Config Export Icon",
@@ -330,9 +339,5 @@
     "typescript": "^5.9.2",
     "webpack": "^5.101.3",
     "webpack-cli": "^6.0.1"
-  },
-  "dependencies": {
-    "@types/markdown-it": "^14.1.2",
-    "markdown-it": "^14.1.0"
   }
 }

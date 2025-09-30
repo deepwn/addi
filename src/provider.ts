@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { Model, Provider } from "./types";
+import { ConfigManager } from "./utils";
 import { ModelTreeItem } from "./model";
 
 export class ProviderModelManager {
@@ -63,10 +64,22 @@ export class ProviderModelManager {
         continue;
       }
 
+      // Filter out invalid entries that may be present in persisted state
+      provider.models = provider.models.filter((m) => m && typeof m === "object");
+
       provider.models = provider.models.map((model) => {
         const mutableModel = model as unknown as Record<string, unknown>;
         let changed = false;
 
+        // Ensure token defaults exist for older or malformed saved models
+        if (typeof mutableModel["maxInputTokens"] !== "number") {
+          mutableModel["maxInputTokens"] = ConfigManager.getDefaultMaxInputTokens();
+          changed = true;
+        }
+        if (typeof mutableModel["maxOutputTokens"] !== "number") {
+          mutableModel["maxOutputTokens"] = ConfigManager.getDefaultMaxOutputTokens();
+          changed = true;
+        }
         if (!mutableModel["capabilities"] || typeof mutableModel["capabilities"] !== "object") {
           mutableModel["capabilities"] = {} as Record<string, unknown>;
           changed = true;

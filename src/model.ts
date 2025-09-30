@@ -56,7 +56,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
   async provideLanguageModelChatResponse(
     model: vscode.LanguageModelChatInformation,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
-    _options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
+    options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken
   ): Promise<void> {
@@ -80,21 +80,21 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
 
     try {
       if (this.isOpenAiEndpoint(provider.apiEndpoint)) {
-        await this.callOpenAiApi(provider, storedModel, messages, progress, token);
+          await this.callOpenAiApi(provider, storedModel, messages, options, progress, token);
         return;
       }
 
       if (this.isAnthropicEndpoint(provider.apiEndpoint)) {
-        await this.callAnthropicApi(provider, storedModel, messages, progress, token);
+          await this.callAnthropicApi(provider, storedModel, messages, options, progress, token);
         return;
       }
 
       if (this.isGoogleEndpoint(provider.apiEndpoint)) {
-        await this.callGoogleApi(provider, storedModel, messages, progress, token);
+          await this.callGoogleApi(provider, storedModel, messages, options, progress, token);
         return;
       }
 
-      await this.callGenericOpenAiCompatibleApi(provider, storedModel, messages, progress, token);
+        await this.callGenericOpenAiCompatibleApi(provider, storedModel, messages, options, progress, token);
     } catch (error) {
       console.error("model query error:", error);
       progress.report(new vscode.LanguageModelTextPart(`model query error: ${error instanceof Error ? error.message : "unknown"}`));
@@ -165,9 +165,182 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     return trimmedId || model.family;
   }
 
-  private async callOpenAiApi(provider: Provider, model: Model, messages: readonly vscode.LanguageModelChatRequestMessage[], progress: vscode.Progress<vscode.LanguageModelResponsePart>, token: vscode.CancellationToken): Promise<void> {
+  private getNumberOption(options: vscode.ProvideLanguageModelChatResponseOptions | undefined, key: string): number | undefined {
+    if (!options) {
+      return undefined;
+    }
+    const bag = options as unknown as Record<string, unknown>;
+    const value = bag[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    return undefined;
+  }
+
+  private ensureMaxTokens(value: number | undefined, fallback: number): number {
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+      return Math.min(Math.max(Math.floor(value), 1), 8192);
+    }
+    return fallback;
+  }
+
+  private extractGenerationParameters(
+    options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
+    model: Model
+  ): {
+    maxTokens: number;
+    temperature?: number;
+    topP?: number;
+    presencePenalty?: number;
+    frequencyPenalty?: number;
+  } {
+    const requestedMax = this.getNumberOption(options, "maxOutputTokens") ?? this.getNumberOption(options, "responseMaxTokens");
+    const maxTokens = this.ensureMaxTokens(requestedMax, model.maxOutputTokens);
+    const temperature = this.getNumberOption(options, "temperature");
+    const topP = this.getNumberOption(options, "topP");
+    const presencePenalty = this.getNumberOption(options, "presencePenalty");
+    const frequencyPenalty = this.getNumberOption(options, "frequencyPenalty");
+    const params: {
+      maxTokens: number;
+      temperature?: number;
+      topP?: number;
+      presencePenalty?: number;
+      frequencyPenalty?: number;
+    } = { maxTokens };
+    if (temperature !== undefined) {
+      params.temperature = temperature;
+    }
+    if (topP !== undefined) {
+      params.topP = topP;
+    }
+    if (presencePenalty !== undefined) {
+      params.presencePenalty = presencePenalty;
+    }
+    if (frequencyPenalty !== undefined) {
+      params.frequencyPenalty = frequencyPenalty;
+    }
+    return params;
+  }
+
+  private extractTextFromMessageParts(parts: readonly unknown[]): string {
+    const textParts: string[] = [];
+    for (const part of parts) {
+      if (typeof part === "string") {
+        textParts.push(part);
+        continue;
+      }
+      if (part instanceof vscode.LanguageModelTextPart) {
+        textParts.push(part.value ?? "");
+        continue;
+      }
+      if (part && typeof part === "object") {
+        const value = (part as Record<string, unknown>)["value"];
+        if (typeof value === "string") {
+          textParts.push(value);
+        }
+      }
+    }
+    return textParts.join("");
+  }
+
+  private extractToolCallFromParts(parts: readonly unknown[]): { name: string; arguments: string; id?: string } | undefined {
+    for (const part of parts) {
+      if (!part || typeof part !== "object") {
+        continue;
+      }
+      const candidate = part as Record<string, unknown>;
+      const name = typeof candidate["name"] === "string" ? candidate["name"] : undefined;
+      const argsRaw = candidate["arguments"] ?? candidate["input"];
+      if (!name) {
+        continue;
+      }
+      if (argsRaw === undefined) {
+        continue;
+      }
+      const id = typeof candidate["callId"] === "string" ? candidate["callId"] : typeof candidate["id"] === "string" ? candidate["id"] : undefined;
+      const args = typeof argsRaw === "string" ? argsRaw : JSON.stringify(argsRaw ?? {});
+      const result: { name: string; arguments: string; id?: string } = { name, arguments: args };
+      if (id) {
+        result.id = id;
+      }
+      return result;
+    }
+    return undefined;
+  }
+
+  private extractToolResultFromParts(parts: readonly unknown[]): { id?: string; content: string } | undefined {
+    for (const part of parts) {
+      if (!part || typeof part !== "object") {
+        continue;
+      }
+      const candidate = part as Record<string, unknown>;
+      const id = typeof candidate["callId"] === "string" ? candidate["callId"] : typeof candidate["toolCallId"] === "string" ? candidate["toolCallId"] : typeof candidate["id"] === "string" ? candidate["id"] : undefined;
+      if (!id) {
+        continue;
+      }
+      const payload = candidate["result"] ?? candidate["output"] ?? candidate["content"];
+      const content = typeof payload === "string" ? payload : JSON.stringify(payload ?? {});
+      return { id, content };
+    }
+    return undefined;
+  }
+
+  private mapChatRole(role: unknown): string {
+    const value = typeof role === "string" ? role.toLowerCase() : undefined;
+    switch (value) {
+      case "assistant":
+        return "assistant";
+      case "tool":
+        return "tool";
+      case "system":
+        return "system";
+      default:
+        return "user";
+    }
+  }
+
+  private async callOpenAiApi(
+    provider: Provider,
+    model: Model,
+    messages: readonly vscode.LanguageModelChatRequestMessage[],
+    options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
+    progress: vscode.Progress<vscode.LanguageModelResponsePart>,
+    token: vscode.CancellationToken
+  ): Promise<void> {
     const url = this.resolveChatCompletionsUrl(provider.apiEndpoint ?? "", "https://api.openai.com/v1");
     const modelIdentifier = this.resolveModelIdentifier(model);
+    const generation = this.extractGenerationParameters(options, model);
+    const rawTools = Array.isArray(options?.tools) ? (options?.tools as ReadonlyArray<Record<string, unknown>>) : undefined;
+    const tools = rawTools?.map((tool) => ({
+      type: "function",
+      function: {
+        name: (tool["id"] as string) ?? (tool["name"] as string) ?? "tool",
+        description: (tool["description"] as string) ?? "",
+        parameters: tool["parameters"] ?? { type: "object", properties: {} },
+      },
+    }));
+    const body: Record<string, unknown> = {
+      model: modelIdentifier,
+      messages: this.toOpenAiMessages(messages),
+      max_tokens: generation.maxTokens,
+      stream: true,
+    };
+    if (generation.temperature !== undefined) {
+      body["temperature"] = generation.temperature;
+    }
+    if (generation.topP !== undefined) {
+      body["top_p"] = generation.topP;
+    }
+    if (generation.presencePenalty !== undefined) {
+      body["presence_penalty"] = generation.presencePenalty;
+    }
+    if (generation.frequencyPenalty !== undefined) {
+      body["frequency_penalty"] = generation.frequencyPenalty;
+    }
+    if (tools && tools.length > 0) {
+      body["tools"] = tools;
+    }
+
     await this.streamOpenAiCompatibleResponse(
       {
         url,
@@ -175,12 +348,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
           "Content-Type": "application/json",
           Authorization: `Bearer ${provider.apiKey}`,
         },
-        body: {
-          model: modelIdentifier,
-          messages: this.toOpenAiMessages(messages),
-          max_tokens: model.maxOutputTokens,
-          stream: true,
-        },
+        body,
       },
       progress,
       token,
@@ -188,11 +356,19 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     );
   }
 
-  private async callAnthropicApi(provider: Provider, model: Model, messages: readonly vscode.LanguageModelChatRequestMessage[], progress: vscode.Progress<vscode.LanguageModelResponsePart>, token: vscode.CancellationToken): Promise<void> {
+  private async callAnthropicApi(
+    provider: Provider,
+    model: Model,
+    messages: readonly vscode.LanguageModelChatRequestMessage[],
+    options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
+    progress: vscode.Progress<vscode.LanguageModelResponsePart>,
+    token: vscode.CancellationToken
+  ): Promise<void> {
     const baseUrl = this.normalizeBaseUrl(provider.apiEndpoint ?? "", "https://api.anthropic.com");
     const systemMessage = this.extractSystemMessage(messages);
     const userMessages = this.toAnthropicMessages(messages);
     const modelIdentifier = this.resolveModelIdentifier(model);
+    const generation = this.extractGenerationParameters(options, model);
 
     const response = await fetch(this.buildUrl(baseUrl, "/v1/messages"), {
       method: "POST",
@@ -203,10 +379,12 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       },
       body: JSON.stringify({
         model: modelIdentifier,
-        max_tokens: model.maxOutputTokens,
+        max_tokens: generation.maxTokens,
         system: systemMessage || undefined,
         messages: userMessages,
         stream: true,
+  temperature: generation.temperature,
+  top_p: generation.topP,
       }),
     });
 
@@ -241,10 +419,18 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     });
   }
 
-  private async callGoogleApi(provider: Provider, model: Model, messages: readonly vscode.LanguageModelChatRequestMessage[], progress: vscode.Progress<vscode.LanguageModelResponsePart>, token: vscode.CancellationToken): Promise<void> {
+  private async callGoogleApi(
+    provider: Provider,
+    model: Model,
+    messages: readonly vscode.LanguageModelChatRequestMessage[],
+    options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
+    progress: vscode.Progress<vscode.LanguageModelResponsePart>,
+    token: vscode.CancellationToken
+  ): Promise<void> {
     const baseUrl = this.normalizeBaseUrl(provider.apiEndpoint ?? "", "https://generativelanguage.googleapis.com/v1beta");
     const contents = this.toGoogleMessages(messages);
     const modelIdentifier = this.resolveModelIdentifier(model);
+    const generation = this.extractGenerationParameters(options, model);
 
     const response = await fetch(`${baseUrl}/models/${modelIdentifier}:streamGenerateContent?key=${provider.apiKey}`, {
       method: "POST",
@@ -254,7 +440,11 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       body: JSON.stringify({
         contents,
         generationConfig: {
-          maxOutputTokens: model.maxOutputTokens,
+          maxOutputTokens: generation.maxTokens,
+          temperature: generation.temperature,
+          topP: generation.topP,
+          presencePenalty: generation.presencePenalty,
+          frequencyPenalty: generation.frequencyPenalty,
         },
       }),
     });
@@ -305,11 +495,44 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     provider: Provider,
     model: Model,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
+    options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken
   ): Promise<void> {
     const url = this.resolveChatCompletionsUrl(provider.apiEndpoint ?? "", "https://api.openai.com/v1");
     const modelIdentifier = this.resolveModelIdentifier(model);
+    const generation = this.extractGenerationParameters(options, model);
+    const rawTools = Array.isArray(options?.tools) ? (options?.tools as ReadonlyArray<Record<string, unknown>>) : undefined;
+    const tools = rawTools?.map((tool) => ({
+      type: "function",
+      function: {
+        name: (tool["id"] as string) ?? (tool["name"] as string) ?? "tool",
+        description: (tool["description"] as string) ?? "",
+        parameters: tool["parameters"] ?? { type: "object", properties: {} },
+      },
+    }));
+    const bodyGeneric: Record<string, unknown> = {
+      model: modelIdentifier,
+      messages: this.toOpenAiMessages(messages),
+      max_tokens: generation.maxTokens,
+      stream: true,
+    };
+    if (generation.temperature !== undefined) {
+      bodyGeneric["temperature"] = generation.temperature;
+    }
+    if (generation.topP !== undefined) {
+      bodyGeneric["top_p"] = generation.topP;
+    }
+    if (generation.presencePenalty !== undefined) {
+      bodyGeneric["presence_penalty"] = generation.presencePenalty;
+    }
+    if (generation.frequencyPenalty !== undefined) {
+      bodyGeneric["frequency_penalty"] = generation.frequencyPenalty;
+    }
+    if (tools && tools.length > 0) {
+      bodyGeneric["tools"] = tools;
+    }
+
     await this.streamOpenAiCompatibleResponse(
       {
         url,
@@ -317,12 +540,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
           "Content-Type": "application/json",
           Authorization: `Bearer ${provider.apiKey}`,
         },
-        body: {
-          model: modelIdentifier,
-          messages: this.toOpenAiMessages(messages),
-          max_tokens: model.maxOutputTokens,
-          stream: true,
-        },
+        body: bodyGeneric,
       },
       progress,
       token,
@@ -330,19 +548,42 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     );
   }
 
-  private toOpenAiMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): Array<{ role: string; content: string }> {
-    return messages.map((msg) => ({
-      role: msg.role === vscode.LanguageModelChatMessageRole.User ? "user" : "assistant",
-      content:
-        typeof msg.content === "string"
-          ? msg.content
-          : Array.isArray(msg.content)
-          ? (msg.content as Array<unknown>)
-              .filter((p): p is vscode.LanguageModelTextPart => p instanceof vscode.LanguageModelTextPart)
-              .map((p) => p.value)
-              .join("")
-          : String(msg.content),
-    }));
+  private toOpenAiMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): Array<Record<string, unknown>> {
+    return messages.map((msg) => {
+  const role = this.mapChatRole(msg.role);
+      const parts = Array.isArray(msg.content) ? (msg.content as readonly unknown[]) : [msg.content];
+      const toolCall = this.extractToolCallFromParts(parts);
+      const toolResult = this.extractToolResultFromParts(parts);
+      const contentText = this.extractTextFromMessageParts(parts);
+
+      const entry: Record<string, unknown> = {
+        role,
+      };
+
+      if (toolCall) {
+        const callId = toolCall.id ?? `tool_call_${Math.random().toString(36).slice(2)}`;
+        entry["tool_calls"] = [
+          {
+            type: "function",
+            id: callId,
+            function: {
+              name: toolCall.name,
+              arguments: toolCall.arguments,
+            },
+          },
+        ];
+        entry["content"] = contentText;
+      } else if (toolResult && role === "tool") {
+        entry["content"] = toolResult.content;
+        if (toolResult.id) {
+          entry["tool_call_id"] = toolResult.id;
+        }
+      } else {
+        entry["content"] = contentText;
+      }
+
+      return entry;
+    });
   }
 
   private extractSystemMessage(messages: readonly vscode.LanguageModelChatRequestMessage[]): string {
@@ -454,8 +695,10 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       return;
     }
 
-    const reader = response.body.getReader();
+  const reader = response.body.getReader();
     const decoder = new TextDecoder();
+  // For OpenAI-style function_call detection we may receive parts indicating a function call
+    let pendingFunctionCall: { name?: string; arguments?: string } | null = null;
 
     while (true) {
       if (token.isCancellationRequested) {
@@ -482,9 +725,49 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
         if (trimmed.startsWith("data: ")) {
           try {
             const data = JSON.parse(trimmed.slice(6));
-            const content = data?.choices?.[0]?.delta?.content ?? data?.choices?.[0]?.message?.content;
+            const choice = data?.choices?.[0];
+            // delta may contain content chunks or function_call
+            const delta = choice?.delta ?? {};
+            if (delta?.function_call) {
+              // accumulate function call parts
+              const fn = delta.function_call as { name?: string; arguments?: string };
+              if (!pendingFunctionCall) {
+                // initialize safely with string defaults to satisfy strict optional typing
+                pendingFunctionCall = { name: fn.name ?? "", arguments: fn.arguments ?? "" };
+              } else {
+                if (fn.name) {
+                  pendingFunctionCall.name = fn.name;
+                }
+                if (fn.arguments) {
+                  pendingFunctionCall.arguments = (pendingFunctionCall.arguments ?? "") + fn.arguments;
+                }
+              }
+            }
+
+            const content = delta?.content ?? data?.choices?.[0]?.message?.content;
             if (typeof content === "string") {
               progress.report(new vscode.LanguageModelTextPart(content));
+            }
+
+            // If the event signals finish and we have a pending function call, emit a tool call part
+            if (data?.id && pendingFunctionCall && data?.choices?.[0]?.finish_reason === "function_call") {
+              try {
+                const callId = Date.now().toString();
+                const inputObj = pendingFunctionCall.arguments ? JSON.parse(pendingFunctionCall.arguments) : {};
+                // Report a tool call part to VS Code and return immediately so the host
+                // can execute the tool (using the provided options.tools) and then
+                // re-invoke the provider with the tool result. This hands off tool
+                // execution to VS Code instead of attempting to run it here.
+                progress.report(new vscode.LanguageModelToolCallPart(callId, pendingFunctionCall.name ?? "", inputObj));
+                // reset and return to stop further streaming; VS Code will handle the tool
+                // execution and continue the conversation by calling the provider again.
+                pendingFunctionCall = null;
+                return;
+              } catch (err) {
+                // If parsing fails, report as text instead and continue streaming
+                progress.report(new vscode.LanguageModelTextPart(pendingFunctionCall?.arguments ?? ""));
+                pendingFunctionCall = null;
+              }
             }
           } catch (error) {
             // If strict parsing is required we warn, but also report a textual hint so user sees progress
