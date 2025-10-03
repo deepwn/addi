@@ -27,8 +27,8 @@ export class ProviderModelManager {
   }
 
   getProviders(): Provider[] {
-  const stored = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
-  const mutated = this.normalizeProvidersInPlace(stored as Array<Provider & Record<string, unknown>>);
+    const stored = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
+    const mutated = this.normalizeProvidersInPlace(stored as Array<Provider & Record<string, unknown>>);
     if (mutated) {
       void this.context.globalState.update(ProviderModelManager.STORAGE_KEY, stored);
     }
@@ -36,7 +36,7 @@ export class ProviderModelManager {
   }
 
   async saveProviders(providers: Provider[]): Promise<void> {
-  this.normalizeProvidersInPlace(providers as Array<Provider & Record<string, unknown>>);
+    this.normalizeProvidersInPlace(providers as Array<Provider & Record<string, unknown>>);
     await this.context.globalState.update(ProviderModelManager.STORAGE_KEY, providers);
   }
 
@@ -119,10 +119,7 @@ export class ProviderModelManager {
         }
 
         const normalizedCapabilities = this.normalizeCapabilities(capabilitiesRecord as Model["capabilities"]);
-        if (
-          normalizedCapabilities.imageInput !== capabilitiesRecord["imageInput"] ||
-          normalizedCapabilities.toolCalling !== capabilitiesRecord["toolCalling"]
-        ) {
+        if (normalizedCapabilities.imageInput !== capabilitiesRecord["imageInput"] || normalizedCapabilities.toolCalling !== capabilitiesRecord["toolCalling"]) {
           changed = true;
         }
         mutableModel["capabilities"] = normalizedCapabilities;

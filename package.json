@@ -33,20 +33,12 @@
     "AI",
     "Chat",
     "Programming Languages",
-    "Machine Learning"
+    "Machine Learning",
+    "Other"
   ],
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
-    "chatParticipants": [
-      {
-        "id": "addi.chat",
-        "name": "addi",
-        "fullName": "Addi Assistant",
-        "description": "Access your custom Addi providers directly in chat",
-        "isSticky": false
-      }
-    ],
     "icons": {
       "config-export-icon": {
         "description": "Config Export Icon",

@@ -39,12 +39,20 @@ export interface ChatStreamChunk {
  * 将 OpenAI / 兼容 SSE 行解析成 json 对象（忽略空行与以 : 开头的注释）
  */
 export function parseSseLine(line: string): unknown | undefined {
-  if (!line) { return undefined; }
-  if (line.startsWith(":")) { return undefined; }
+  if (!line) {
+    return undefined;
+  }
+  if (line.startsWith(":")) {
+    return undefined;
+  }
   const prefix = "data:";
-  if (!line.startsWith(prefix)) { return undefined; }
+  if (!line.startsWith(prefix)) {
+    return undefined;
+  }
   const data = line.slice(prefix.length).trim();
-  if (data === "[DONE]") { return { done: true }; }
+  if (data === "[DONE]") {
+    return { done: true };
+  }
   try {
     return JSON.parse(data) as unknown;
   } catch {
@@ -56,12 +64,18 @@ export function parseSseLine(line: string): unknown | undefined {
  * OpenAI / 兼容 SSE 流式调用（目前仅支持 chat.completions 风格）。
  * Anthropic / Google 暂未接入流式（后续可扩展）。
  */
-export async function *streamChatCompletion(provider: Provider, model: Model, options: ChatRequestOptions): AsyncGenerator<ChatStreamChunk> {
+export async function* streamChatCompletion(provider: Provider, model: Model, options: ChatRequestOptions): AsyncGenerator<ChatStreamChunk> {
   const apiEndpoint = provider.apiEndpoint?.trim();
   const apiKey = provider.apiKey?.trim();
-  if (!apiEndpoint) { yield { type: "error", error: "unconfigured API endpoint" }; return; }
-  if (!apiKey) { yield { type: "error", error: "unconfigured API key" }; return; }
-  if (!(isOpenAiEndpoint(apiEndpoint) || !isAnthropicEndpoint(apiEndpoint) && !isGoogleEndpoint(apiEndpoint))) {
+  if (!apiEndpoint) {
+    yield { type: "error", error: "unconfigured API endpoint" };
+    return;
+  }
+  if (!apiKey) {
+    yield { type: "error", error: "unconfigured API key" };
+    return;
+  }
+  if (!(isOpenAiEndpoint(apiEndpoint) || (!isAnthropicEndpoint(apiEndpoint) && !isGoogleEndpoint(apiEndpoint)))) {
     // 仅在 openai 或 generic 情况下启用，其他 provider 回退错误（可未来扩展）
     yield { type: "error", error: "Streaming currently only supported for OpenAI / OpenAI-compatible endpoints" };
     return;
@@ -79,10 +93,18 @@ export async function *streamChatCompletion(provider: Provider, model: Model, op
     max_tokens: maxOutputTokens,
     stream: true,
   };
-  if (typeof temperature === "number") { payload["temperature"] = temperature; }
-  if (typeof options.topP === "number") { payload["top_p"] = Math.min(Math.max(options.topP, 0), 1); }
-  if (typeof options.presencePenalty === "number") { payload["presence_penalty"] = Math.min(Math.max(options.presencePenalty, -2), 2); }
-  if (typeof options.frequencyPenalty === "number") { payload["frequency_penalty"] = Math.min(Math.max(options.frequencyPenalty, -2), 2); }
+  if (typeof temperature === "number") {
+    payload["temperature"] = temperature;
+  }
+  if (typeof options.topP === "number") {
+    payload["top_p"] = Math.min(Math.max(options.topP, 0), 1);
+  }
+  if (typeof options.presencePenalty === "number") {
+    payload["presence_penalty"] = Math.min(Math.max(options.presencePenalty, -2), 2);
+  }
+  if (typeof options.frequencyPenalty === "number") {
+    payload["frequency_penalty"] = Math.min(Math.max(options.frequencyPenalty, -2), 2);
+  }
 
   // startedAt 可在后续需要 latency 时启用
   let full = "";
@@ -106,18 +128,24 @@ export async function *streamChatCompletion(provider: Provider, model: Model, op
     let buffer = "";
     while (true) {
       const { done, value } = await reader.read();
-  if (done) { break; }
+      if (done) {
+        break;
+      }
       buffer += decoder.decode(value, { stream: true });
       let idx;
       while ((idx = buffer.indexOf("\n")) >= 0) {
         const line = buffer.slice(0, idx).trim();
         buffer = buffer.slice(idx + 1);
         const parsed = parseSseLine(line);
-        if (!parsed || typeof parsed !== "object") { continue; }
+        if (!parsed || typeof parsed !== "object") {
+          continue;
+        }
         // Narrow to expected OpenAI-compatible SSE shape
         type OpenAiSse = { done?: boolean; choices?: Array<{ delta?: { content?: string }; message?: { content?: string } }> };
         const p = parsed as OpenAiSse;
-        if (p.done) { break; }
+        if (p.done) {
+          break;
+        }
         const delta = p.choices?.[0]?.delta?.content ?? p.choices?.[0]?.message?.content;
         if (typeof delta === "string" && delta.length) {
           full += delta;
@@ -158,18 +186,29 @@ export async function invokeChatCompletion(provider: Provider, model: Model, opt
   const signal = options.signal;
 
   if (isOpenAiEndpoint(apiEndpoint)) {
-  return await callOpenAi(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, options.presencePenalty, options.frequencyPenalty, signal);
+    return await callOpenAi(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, options.presencePenalty, options.frequencyPenalty, signal);
   }
 
   if (isAnthropicEndpoint(apiEndpoint)) {
-  return await callAnthropic(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, signal);
+    return await callAnthropic(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, signal);
   }
 
   if (isGoogleEndpoint(apiEndpoint)) {
-  return await callGoogle(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, signal);
+    return await callGoogle(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, signal);
   }
 
-  return await callGenericCompatible(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, options.presencePenalty, options.frequencyPenalty, signal);
+  return await callGenericCompatible(
+    apiEndpoint,
+    apiKey,
+    modelIdentifier,
+    messages,
+    maxOutputTokens,
+    temperature,
+    options.topP,
+    options.presencePenalty,
+    options.frequencyPenalty,
+    signal
+  );
 }
 
 function buildConversation(history: ChatMessage[], prompt: string): ChatMessage[] {
@@ -275,8 +314,8 @@ function toGoogleContents(messages: ChatMessage[]): Array<{ role: string; parts:
   let currentParts: Array<{ text: string }> = [];
 
   messages.forEach((message) => {
-  const role = message.role === "assistant" ? "model" : message.role;
-  const content = message.content;
+    const role = message.role === "assistant" ? "model" : message.role;
+    const content = message.content;
 
     if (role !== currentRole && currentParts.length > 0) {
       contents.push({ role: currentRole, parts: currentParts });
@@ -473,7 +512,7 @@ async function callAnthropic(
   let responseText = "";
   if (typeof responsePayload === "object" && responsePayload !== null) {
     const rp = responsePayload as Record<string, unknown>;
-  const content = rp["content"];
+    const content = rp["content"];
     if (Array.isArray(content)) {
       type AnthropicContentItem = { text?: string };
       const arr = content as Array<AnthropicContentItem>;
@@ -537,12 +576,12 @@ async function callGoogle(
   let responseText = "";
   if (typeof responsePayload === "object" && responsePayload !== null) {
     const rp = responsePayload as Record<string, unknown>;
-  const candidates = rp["candidates"];
+    const candidates = rp["candidates"];
     if (Array.isArray(candidates)) {
       type GooglePart = { text?: string };
       type GoogleCandidate = { content?: { parts?: GooglePart[] } };
       const cands = candidates as GoogleCandidate[];
-      const parts = cands.flatMap((candidate) => candidate?.content?.parts ?? [] as GooglePart[]);
+      const parts = cands.flatMap((candidate) => candidate?.content?.parts ?? ([] as GooglePart[]));
       responseText = parts.map((part) => (typeof part?.text === "string" ? part.text : "")).join("");
     }
   }

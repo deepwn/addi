@@ -85,12 +85,12 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       }
 
       if (this.isAnthropicEndpoint(provider.apiEndpoint)) {
-        await this.callAnthropicApi(provider, storedModel, messages, options, progress, token);
+        await this.callAnthropicApi(provider, storedModel, messages, options, progress, token, (options as any)?.toolInvocationToken);
         return;
       }
 
       if (this.isGoogleEndpoint(provider.apiEndpoint)) {
-        await this.callGoogleApi(provider, storedModel, messages, options, progress, token);
+        await this.callGoogleApi(provider, storedModel, messages, options, progress, token, (options as any)?.toolInvocationToken);
         return;
       }
 
@@ -370,7 +370,8 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
+    toolInvocationToken?: unknown
   ): Promise<void> {
     const baseUrl = this.normalizeBaseUrl(provider.apiEndpoint ?? "", "https://api.anthropic.com");
     const systemMessage = this.extractSystemMessage(messages);
@@ -414,6 +415,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     }
 
     await this.streamSseResponse(response, token, (data) => {
+      void toolInvocationToken;
       const obj = data as Record<string, unknown> | undefined;
       if (!obj) {
         return;
@@ -433,7 +435,8 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
+    toolInvocationToken?: unknown
   ): Promise<void> {
     const baseUrl = this.normalizeBaseUrl(provider.apiEndpoint ?? "", "https://generativelanguage.googleapis.com/v1beta");
     const contents = this.toGoogleMessages(messages);
@@ -474,6 +477,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     }
 
     await this.streamLineDelimitedJson(response, token, (data) => {
+      void toolInvocationToken;
       const obj = data as Record<string, unknown> | undefined;
       if (!obj) {
         return;
@@ -556,7 +560,6 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       (options as any)?.toolInvocationToken
     );
   }
-
   private toOpenAiMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): Array<Record<string, unknown>> {
     return messages.map((msg) => {
       const role = this.mapChatRole(msg.role);
@@ -822,13 +825,15 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
                     // Attempt to actually invoke the tool if registered so side-effects (like file creation) occur.
                     try {
                       // invokeTool will validate input against declared schema and run the tool implementation
-                      const invokeOptions = { input: normalizedInput, toolInvocationToken: toolInvocationToken } as unknown as vscode.LanguageModelToolInvocationOptions<object>;
-                      const toolResult = await vscode.lm.invokeTool(name, invokeOptions, token);
+                      const tokenForInvoke = toolInvocationToken as unknown | undefined;
+                      const invokeOptions = { input: normalizedInput, toolInvocationToken: tokenForInvoke } as unknown as vscode.LanguageModelToolInvocationOptions<object>;
+                      const toolResult = await this.invokeToolWithLogging(name, invokeOptions, token, progress);
                       // Report a short textual summary of the tool result to the chat stream
                       try {
-                        const summary = toolResult && Array.isArray((toolResult as any).content)
-                          ? (toolResult as any).content.map((p: any) => (p instanceof vscode.LanguageModelTextPart ? p.value : String(p))).join("")
-                          : String(toolResult);
+                        const summary =
+                          toolResult && Array.isArray((toolResult as any).content)
+                            ? (toolResult as any).content.map((p: any) => (p instanceof vscode.LanguageModelTextPart ? p.value : String(p))).join("")
+                            : String(toolResult);
                         progress.report(new vscode.LanguageModelTextPart(summary || `Tool ${name} invoked successfully.`));
                       } catch (err) {
                         progress.report(new vscode.LanguageModelTextPart(`Tool ${name} invoked.`));
@@ -866,12 +871,14 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
                   const name = pending.name ?? "tool";
                   progress.report(new vscode.LanguageModelToolCallPart(idToUse, name, normalizedInput));
                   try {
-                    const invokeOptions = { input: normalizedInput, toolInvocationToken: toolInvocationToken } as unknown as vscode.LanguageModelToolInvocationOptions<object>;
-                    const toolResult = await vscode.lm.invokeTool(name, invokeOptions, token);
+                    const tokenForInvoke = toolInvocationToken as unknown | undefined;
+                    const invokeOptions = { input: normalizedInput, toolInvocationToken: tokenForInvoke } as unknown as vscode.LanguageModelToolInvocationOptions<object>;
+                    const toolResult = await this.invokeToolWithLogging(name, invokeOptions, token, progress);
                     try {
-                      const summary = toolResult && Array.isArray((toolResult as any).content)
-                        ? (toolResult as any).content.map((p: any) => (p instanceof vscode.LanguageModelTextPart ? p.value : String(p))).join("")
-                        : String(toolResult);
+                      const summary =
+                        toolResult && Array.isArray((toolResult as any).content)
+                          ? (toolResult as any).content.map((p: any) => (p instanceof vscode.LanguageModelTextPart ? p.value : String(p))).join("")
+                          : String(toolResult);
                       progress.report(new vscode.LanguageModelTextPart(summary || `Tool ${name} invoked successfully.`));
                     } catch (_err) {
                       progress.report(new vscode.LanguageModelTextPart(`Tool ${name} invoked.`));
@@ -986,6 +993,26 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
           console.warn("Failed to parse line-delimited JSON:", error);
         }
       }
+    }
+  }
+
+  private async invokeToolWithLogging(
+    name: string,
+    invokeOptions: vscode.LanguageModelToolInvocationOptions<object>,
+    token: vscode.CancellationToken,
+    progress: vscode.Progress<vscode.LanguageModelResponsePart>
+  ): Promise<unknown> {
+    if (!vscode?.lm || typeof (vscode as any).lm.invokeTool !== "function") {
+      progress.report(new vscode.LanguageModelTextPart(`Tool invocation not available in this host for ${name}.`));
+      return undefined;
+    }
+
+    try {
+      const toolResult = await (vscode as any).lm.invokeTool(name, invokeOptions, token);
+      return toolResult;
+    } catch (err) {
+      progress.report(new vscode.LanguageModelTextPart(`Tool invocation failed for ${name}: ${err instanceof Error ? err.message : String(err)}`));
+      throw err;
     }
   }
 }

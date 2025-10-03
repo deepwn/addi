@@ -11,19 +11,16 @@ export class PlaygroundManager {
   }
 
   async openPlayground(provider: Provider, model: Model): Promise<void> {
-    const panel = vscode.window.createWebviewPanel(
-      "addiPlayground",
-      `Playground · ${model.name || model.id || "model"}`,
-      vscode.ViewColumn.Active,
-      { enableScripts: true, retainContextWhenHidden: true }
-    );
+    const panel = vscode.window.createWebviewPanel("addiPlayground", `Playground · ${model.name || model.id || "model"}`, vscode.ViewColumn.Active, {
+      enableScripts: true,
+      retainContextWhenHidden: true,
+    });
 
     type AddiPanelState = vscode.WebviewPanel & { _addiCancellation?: vscode.CancellationTokenSource };
     const addiPanel = panel as AddiPanelState;
 
-
-      // 使用 VS Code/主机提供的 markdown 渲染（通过 stream.markdown）
-      // playground 将不再对 markdown 进行本地渲染；它只是把原始 markdown 片段转发给前端/主机。
+    // 使用 VS Code/主机提供的 markdown 渲染（通过 stream.markdown）
+    // playground 将不再对 markdown 进行本地渲染；它只是把原始 markdown 片段转发给前端/主机。
 
     // 不再在扩展端更改或定制 markdown-it 的渲染规则；前端/主机会自行处理渲染样式
 
@@ -38,12 +35,24 @@ export class PlaygroundManager {
     let systemPrompt: string | undefined = undefined;
     if (stored && typeof stored === "object") {
       const s = stored as Record<string, unknown>;
-      if (typeof s["temperature"] === "number") { temperature = s["temperature"] as number; }
-      if (typeof s["topP"] === "number") { topP = s["topP"] as number; }
-      if (typeof s["maxOutputTokens"] === "number") { maxOutputTokens = s["maxOutputTokens"] as number; }
-      if (typeof s["presencePenalty"] === "number") { presencePenalty = s["presencePenalty"] as number; }
-      if (typeof s["frequencyPenalty"] === "number") { frequencyPenalty = s["frequencyPenalty"] as number; }
-      if (typeof s["systemPrompt"] === "string") { systemPrompt = s["systemPrompt"] as string; }
+      if (typeof s["temperature"] === "number") {
+        temperature = s["temperature"] as number;
+      }
+      if (typeof s["topP"] === "number") {
+        topP = s["topP"] as number;
+      }
+      if (typeof s["maxOutputTokens"] === "number") {
+        maxOutputTokens = s["maxOutputTokens"] as number;
+      }
+      if (typeof s["presencePenalty"] === "number") {
+        presencePenalty = s["presencePenalty"] as number;
+      }
+      if (typeof s["frequencyPenalty"] === "number") {
+        frequencyPenalty = s["frequencyPenalty"] as number;
+      }
+      if (typeof s["systemPrompt"] === "string") {
+        systemPrompt = s["systemPrompt"] as string;
+      }
     }
 
     const saveParams = () => {
@@ -66,7 +75,7 @@ export class PlaygroundManager {
       panel.webview.html = html;
     } catch (e) {
       panel.webview.html = this.createPlaygroundHtmlPlaceholder();
-      console.warn('[Addi] Failed to load playground.html from extension path:', e);
+      console.warn("[Addi] Failed to load playground.html from extension path:", e);
     }
 
     const postInit = () => {
@@ -85,17 +94,27 @@ export class PlaygroundManager {
     panel.webview.onDidReceiveMessage(async (msg) => {
       if (msg?.type === "playgroundSend") {
         const prompt: string = (msg.prompt || "").trim();
-        if (!prompt) { return; }
+        if (!prompt) {
+          return;
+        }
 
         const localTemp = typeof msg.temperature === "number" ? msg.temperature : temperature;
         temperature = localTemp;
-        if (typeof msg.topP === "number") { topP = Math.min(Math.max(msg.topP, 0), 1); }
+        if (typeof msg.topP === "number") {
+          topP = Math.min(Math.max(msg.topP, 0), 1);
+        }
         if (typeof msg.maxOutputTokens === "number") {
           const v = Math.floor(msg.maxOutputTokens);
-          if (isFinite(v) && v > 0) { maxOutputTokens = Math.min(Math.max(v, 1), 8192); }
+          if (isFinite(v) && v > 0) {
+            maxOutputTokens = Math.min(Math.max(v, 1), 8192);
+          }
         }
-        if (typeof msg.presencePenalty === "number") { presencePenalty = Math.min(Math.max(msg.presencePenalty, -2), 2); }
-        if (typeof msg.frequencyPenalty === "number") { frequencyPenalty = Math.min(Math.max(msg.frequencyPenalty, -2), 2); }
+        if (typeof msg.presencePenalty === "number") {
+          presencePenalty = Math.min(Math.max(msg.presencePenalty, -2), 2);
+        }
+        if (typeof msg.frequencyPenalty === "number") {
+          frequencyPenalty = Math.min(Math.max(msg.frequencyPenalty, -2), 2);
+        }
         if (typeof msg.systemPrompt === "string") {
           const sp = msg.systemPrompt.trim();
           systemPrompt = sp.length ? sp : undefined;
@@ -120,16 +139,24 @@ export class PlaygroundManager {
           presencePenalty?: number;
           frequencyPenalty?: number;
         } = { temperature: localTemp };
-        if (typeof topP === "number") { requestOptionsInput.topP = topP; }
-        if (typeof maxOutputTokens === "number") { requestOptionsInput.maxOutputTokens = maxOutputTokens; }
-        if (typeof presencePenalty === "number") { requestOptionsInput.presencePenalty = presencePenalty; }
-        if (typeof frequencyPenalty === "number") { requestOptionsInput.frequencyPenalty = frequencyPenalty; }
+        if (typeof topP === "number") {
+          requestOptionsInput.topP = topP;
+        }
+        if (typeof maxOutputTokens === "number") {
+          requestOptionsInput.maxOutputTokens = maxOutputTokens;
+        }
+        if (typeof presencePenalty === "number") {
+          requestOptionsInput.presencePenalty = presencePenalty;
+        }
+        if (typeof frequencyPenalty === "number") {
+          requestOptionsInput.frequencyPenalty = frequencyPenalty;
+        }
 
         const requestOptions = this.createChatRequestOptions(requestOptionsInput);
 
         const streaming = msg.stream === true;
-  const cts = new vscode.CancellationTokenSource();
-  addiPanel._addiCancellation = cts;
+        const cts = new vscode.CancellationTokenSource();
+        addiPanel._addiCancellation = cts;
 
         const priorLength = history.length;
         history.push({ role: "user", content: prompt });
@@ -176,14 +203,24 @@ export class PlaygroundManager {
           delete addiPanel._addiCancellation;
         }
       } else if (msg?.type === "playgroundSetParams") {
-        if (typeof msg.temperature === "number") { temperature = msg.temperature; }
-        if (typeof msg.topP === "number") { topP = Math.min(Math.max(msg.topP, 0), 1); }
+        if (typeof msg.temperature === "number") {
+          temperature = msg.temperature;
+        }
+        if (typeof msg.topP === "number") {
+          topP = Math.min(Math.max(msg.topP, 0), 1);
+        }
         if (typeof msg.maxOutputTokens === "number") {
           const v = Math.floor(msg.maxOutputTokens);
-          if (isFinite(v) && v > 0) { maxOutputTokens = Math.min(Math.max(v, 1), 8192); }
+          if (isFinite(v) && v > 0) {
+            maxOutputTokens = Math.min(Math.max(v, 1), 8192);
+          }
         }
-        if (typeof msg.presencePenalty === "number") { presencePenalty = Math.min(Math.max(msg.presencePenalty, -2), 2); }
-        if (typeof msg.frequencyPenalty === "number") { frequencyPenalty = Math.min(Math.max(msg.frequencyPenalty, -2), 2); }
+        if (typeof msg.presencePenalty === "number") {
+          presencePenalty = Math.min(Math.max(msg.presencePenalty, -2), 2);
+        }
+        if (typeof msg.frequencyPenalty === "number") {
+          frequencyPenalty = Math.min(Math.max(msg.frequencyPenalty, -2), 2);
+        }
         if (typeof msg.systemPrompt === "string") {
           const sp = msg.systemPrompt.trim();
           systemPrompt = sp.length ? sp : undefined;
@@ -192,7 +229,11 @@ export class PlaygroundManager {
       } else if (msg?.type === "playgroundReset") {
         const cts = addiPanel._addiCancellation;
         if (cts) {
-          try { cts.cancel(); } catch (_e) { /* noop */ }
+          try {
+            cts.cancel();
+          } catch (_e) {
+            /* noop */
+          }
           delete addiPanel._addiCancellation;
         }
         history.length = 0;
@@ -200,7 +241,11 @@ export class PlaygroundManager {
       } else if (msg?.type === "playgroundAbort") {
         const cts = addiPanel._addiCancellation;
         if (cts) {
-          try { cts.cancel(); } catch (_e) { /* noop */ }
+          try {
+            cts.cancel();
+          } catch (_e) {
+            /* noop */
+          }
           delete addiPanel._addiCancellation;
         }
       }
