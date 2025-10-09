@@ -12,6 +12,8 @@ webpack.config.js
 *.md
 !readme.md
 !README.md
+!CHANGELOG.md
+!changelog.md
 **/tsconfig.json
 **/eslint.config.mjs
 **/*.map
