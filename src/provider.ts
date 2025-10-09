@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { Model, Provider } from "./types";
 import { ConfigManager } from "./utils";
 import { ModelTreeItem } from "./model";
+import { logger } from "./logger";
 
 export class ProviderModelManager {
   // Key used to persist providers in globalState and optionally sync via Settings Sync
@@ -12,6 +13,7 @@ export class ProviderModelManager {
 
   setSettingsSync(enabled: boolean): void {
     if (this.syncEnabled === enabled) {
+      logger.debug("Settings sync already at requested state", { enabled });
       return;
     }
     this.syncEnabled = enabled;
@@ -20,6 +22,7 @@ export class ProviderModelManager {
     } else {
       this.context.globalState.setKeysForSync([]);
     }
+    logger.info("Settings sync preference updated", { enabled });
   }
 
   isSettingsSyncEnabled(): boolean {
@@ -31,13 +34,16 @@ export class ProviderModelManager {
     const mutated = this.normalizeProvidersInPlace(stored as Array<Provider & Record<string, unknown>>);
     if (mutated) {
       void this.context.globalState.update(ProviderModelManager.STORAGE_KEY, stored);
+      logger.debug("Normalized provider data on load", { providerCount: stored.length });
     }
+    logger.debug("Loaded providers", { providerCount: stored.length });
     return stored as Provider[];
   }
 
   async saveProviders(providers: Provider[]): Promise<void> {
     this.normalizeProvidersInPlace(providers as Array<Provider & Record<string, unknown>>);
     await this.context.globalState.update(ProviderModelManager.STORAGE_KEY, providers);
+    logger.debug("Saved providers", { providerCount: providers.length });
   }
 
   private normalizeProvidersInPlace(providers: Array<Provider & Record<string, unknown>>): boolean {
@@ -59,6 +65,7 @@ export class ProviderModelManager {
       }
 
       if (!Array.isArray(provider.models)) {
+        logger.warn("Provider models array invalid, resetting", logger.sanitizeProvider(provider));
         provider.models = [];
         mutated = true;
         continue;
@@ -166,6 +173,7 @@ export class ProviderModelManager {
     }
     providers.push(newProvider);
     await this.saveProviders(providers);
+      logger.info("Provider added", logger.sanitizeProvider(newProvider));
     return newProvider;
   }
 
@@ -181,8 +189,10 @@ export class ProviderModelManager {
         providers[index]!.providerType = "generic";
       }
       await this.saveProviders(providers);
+        logger.info("Provider updated", logger.sanitizeProvider(providers[index]!));
       return true;
     }
+      logger.warn("Attempted to update missing provider", { providerId: id });
     return false;
   }
 
@@ -191,8 +201,10 @@ export class ProviderModelManager {
     const filtered = providers.filter((p) => p.id !== id);
     if (filtered.length !== providers.length) {
       await this.saveProviders(filtered);
+        logger.info("Provider deleted", { providerId: id });
       return true;
     }
+      logger.warn("Attempted to delete missing provider", { providerId: id });
     return false;
   }
 
@@ -217,8 +229,13 @@ export class ProviderModelManager {
       }
       providers[providerIndex]!.models.push(newModel);
       await this.saveProviders(providers);
+        logger.info("Model added", {
+          provider: logger.sanitizeProvider(providers[providerIndex]!),
+          model: logger.sanitizeModel(newModel),
+        });
       return newModel;
     }
+      logger.warn("Attempted to add model to missing provider", { providerId });
     return null;
   }
 
@@ -248,9 +265,14 @@ export class ProviderModelManager {
         }
         providers[providerIndex]!.models[modelIndex] = updatedModel;
         await this.saveProviders(providers);
+          logger.info("Model updated", {
+            provider: logger.sanitizeProvider(providers[providerIndex]!),
+            model: logger.sanitizeModel(updatedModel),
+          });
         return true;
       }
     }
+      logger.warn("Attempted to update missing model", { providerId, modelId });
     return false;
   }
 
@@ -269,6 +291,7 @@ export class ProviderModelManager {
 
     if (deleted) {
       await this.saveProviders(providers);
+        logger.info("Model deleted", { modelId });
     }
 
     return deleted;
@@ -279,9 +302,14 @@ export class ProviderModelManager {
     for (const provider of providers) {
       const model = provider.models.find((m) => m.id === modelId);
       if (model) {
+          logger.debug("Model lookup hit", {
+            provider: logger.sanitizeProvider(provider),
+            model: logger.sanitizeModel(model),
+          });
         return { provider, model };
       }
     }
+      logger.warn("Model lookup miss", { modelId });
     return null;
   }
 }

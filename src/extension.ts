@@ -3,13 +3,28 @@ import { AddiChatProvider } from "./model";
 import { ProviderModelManager, AddiTreeDataProvider, ProviderTreeItem } from "./provider";
 import { CommandHandler } from "./commands";
 import { ModelTreeItem } from "./model";
+import { logger, LogLevel } from "./logger";
+
+function readLogLevel(): LogLevel {
+  const config = vscode.workspace.getConfiguration("addi");
+  const raw = (config.get<string>("logLevel") ?? "warn").toLowerCase();
+  if (raw === "off" || raw === "error" || raw === "warn" || raw === "info" || raw === "debug") {
+    return raw;
+  }
+  return "warn";
+}
 
 export function activate(context: vscode.ExtensionContext) {
+  const initialLogLevel = readLogLevel();
+  logger.initialize(context, initialLogLevel);
+  logger.info("Extension activation start");
+
   const manager = new ProviderModelManager(context);
   const applySettingsSyncPreference = () => {
     const config = vscode.workspace.getConfiguration("addi");
     const enableSync = config.get<boolean>("saveConfigToSettingsSync", true);
     manager.setSettingsSync(Boolean(enableSync));
+    logger.debug("Updated settings sync preference", { enableSync });
   };
 
   applySettingsSyncPreference();
@@ -19,6 +34,45 @@ export function activate(context: vscode.ExtensionContext) {
       if (event.affectsConfiguration("addi.saveConfigToSettingsSync")) {
         applySettingsSyncPreference();
       }
+      if (event.affectsConfiguration("addi.logLevel")) {
+        const nextLevel = readLogLevel();
+        logger.setLevel(nextLevel);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("addi.showLogs", () => {
+      logger.info("Show logs command executed");
+      logger.show();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("addi.setLogLevel", async () => {
+      const currentLevel = logger.getLevel();
+      const selection = await vscode.window.showQuickPick(
+        [
+          { label: "Off", value: "off" },
+          { label: "Error", value: "error" },
+          { label: "Warn", value: "warn" },
+          { label: "Info", value: "info" },
+          { label: "Debug", value: "debug" },
+        ],
+        {
+          placeHolder: "Select Addi log level",
+          canPickMany: false,
+          title: "Addi Log Level",
+          ignoreFocusOut: true,
+        }
+      );
+      if (!selection) {
+        return;
+      }
+      const config = vscode.workspace.getConfiguration("addi");
+      await config.update("logLevel", selection.value, vscode.ConfigurationTarget.Global);
+      logger.setLevel(selection.value as LogLevel);
+      logger.info("Log level changed via command", { previous: currentLevel, next: selection.value });
     })
   );
 
@@ -38,12 +92,11 @@ export function activate(context: vscode.ExtensionContext) {
   // 调试命令：输出当前 Settings Sync 状态和存储内容（仅用于开发/验证）
   context.subscriptions.push(
     vscode.commands.registerCommand("addi.debug.printSettingsSyncState", async () => {
-      const channel = vscode.window.createOutputChannel("Addi Debug");
-      channel.appendLine(`saveConfigToSettingsSync: ${manager.isSettingsSyncEnabled()}`);
-      const providers = manager.getProviders();
-      channel.appendLine(`providers (count=${providers.length}):`);
-      channel.appendLine(JSON.stringify(providers, null, 2));
-      channel.show(true);
+      logger.show();
+      logger.info("Settings sync state requested", {
+        saveConfigToSettingsSync: manager.isSettingsSyncEnabled(),
+        providerCount: manager.getProviders().length,
+      });
     })
   );
 

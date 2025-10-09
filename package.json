@@ -111,6 +111,18 @@
           "group": "navigation@3"
         }
       ],
+      "panel/title": [
+        {
+          "command": "addi.showLogs",
+          "when": "panel == output",
+          "group": "navigation@3"
+        },
+        {
+          "command": "addi.setLogLevel",
+          "when": "panel == output",
+          "group": "navigation@4"
+        }
+      ],
       "commandPalette": [
         {
           "command": "addi.addProvider",
@@ -210,6 +222,18 @@
           "type": "boolean",
           "default": true,
           "description": "Whether to save the addi configuration to the vscode settings sync cloud"
+        },
+        "addi.logLevel": {
+          "type": "string",
+          "enum": [
+            "off",
+            "error",
+            "warn",
+            "info",
+            "debug"
+          ],
+          "default": "warn",
+          "description": "Minimum log level written to the Addi output channel"
         }
       }
     },
@@ -295,6 +319,20 @@
         "command": "addi.debug.printSettingsSyncState",
         "title": "Print Settings Sync State",
         "icon": "$(bug)",
+        "category": "Addi"
+      },
+      {
+        "command": "addi.showLogs",
+        "title": "Show Logs",
+        "shortTitle": "Logs",
+        "icon": "$(output)",
+        "category": "Addi"
+      },
+      {
+        "command": "addi.setLogLevel",
+        "title": "Set Log Level",
+        "shortTitle": "Log Level",
+        "icon": "$(debug-breakpoint-log)",
         "category": "Addi"
       }
     ],

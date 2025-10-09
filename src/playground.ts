@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { Provider, Model } from "./types";
 import { ChatMessage } from "./apiClient";
 import { TextDecoder } from "util";
+import { logger } from "./logger";
 
 export class PlaygroundManager {
   constructor(private readonly context: vscode.ExtensionContext) {}
@@ -11,6 +12,10 @@ export class PlaygroundManager {
   }
 
   async openPlayground(provider: Provider, model: Model): Promise<void> {
+    logger.info("Opening playground", {
+      provider: logger.sanitizeProvider(provider),
+      model: logger.sanitizeModel(model),
+    });
     const panel = vscode.window.createWebviewPanel("addiPlayground", `Playground · ${model.name || model.id || "model"}`, vscode.ViewColumn.Active, {
       enableScripts: true,
       retainContextWhenHidden: true,
@@ -75,7 +80,7 @@ export class PlaygroundManager {
       panel.webview.html = html;
     } catch (e) {
       panel.webview.html = this.createPlaygroundHtmlPlaceholder();
-      console.warn("[Addi] Failed to load playground.html from extension path:", e);
+      logger.warn("Failed to load playground HTML", { error: e instanceof Error ? e.message : String(e) });
     }
 
     const postInit = () => {
@@ -92,9 +97,11 @@ export class PlaygroundManager {
     };
 
     panel.webview.onDidReceiveMessage(async (msg) => {
+      logger.debug("Playground message received", { type: msg?.type });
       if (msg?.type === "playgroundSend") {
         const prompt: string = (msg.prompt || "").trim();
         if (!prompt) {
+          logger.warn("Playground send ignored due to empty prompt");
           return;
         }
 
@@ -122,6 +129,7 @@ export class PlaygroundManager {
 
         const chatModel = await this.selectChatModel(model);
         if (!chatModel) {
+          logger.warn("Playground could not select chat model", logger.sanitizeModel(model));
           panel.webview.postMessage({ type: "playgroundError", payload: { message: "No Addi chat model is available. Configure a provider first." } });
           return;
         }
@@ -163,6 +171,10 @@ export class PlaygroundManager {
 
         try {
           const response = await chatModel.sendRequest(messages, requestOptions, cts.token);
+          logger.debug("Playground chatModel.sendRequest started", {
+            streaming,
+            messageCount: messages.length,
+          });
           let assembled = "";
 
           // Create a small adapter that mimics the ChatResponseStream.markdown behaviour
@@ -193,14 +205,17 @@ export class PlaygroundManager {
 
           history.push({ role: "assistant", content: assembled });
           panel.webview.postMessage({ type: "playgroundResponse", payload: { text: assembled } });
+          logger.info("Playground response completed", { length: assembled.length });
         } catch (error) {
           const cancelled = cts.token.isCancellationRequested;
           const message = error instanceof Error ? error.message : String(error);
           panel.webview.postMessage({ type: "playgroundError", payload: { message: cancelled ? "Request cancelled" : message } });
           history.splice(priorLength); // remove pending user entry on error
+          logger.warn("Playground request failed", { cancelled, error: message });
         } finally {
           cts.dispose();
           delete addiPanel._addiCancellation;
+          logger.debug("Playground request finalized");
         }
       } else if (msg?.type === "playgroundSetParams") {
         if (typeof msg.temperature === "number") {
@@ -226,6 +241,14 @@ export class PlaygroundManager {
           systemPrompt = sp.length ? sp : undefined;
         }
         saveParams();
+        logger.debug("Playground parameters updated", {
+          temperature,
+          topP,
+          maxOutputTokens,
+          presencePenalty,
+          frequencyPenalty,
+          hasSystemPrompt: Boolean(systemPrompt),
+        });
       } else if (msg?.type === "playgroundReset") {
         const cts = addiPanel._addiCancellation;
         if (cts) {
@@ -238,6 +261,7 @@ export class PlaygroundManager {
         }
         history.length = 0;
         panel.webview.postMessage({ type: "playgroundResetAck" });
+        logger.debug("Playground reset by user");
       } else if (msg?.type === "playgroundAbort") {
         const cts = addiPanel._addiCancellation;
         if (cts) {
@@ -248,6 +272,7 @@ export class PlaygroundManager {
           }
           delete addiPanel._addiCancellation;
         }
+        logger.debug("Playground request aborted");
       }
     });
 
@@ -265,7 +290,7 @@ export class PlaygroundManager {
       const [fallback] = await vscode.lm.selectChatModels({ vendor: "addi-provider" });
       return fallback;
     } catch (error) {
-      console.warn("[Addi] Failed to select chat model", error);
+      logger.warn("Failed to select chat model", { error: error instanceof Error ? error.message : String(error) });
       return undefined;
     }
   }

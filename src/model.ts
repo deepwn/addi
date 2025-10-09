@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { Model, Provider, ProviderRepository } from "./types";
+import { logger } from "./logger";
 
 export class ModelTreeItem extends vscode.TreeItem {
   constructor(public model: Model) {
@@ -33,7 +34,15 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
 
   async provideLanguageModelChatInformation(options: { silent: boolean }, _token: vscode.CancellationToken): Promise<vscode.LanguageModelChatInformation[]> {
     const providers = this.repository.getProviders();
+    logger.debug("provideLanguageModelChatInformation", {
+      silent: options.silent,
+      providerCount: providers.length,
+    });
     const filterProviders = options.silent ? providers.filter((p) => p.apiKey && p.apiKey.trim() !== "") : providers;
+    logger.debug("Filtered providers for chat information", {
+      original: providers.length,
+      filtered: filterProviders.length,
+    });
     return filterProviders.flatMap((p) =>
       p.models.map((m) => ({
         id: `addi-provider:${m.id}`,
@@ -61,42 +70,62 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     token: vscode.CancellationToken
   ): Promise<void> {
     const modelId = typeof model.id === "string" && model.id.startsWith("addi-provider:") ? model.id.replace("addi-provider:", "") : model.id;
+    logger.info("Chat response requested", {
+      requestedModelId: modelId,
+      messageCount: messages.length,
+      hasOptions: Boolean(options),
+    });
     const result = this.repository.findModel(modelId);
     if (!result) {
+      logger.warn("Chat response requested for unknown model", { requestedModelId: modelId });
       progress.report(new vscode.LanguageModelTextPart("cannot find the specified model."));
       return;
     }
 
     const { provider, model: storedModel } = result;
+    logger.debug("Resolved model for chat response", {
+      provider: logger.sanitizeProvider(provider),
+      model: logger.sanitizeModel(storedModel),
+    });
     if (!provider.apiKey || provider.apiKey.trim() === "") {
+      logger.warn("Provider missing API key", logger.sanitizeProvider(provider));
       progress.report(new vscode.LanguageModelTextPart("unconfigured API key."));
       return;
     }
 
     if (!provider.apiEndpoint || provider.apiEndpoint.trim() === "") {
+      logger.warn("Provider missing API endpoint", logger.sanitizeProvider(provider));
       progress.report(new vscode.LanguageModelTextPart("unconfigured API endpoint."));
       return;
     }
 
     try {
       if (this.isOpenAiEndpoint(provider.apiEndpoint)) {
+        logger.debug("Dispatching request to OpenAI endpoint", logger.sanitizeProvider(provider));
         await this.callOpenAiApi(provider, storedModel, messages, options, progress, token);
         return;
       }
 
       if (this.isAnthropicEndpoint(provider.apiEndpoint)) {
+        logger.debug("Dispatching request to Anthropic endpoint", logger.sanitizeProvider(provider));
         await this.callAnthropicApi(provider, storedModel, messages, options, progress, token, (options as any)?.toolInvocationToken);
         return;
       }
 
       if (this.isGoogleEndpoint(provider.apiEndpoint)) {
+        logger.debug("Dispatching request to Google endpoint", logger.sanitizeProvider(provider));
         await this.callGoogleApi(provider, storedModel, messages, options, progress, token, (options as any)?.toolInvocationToken);
         return;
       }
 
+      logger.debug("Dispatching request to generic OpenAI-compatible endpoint", logger.sanitizeProvider(provider));
       await this.callGenericOpenAiCompatibleApi(provider, storedModel, messages, options, progress, token);
     } catch (error) {
-      console.error("model query error:", error);
+      logger.error("Model query error", {
+        error: error instanceof Error ? error.message : String(error),
+        provider: logger.sanitizeProvider(provider),
+        model: logger.sanitizeModel(storedModel),
+      });
       progress.report(new vscode.LanguageModelTextPart(`model query error: ${error instanceof Error ? error.message : "unknown"}`));
     }
   }
@@ -317,6 +346,11 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     const url = this.resolveChatCompletionsUrl(provider.apiEndpoint ?? "", "https://api.openai.com/v1");
     const modelIdentifier = this.resolveModelIdentifier(model);
     const generation = this.extractGenerationParameters(options, model);
+    logger.debug("callOpenAiApi", {
+      provider: logger.sanitizeProvider(provider),
+      model: logger.sanitizeModel(model),
+      generation,
+    });
     const rawTools = Array.isArray(options?.tools) ? (options?.tools as ReadonlyArray<Record<string, unknown>>) : undefined;
     const tools = rawTools?.map((tool) => ({
       type: "function",
@@ -362,6 +396,10 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       true,
       (options as any)?.toolInvocationToken
     );
+    logger.debug("callOpenAiApi completed", {
+      provider: logger.sanitizeProvider(provider),
+      model: logger.sanitizeModel(model),
+    });
   }
 
   private async callAnthropicApi(
@@ -378,6 +416,13 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     const userMessages = this.toAnthropicMessages(messages);
     const modelIdentifier = this.resolveModelIdentifier(model);
     const generation = this.extractGenerationParameters(options, model);
+    logger.debug("callAnthropicApi", {
+      provider: logger.sanitizeProvider(provider),
+      model: logger.sanitizeModel(model),
+      generation,
+      hasSystemMessage: Boolean(systemMessage),
+      messageCount: userMessages.length,
+    });
 
     const response = await fetch(this.buildUrl(baseUrl, "/v1/messages"), {
       method: "POST",
@@ -400,14 +445,25 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     if (!response.ok) {
       // Report friendly errors for common HTTP statuses
       if (response.status === 401 || response.status === 403) {
+        logger.warn("Anthropic auth or consent error", {
+          status: response.status,
+          provider: logger.sanitizeProvider(provider),
+        });
         progress.report(new vscode.LanguageModelTextPart("Authentication or consent issue: please check API key or user consent for this model."));
         return;
       }
       if (response.status === 429) {
+        logger.warn("Anthropic rate limit", {
+          provider: logger.sanitizeProvider(provider),
+        });
         progress.report(new vscode.LanguageModelTextPart("Rate limit or quota exceeded. Please try again later."));
         return;
       }
       if (response.status >= 500) {
+        logger.warn("Anthropic server error", {
+          status: response.status,
+          provider: logger.sanitizeProvider(provider),
+        });
         progress.report(new vscode.LanguageModelTextPart("Server error from model provider. Please try again later."));
         return;
       }
@@ -427,6 +483,10 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
         }
       }
     });
+    logger.debug("callAnthropicApi completed", {
+      provider: logger.sanitizeProvider(provider),
+      model: logger.sanitizeModel(model),
+    });
   }
 
   private async callGoogleApi(
@@ -442,6 +502,12 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     const contents = this.toGoogleMessages(messages);
     const modelIdentifier = this.resolveModelIdentifier(model);
     const generation = this.extractGenerationParameters(options, model);
+    logger.debug("callGoogleApi", {
+      provider: logger.sanitizeProvider(provider),
+      model: logger.sanitizeModel(model),
+      generation,
+      messageCount: contents.length,
+    });
 
     const response = await fetch(`${baseUrl}/models/${modelIdentifier}:streamGenerateContent?key=${provider.apiKey}`, {
       method: "POST",
@@ -462,14 +528,23 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
 
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
+        logger.warn("Google auth or consent error", {
+          status: response.status,
+          provider: logger.sanitizeProvider(provider),
+        });
         progress.report(new vscode.LanguageModelTextPart("Authentication or consent issue: please check API key or user consent for this model."));
         return;
       }
       if (response.status === 429) {
+        logger.warn("Google rate limit", { provider: logger.sanitizeProvider(provider) });
         progress.report(new vscode.LanguageModelTextPart("Rate limit or quota exceeded. Please try again later."));
         return;
       }
       if (response.status >= 500) {
+        logger.warn("Google server error", {
+          status: response.status,
+          provider: logger.sanitizeProvider(provider),
+        });
         progress.report(new vscode.LanguageModelTextPart("Server error from model provider. Please try again later."));
         return;
       }
@@ -501,6 +576,10 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
         }
       }
     });
+    logger.debug("callGoogleApi completed", {
+      provider: logger.sanitizeProvider(provider),
+      model: logger.sanitizeModel(model),
+    });
   }
 
   private async callGenericOpenAiCompatibleApi(
@@ -514,6 +593,11 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     const url = this.resolveChatCompletionsUrl(provider.apiEndpoint ?? "", "https://api.openai.com/v1");
     const modelIdentifier = this.resolveModelIdentifier(model);
     const generation = this.extractGenerationParameters(options, model);
+    logger.debug("callGenericOpenAiCompatibleApi", {
+      provider: logger.sanitizeProvider(provider),
+      model: logger.sanitizeModel(model),
+      generation,
+    });
     const rawTools = Array.isArray(options?.tools) ? (options?.tools as ReadonlyArray<Record<string, unknown>>) : undefined;
     const tools = rawTools?.map((tool) => ({
       type: "function",
@@ -559,6 +643,10 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       false,
       (options as any)?.toolInvocationToken
     );
+    logger.debug("callGenericOpenAiCompatibleApi completed", {
+      provider: logger.sanitizeProvider(provider),
+      model: logger.sanitizeModel(model),
+    });
   }
   private toOpenAiMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): Array<Record<string, unknown>> {
     return messages.map((msg) => {
@@ -894,7 +982,9 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
                 return;
               } catch (err) {
                 // If parsing/reporting fails, continue streaming and surface text
-                console.warn("Failed to emit tool_calls as LanguageModelToolCallPart:", err);
+                logger.warn("Failed to emit tool_calls as LanguageModelToolCallPart", {
+                  error: err instanceof Error ? err.message : String(err),
+                });
               }
             }
 
@@ -914,7 +1004,9 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
           } catch (error) {
             // If strict parsing is required we warn, but also report a textual hint so user sees progress
             if (strict) {
-              console.warn("Failed to parse OpenAI compatible stream data:", error);
+              logger.warn("Failed to parse OpenAI compatible stream data", {
+                error: error instanceof Error ? error.message : String(error),
+              });
             }
             // Optionally surface a non-fatal parse hint
             // Do not spam progress with every parse error; skip reporting here.
@@ -952,7 +1044,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
             const data = JSON.parse(line.slice(6));
             onData(data);
           } catch (error) {
-            console.warn("Failed to parse SSE data:", error);
+            logger.warn("Failed to parse SSE data", { error: error instanceof Error ? error.message : String(error) });
           }
         }
       }
@@ -990,7 +1082,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
           const data = JSON.parse(trimmed);
           onData(data);
         } catch (error) {
-          console.warn("Failed to parse line-delimited JSON:", error);
+          logger.warn("Failed to parse line-delimited JSON", { error: error instanceof Error ? error.message : String(error) });
         }
       }
     }

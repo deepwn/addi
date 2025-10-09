@@ -1,4 +1,5 @@
 import { Model, Provider } from "./types";
+import { logger } from "./logger";
 
 export type ChatMessageRole = "system" | "user" | "assistant";
 
@@ -65,19 +66,28 @@ export function parseSseLine(line: string): unknown | undefined {
  * Anthropic / Google 暂未接入流式（后续可扩展）。
  */
 export async function* streamChatCompletion(provider: Provider, model: Model, options: ChatRequestOptions): AsyncGenerator<ChatStreamChunk> {
+  logger.debug("streamChatCompletion invoked", {
+    provider: logger.sanitizeProvider(provider),
+    model: logger.sanitizeModel(model),
+    hasConversation: Boolean(options.conversation?.length),
+    stream: true,
+  });
   const apiEndpoint = provider.apiEndpoint?.trim();
   const apiKey = provider.apiKey?.trim();
   if (!apiEndpoint) {
     yield { type: "error", error: "unconfigured API endpoint" };
+    logger.warn("streamChatCompletion missing endpoint", logger.sanitizeProvider(provider));
     return;
   }
   if (!apiKey) {
     yield { type: "error", error: "unconfigured API key" };
+    logger.warn("streamChatCompletion missing API key", logger.sanitizeProvider(provider));
     return;
   }
   if (!(isOpenAiEndpoint(apiEndpoint) || (!isAnthropicEndpoint(apiEndpoint) && !isGoogleEndpoint(apiEndpoint)))) {
     // 仅在 openai 或 generic 情况下启用，其他 provider 回退错误（可未来扩展）
     yield { type: "error", error: "Streaming currently only supported for OpenAI / OpenAI-compatible endpoints" };
+    logger.warn("streamChatCompletion unsupported endpoint", logger.sanitizeProvider(provider));
     return;
   }
   const messages = buildConversation(options.conversation ?? [], options.prompt);
@@ -121,6 +131,10 @@ export async function* streamChatCompletion(provider: Provider, model: Model, op
     if (!response.ok || !response.body) {
       const errText = !response.ok ? await readResponseError(response) : "Readable stream not supported";
       yield { type: "error", error: errText };
+      logger.warn("streamChatCompletion HTTP error", {
+        provider: logger.sanitizeProvider(provider),
+        error: errText,
+      });
       return;
     }
     const reader = response.body.getReader();
@@ -155,26 +169,43 @@ export async function* streamChatCompletion(provider: Provider, model: Model, op
     }
     // 完成
     yield { type: "done", fullText: full };
+    logger.debug("streamChatCompletion finished", {
+      provider: logger.sanitizeProvider(provider),
+      model: logger.sanitizeModel(model),
+      totalLength: full.length,
+    });
   } catch (e: unknown) {
     const err = e as { name?: string } | undefined;
     if (err?.name === "AbortError") {
       yield { type: "error", error: "aborted" };
+      logger.warn("streamChatCompletion aborted", logger.sanitizeProvider(provider));
     } else {
       yield { type: "error", error: e instanceof Error ? e.message : String(e) };
+      logger.warn("streamChatCompletion failed", {
+        provider: logger.sanitizeProvider(provider),
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   }
   // latency 可在最后一帧由调用端计算，如需可扩展。
 }
 
 export async function invokeChatCompletion(provider: Provider, model: Model, options: ChatRequestOptions): Promise<ChatResponse> {
+  logger.debug("invokeChatCompletion invoked", {
+    provider: logger.sanitizeProvider(provider),
+    model: logger.sanitizeModel(model),
+    hasConversation: Boolean((options.conversation ?? []).length),
+  });
   const apiEndpoint = provider.apiEndpoint?.trim();
   const apiKey = provider.apiKey?.trim();
 
   if (!apiEndpoint) {
+    logger.warn("invokeChatCompletion missing endpoint", logger.sanitizeProvider(provider));
     throw new Error("unconfigured API endpoint for the provider");
   }
 
   if (!apiKey) {
+    logger.warn("invokeChatCompletion missing API key", logger.sanitizeProvider(provider));
     throw new Error("unconfigured API key for the provider");
   }
 
@@ -186,17 +217,21 @@ export async function invokeChatCompletion(provider: Provider, model: Model, opt
   const signal = options.signal;
 
   if (isOpenAiEndpoint(apiEndpoint)) {
+    logger.debug("invokeChatCompletion routing to OpenAI", logger.sanitizeProvider(provider));
     return await callOpenAi(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, options.presencePenalty, options.frequencyPenalty, signal);
   }
 
   if (isAnthropicEndpoint(apiEndpoint)) {
+    logger.debug("invokeChatCompletion routing to Anthropic", logger.sanitizeProvider(provider));
     return await callAnthropic(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, signal);
   }
 
   if (isGoogleEndpoint(apiEndpoint)) {
+    logger.debug("invokeChatCompletion routing to Google", logger.sanitizeProvider(provider));
     return await callGoogle(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, signal);
   }
 
+  logger.debug("invokeChatCompletion routing to generic", logger.sanitizeProvider(provider));
   return await callGenericCompatible(
     apiEndpoint,
     apiKey,

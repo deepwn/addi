@@ -4,21 +4,38 @@ import { ProviderModelManager, ProviderTreeItem, AddiTreeDataProvider } from "./
 import { ModelTreeItem } from "./model";
 import { ConfigManager, InputValidator, UserFeedback } from "./utils";
 import { ModelDraft, Provider, Model } from "./types";
+import { logger } from "./logger";
 // playground logic moved to src/playground.ts
 import PlaygroundManager from "./playground";
 
 export class CommandHandler {
-  constructor(private readonly manager: ProviderModelManager, private readonly treeDataProvider: AddiTreeDataProvider, private readonly context?: vscode.ExtensionContext) {}
+  constructor(private readonly manager: ProviderModelManager, private readonly treeDataProvider: AddiTreeDataProvider, private readonly context?: vscode.ExtensionContext) {
+    logger.debug("CommandHandler initialized", {
+      hasContext: Boolean(context),
+    });
+  }
 
   private async promptModelApiTest(provider: Provider, modelDraft: ModelDraft, continueLabel: string): Promise<boolean> {
+    logger.debug("promptModelApiTest invoked", {
+      provider: logger.sanitizeProvider(provider),
+      model: logger.sanitizeModel(modelDraft),
+    });
     const testChoice = await vscode.window.showQuickPick([{ label: "check" }, { label: "skip" }], { placeHolder: "should check model API?" });
 
     if (!testChoice) {
       UserFeedback.showWarning("canceled model operation");
+      logger.warn("Model API test selection canceled", {
+        provider: logger.sanitizeProvider(provider),
+        model: logger.sanitizeModel(modelDraft),
+      });
       return false;
     }
 
     if (testChoice.label === "skip") {
+      logger.debug("Model API test skipped", {
+        provider: logger.sanitizeProvider(provider),
+        model: logger.sanitizeModel(modelDraft),
+      });
       return true;
     }
 
@@ -27,12 +44,25 @@ export class CommandHandler {
         await this.testModelApi(provider, modelDraft, token);
       });
       UserFeedback.showInfo("Model API test passed");
+      logger.info("Model API test passed", {
+        provider: logger.sanitizeProvider(provider),
+        model: logger.sanitizeModel(modelDraft),
+      });
       return true;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.warn("Model API test failed", {
+        provider: logger.sanitizeProvider(provider),
+        model: logger.sanitizeModel(modelDraft),
+        error: errorMsg,
+      });
       const decision = await vscode.window.showWarningMessage(`Model API test failed: ${errorMsg}`, { modal: true }, "Cancel", continueLabel);
       if (decision !== continueLabel) {
         UserFeedback.showWarning("Canceled model operation");
+        logger.debug("User canceled after failed API test", {
+          provider: logger.sanitizeProvider(provider),
+          model: logger.sanitizeModel(modelDraft),
+        });
         return false;
       }
       return true;
@@ -44,12 +74,19 @@ export class CommandHandler {
     const apiKey = provider.apiKey?.trim();
 
     if (!apiEndpoint) {
+      logger.warn("testModelApi aborted due to missing endpoint", logger.sanitizeProvider(provider));
       throw new Error("unconfigured API endpoint for the provider");
     }
 
     if (!apiKey) {
+      logger.warn("testModelApi aborted due to missing API key", logger.sanitizeProvider(provider));
       throw new Error("unconfigured API key for the provider");
     }
+
+    logger.debug("testModelApi starting", {
+      provider: logger.sanitizeProvider(provider),
+      model: logger.sanitizeModel(modelDraft),
+    });
 
     const abortController = new AbortController();
     const subscription = token.onCancellationRequested(() => abortController.abort());
@@ -58,24 +95,34 @@ export class CommandHandler {
       switch (provider.providerType) {
         case "openai":
           await this.testOpenAiApi(apiEndpoint, apiKey, modelDraft, abortController.signal);
+          logger.debug("testModelApi openai completed", logger.sanitizeProvider(provider));
           return;
         case "anthropic":
           await this.testAnthropicApi(apiEndpoint, apiKey, modelDraft, abortController.signal);
+          logger.debug("testModelApi anthropic completed", logger.sanitizeProvider(provider));
           return;
         case "google":
           await this.testGoogleApi(apiEndpoint, apiKey, modelDraft, abortController.signal);
+          logger.debug("testModelApi google completed", logger.sanitizeProvider(provider));
           return;
         default:
           await this.testGenericOpenAiCompatibleApi(apiEndpoint, apiKey, modelDraft, abortController.signal);
+          logger.debug("testModelApi generic completed", logger.sanitizeProvider(provider));
           return;
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
+        logger.warn("testModelApi aborted", logger.sanitizeProvider(provider));
         throw new Error("Model API test canceled");
       }
+      logger.warn("testModelApi failed", {
+        provider: logger.sanitizeProvider(provider),
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     } finally {
       subscription.dispose();
+      logger.debug("testModelApi finished cleanup", logger.sanitizeProvider(provider));
     }
   }
 
@@ -292,7 +339,14 @@ export class CommandHandler {
   // playground logic moved to PlaygroundManager
 
   async openPlayground(provider: Provider, model: Model | (ModelDraft & { id?: string; name?: string })): Promise<void> {
-    if (!this.context) { throw new Error("No extension context"); }
+    logger.info("Command openPlayground invoked", {
+      provider: logger.sanitizeProvider(provider),
+      model: logger.sanitizeModel(model as Model),
+    });
+    if (!this.context) {
+      logger.error("openPlayground missing extension context");
+      throw new Error("No extension context");
+    }
     const mgr = new PlaygroundManager(this.context);
     // ensure model has the shape of Model
     const realModel = model as Model;
@@ -300,12 +354,14 @@ export class CommandHandler {
   }
 
   async addProvider(): Promise<void> {
+    logger.info("Command addProvider invoked");
     const name = await UserFeedback.showInputBox({
       prompt: "Please enter the provider name",
       validateInput: InputValidator.validateName,
     });
 
     if (!name) {
+      logger.debug("addProvider canceled at name input");
       return;
     }
 
@@ -331,6 +387,7 @@ export class CommandHandler {
     );
     if (!typePick) {
       UserFeedback.showWarning("Provider creation canceled (no type selected)");
+      logger.warn("addProvider canceled at type selection");
       return;
     }
     const providerType = typePick.value as Provider["providerType"];
@@ -364,7 +421,7 @@ export class CommandHandler {
     });
 
     try {
-  const providerData: Omit<Provider, "id" | "models"> = { name, providerType };
+      const providerData: Omit<Provider, "id" | "models"> = { name, providerType };
 
       if (description) {
         providerData.description = description;
@@ -382,15 +439,21 @@ export class CommandHandler {
         providerData.providerType = providerType;
       }
 
-      await this.manager.addProvider(providerData);
+      logger.debug("Submitting provider for creation", {
+        provider: logger.sanitizeProvider(providerData as Provider),
+      });
+      const created = await this.manager.addProvider(providerData);
       this.treeDataProvider.refresh();
       UserFeedback.showInfo(`Provider "${name}" added`);
+      logger.info("Provider created", logger.sanitizeProvider(created));
     } catch (error) {
       UserFeedback.showError(`Failed to add provider: ${error instanceof Error ? error.message : "Unknown error"}`);
+      logger.error("addProvider failed", { error: error instanceof Error ? error.message : String(error) });
     }
   }
 
   async editProvider(item: ProviderTreeItem): Promise<void> {
+    logger.info("Command editProvider invoked", logger.sanitizeProvider(item.provider));
     const name = await UserFeedback.showInputBox({
       prompt: "Edit provider name",
       value: item.provider.name,
@@ -398,6 +461,7 @@ export class CommandHandler {
     });
 
     if (!name) {
+      logger.debug("editProvider canceled at name input", logger.sanitizeProvider(item.provider));
       return;
     }
 
@@ -455,7 +519,7 @@ export class CommandHandler {
     });
 
     try {
-  const providerData: Partial<Omit<Provider, "id" | "models">> = { name, providerType };
+      const providerData: Partial<Omit<Provider, "id" | "models">> = { name, providerType };
 
       if (description) {
         providerData.description = description;
@@ -471,22 +535,31 @@ export class CommandHandler {
       }
       providerData.providerType = providerType;
 
+      logger.debug("Submitting provider update", {
+        original: logger.sanitizeProvider(item.provider),
+        update: logger.sanitizeProvider(providerData as Provider),
+      });
       const success = await this.manager.updateProvider(item.provider.id, providerData);
       if (success) {
         this.treeDataProvider.refresh();
         UserFeedback.showInfo(`Provider "${name}" updated`);
+        logger.info("Provider updated", logger.sanitizeProvider({ ...item.provider, ...providerData } as Provider));
       } else {
         UserFeedback.showError("Failed to update provider");
+        logger.warn("Provider update failed", logger.sanitizeProvider(item.provider));
       }
     } catch (error) {
       UserFeedback.showError(`Failed to update provider: ${error instanceof Error ? error.message : "Unknown error"}`);
+      logger.error("editProvider failed", { error: error instanceof Error ? error.message : String(error) });
     }
   }
 
   async deleteProvider(item: ProviderTreeItem): Promise<void> {
+    logger.info("Command deleteProvider invoked", logger.sanitizeProvider(item.provider));
     const confirm = await UserFeedback.showConfirmDialog(`Are you sure you want to delete provider "${item.provider.name}"? This will also delete all of its models.`);
 
     if (!confirm) {
+      logger.debug("deleteProvider canceled by user", logger.sanitizeProvider(item.provider));
       return;
     }
 
@@ -496,16 +569,20 @@ export class CommandHandler {
         if (success) {
           this.treeDataProvider.refresh();
           UserFeedback.showInfo(`Provider "${item.provider.name}" deleted`);
+          logger.info("Provider deleted", logger.sanitizeProvider(item.provider));
         } else {
           UserFeedback.showError("Failed to delete provider");
+          logger.warn("deleteProvider manager returned false", logger.sanitizeProvider(item.provider));
         }
       });
     } catch (error) {
       UserFeedback.showError(`Failed to delete provider: ${error instanceof Error ? error.message : "Unknown error"}`);
+      logger.error("deleteProvider failed", { error: error instanceof Error ? error.message : String(error) });
     }
   }
 
   async editApiKey(item: ProviderTreeItem): Promise<void> {
+    logger.info("Command editApiKey invoked", logger.sanitizeProvider(item.provider));
     const currentApiKey = item.provider.apiKey || "";
 
     const newApiKey = await UserFeedback.showInputBox({
@@ -516,6 +593,7 @@ export class CommandHandler {
     });
 
     if (newApiKey === undefined) {
+      logger.debug("editApiKey canceled", logger.sanitizeProvider(item.provider));
       return;
     }
 
@@ -524,20 +602,25 @@ export class CommandHandler {
       if (success) {
         this.treeDataProvider.refresh();
         UserFeedback.showInfo(`Provider "${item.provider.name}" API key updated`);
+        logger.info("Provider API key updated", logger.sanitizeProvider(item.provider));
       } else {
         UserFeedback.showError("Failed to update API key");
+        logger.warn("editApiKey manager returned false", logger.sanitizeProvider(item.provider));
       }
     } catch (error) {
       UserFeedback.showError(`Failed to update API key: ${error instanceof Error ? error.message : "Unknown error"}`);
+      logger.error("editApiKey failed", { error: error instanceof Error ? error.message : String(error) });
     }
   }
 
   async addModel(item: ProviderTreeItem): Promise<void> {
+    logger.info("Command addModel invoked", logger.sanitizeProvider(item.provider));
     let id = await UserFeedback.showInputBox({
       prompt: "Enter model ID (unique identifier, recommended: alphanumeric / underscore)",
       validateInput: (v) => (v.trim().length > 0 ? null : "Model ID cannot be empty"),
     });
     if (!id) {
+      logger.debug("addModel canceled at id input", logger.sanitizeProvider(item.provider));
       return;
     }
     id = id.trim();
@@ -548,6 +631,7 @@ export class CommandHandler {
       value: id,
     });
     if (!name) {
+      logger.debug("addModel canceled at name input", logger.sanitizeProvider(item.provider));
       return;
     }
 
@@ -563,6 +647,7 @@ export class CommandHandler {
       validateInput: InputValidator.validateTokens,
     });
     if (!maxInputTokensStr) {
+      logger.debug("addModel canceled at maxInputTokens input", logger.sanitizeProvider(item.provider));
       return;
     }
 
@@ -572,6 +657,7 @@ export class CommandHandler {
       validateInput: InputValidator.validateTokens,
     });
     if (!maxOutputTokensStr) {
+      logger.debug("addModel canceled at maxOutputTokens input", logger.sanitizeProvider(item.provider));
       return;
     }
 
@@ -581,6 +667,7 @@ export class CommandHandler {
     });
     if (!imageInputPick) {
       UserFeedback.showWarning("Model addition canceled");
+      logger.warn("addModel canceled at imageInput selection", logger.sanitizeProvider(item.provider));
       return;
     }
 
@@ -590,6 +677,7 @@ export class CommandHandler {
     });
     if (!toolCallingPick) {
       UserFeedback.showWarning("Model addition canceled");
+      logger.warn("addModel canceled at toolCalling selection", logger.sanitizeProvider(item.provider));
       return;
     }
 
@@ -612,6 +700,10 @@ export class CommandHandler {
 
     const proceed = await this.promptModelApiTest(item.provider, modelDraft, "Still add");
     if (!proceed) {
+      logger.warn("addModel aborted after API test", {
+        provider: logger.sanitizeProvider(item.provider),
+        model: logger.sanitizeModel(modelDraft),
+      });
       return;
     }
 
@@ -622,18 +714,34 @@ export class CommandHandler {
       if (model) {
         this.treeDataProvider.refresh();
         UserFeedback.showInfo(`Model "${name}" added to provider "${item.provider.name}"`);
+        logger.info("Model added", {
+          provider: logger.sanitizeProvider(item.provider),
+          model: logger.sanitizeModel(model),
+        });
       } else {
         UserFeedback.showError("Failed to add model");
+        logger.warn("addModel manager returned null", {
+          provider: logger.sanitizeProvider(item.provider),
+          model: logger.sanitizeModel(modelDraft),
+        });
       }
     } catch (error) {
       UserFeedback.showError(`Failed to add model: ${error instanceof Error ? error.message : "Unknown error"}`);
+      logger.error("addModel failed", {
+        error: error instanceof Error ? error.message : String(error),
+        provider: logger.sanitizeProvider(item.provider),
+      });
     }
   }
 
   async editModel(item: ModelTreeItem): Promise<void> {
+    logger.info("Command editModel invoked", {
+      model: logger.sanitizeModel(item.model),
+    });
     const result = this.manager.findModel(item.model.id);
     if (!result) {
       UserFeedback.showError("Model not found");
+      logger.warn("editModel failed to find model", { modelId: item.model.id });
       return;
     }
     const { provider, model } = result;
@@ -644,6 +752,10 @@ export class CommandHandler {
       validateInput: (v) => (v.trim().length > 0 ? null : "Model ID cannot be empty"),
     });
     if (!id) {
+      logger.debug("editModel canceled at id input", {
+        provider: logger.sanitizeProvider(provider),
+        model: logger.sanitizeModel(model),
+      });
       return;
     }
     id = id.trim();
@@ -654,6 +766,7 @@ export class CommandHandler {
       validateInput: InputValidator.validateName,
     });
     if (!name) {
+      logger.debug("editModel canceled at name input", logger.sanitizeModel(model));
       return;
     }
 
@@ -669,6 +782,7 @@ export class CommandHandler {
       validateInput: InputValidator.validateTokens,
     });
     if (!maxInputTokensStr) {
+      logger.debug("editModel canceled at maxInputTokens input", logger.sanitizeModel(model));
       return;
     }
 
@@ -678,6 +792,7 @@ export class CommandHandler {
       validateInput: InputValidator.validateTokens,
     });
     if (!maxOutputTokensStr) {
+      logger.debug("editModel canceled at maxOutputTokens input", logger.sanitizeModel(model));
       return;
     }
 
@@ -687,6 +802,7 @@ export class CommandHandler {
     });
     if (!imageInputPick) {
       UserFeedback.showWarning("Model editing canceled");
+      logger.warn("editModel canceled at imageInput selection", logger.sanitizeModel(model));
       return;
     }
 
@@ -696,6 +812,7 @@ export class CommandHandler {
     });
     if (!toolCallingPick) {
       UserFeedback.showWarning("Model editing canceled");
+      logger.warn("editModel canceled at toolCalling selection", logger.sanitizeModel(model));
       return;
     }
 
@@ -718,6 +835,10 @@ export class CommandHandler {
 
     const proceed = await this.promptModelApiTest(provider, modelDraft, "still update");
     if (!proceed) {
+      logger.warn("editModel aborted after API test", {
+        provider: logger.sanitizeProvider(provider),
+        model: logger.sanitizeModel(modelDraft),
+      });
       return;
     }
 
@@ -728,18 +849,32 @@ export class CommandHandler {
       if (success) {
         this.treeDataProvider.refresh();
         UserFeedback.showInfo(`Model "${name}" updated successfully`);
+        logger.info("Model updated", {
+          provider: logger.sanitizeProvider(provider),
+          model: logger.sanitizeModel({ ...modelDraft, id: modelDraft.id } as Model),
+        });
       } else {
         UserFeedback.showError("Failed to update model");
+        logger.warn("editModel manager returned false", {
+          provider: logger.sanitizeProvider(provider),
+          model: logger.sanitizeModel(model),
+        });
       }
     } catch (error) {
       UserFeedback.showError(`Failed to update model: ${error instanceof Error ? error.message : "Unknown error"}`);
+      logger.error("editModel failed", {
+        error: error instanceof Error ? error.message : String(error),
+        provider: logger.sanitizeProvider(provider),
+      });
     }
   }
 
   async deleteModel(item: ModelTreeItem): Promise<void> {
+    logger.info("Command deleteModel invoked", logger.sanitizeModel(item.model));
     const confirm = await UserFeedback.showConfirmDialog(`Are you sure you want to delete the model "${item.model.name}"?`);
 
     if (!confirm) {
+      logger.debug("deleteModel canceled by user", logger.sanitizeModel(item.model));
       return;
     }
 
@@ -749,12 +884,15 @@ export class CommandHandler {
         if (success) {
           this.treeDataProvider.refresh();
           UserFeedback.showInfo(`Model "${item.model.name}" deleted successfully`);
+          logger.info("Model deleted", logger.sanitizeModel(item.model));
         } else {
           UserFeedback.showError("Failed to delete model");
+          logger.warn("deleteModel manager returned false", logger.sanitizeModel(item.model));
         }
       });
     } catch (error) {
       UserFeedback.showError(`Failed to delete model: ${error instanceof Error ? error.message : "Unknown error"}`);
+      logger.error("deleteModel failed", { error: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -890,10 +1028,12 @@ export class CommandHandler {
   }
 
   async exportConfig(): Promise<void> {
+    logger.info("Command exportConfig invoked");
     try {
       const providers = this.manager.getProviders();
       if (providers.length === 0) {
         UserFeedback.showWarning("No configurations to export");
+        logger.warn("exportConfig aborted: no providers configured");
         return;
       }
 
@@ -906,6 +1046,7 @@ export class CommandHandler {
       });
 
       if (passwordInput === undefined) {
+        logger.debug("exportConfig canceled at password prompt");
         return;
       }
 
@@ -931,6 +1072,7 @@ export class CommandHandler {
       const uri = await vscode.window.showSaveDialog(saveDialogOptions);
 
       if (!uri) {
+        logger.debug("exportConfig canceled at save dialog");
         return;
       }
 
@@ -940,13 +1082,20 @@ export class CommandHandler {
         const encoded = this.encodeProvidersForExport(providers, password);
         await vscode.workspace.fs.writeFile(targetUri, Buffer.from(encoded, "utf8"));
         UserFeedback.showInfo(`Configuration exported${password ? " (encrypted)" : ""} to ${targetUri.fsPath}`);
+        logger.info("Configuration exported", {
+          providerCount: providers.length,
+          encrypted,
+          target: targetUri.fsPath,
+        });
       });
     } catch (error) {
       UserFeedback.showError(`Failed to export configuration: ${error instanceof Error ? error.message : "Unknown error"}`);
+      logger.error("exportConfig failed", { error: error instanceof Error ? error.message : String(error) });
     }
   }
 
   async importConfig(): Promise<void> {
+    logger.info("Command importConfig invoked");
     try {
       const openDialogOptions: vscode.OpenDialogOptions = {
         filters: {
@@ -960,6 +1109,7 @@ export class CommandHandler {
       const uri = await vscode.window.showOpenDialog(openDialogOptions);
 
       if (!uri || uri.length === 0) {
+        logger.debug("importConfig canceled at file selection");
         return;
       }
 
@@ -976,11 +1126,13 @@ export class CommandHandler {
         });
 
         if (passwordInput === undefined) {
+          logger.debug("importConfig canceled at password prompt");
           return;
         }
 
         if (passwordInput.length === 0) {
           UserFeedback.showError("Password is required to import encrypted configuration");
+          logger.warn("importConfig provided empty password for encrypted file");
           return;
         }
 
@@ -1044,9 +1196,14 @@ export class CommandHandler {
         await this.manager.saveProviders(providers);
         this.treeDataProvider.refresh();
         UserFeedback.showInfo(`Configuration imported from ${uri[0]!.fsPath}`);
+        logger.info("Configuration imported", {
+          providerCount: providers.length,
+          source: uri[0]!.fsPath,
+        });
       });
     } catch (error) {
       UserFeedback.showError(`Failed to import configuration: ${error instanceof Error ? error.message : "Unknown error"}`);
+      logger.error("importConfig failed", { error: error instanceof Error ? error.message : String(error) });
     }
   }
 }

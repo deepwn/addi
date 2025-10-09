@@ -64,6 +64,7 @@ Addi 让你在 VS Code 中为 GitHub Copilot 添加自定义 / 第三方 / 自�
 | SSE 流式输出    | 支持 OpenAI 及兼容端点增量输出                                |
 | 参数持久化      | 最近一次 Playground 参数自动恢复                              |
 | 测试覆盖        | Streaming / 参数裁剪与持久化测试                              |
+| 日志输出        | 专用 output channel 与可调 Log Level                          |
 
 ## 快速开始 Quick Start
 
@@ -130,6 +131,10 @@ Copilot 侧边栏 → 模型下拉 → 管理模型 → 选择 Addi → 勾选�
 | `addi.manage`       | Management           | 打开管理视图 |
 | `addi.exportConfig` | Export Configuration | 导出配置     |
 | `addi.importConfig` | Import Configuration | 导入配置     |
+| `addi.showLogs`     | Show Logs            | 打开 Addi 日志输出 |
+| `addi.setLogLevel`  | Set Log Level        | 快速调整日志级别 |
+
+`Show Logs` 将在 VS Code 的 **输出 (Output)** 面板中定位 “Addi” 通道，可随时查看调试信息。通过 `Set Log Level` 或在设置中修改 `addi.logLevel`，即可在 `off / error / warn / info / debug` 之间切换输出详细程度。
 
 > 这些命令大多通过树视图右键或标题按钮触发，命令面板默认隐藏。
 
@@ -142,6 +147,7 @@ Copilot 侧边栏 → 模型下拉 → 管理模型 → 选择 Addi → 勾选�
 | `addi.defaultModelFamily`       | "Addi"  | 默认模型 family                      |
 | `addi.defaultModelVersion`      | "1.0.0" | 默认模型 version                     |
 | `addi.saveConfigToSettingsSync` | true    | 是否保存到 VSCode Settings Sync 云端 |
+| `addi.logLevel`                 | warn    | 控制 Addi 输出通道的最低日志级别     |
 
 更改方法：VS Code 设置搜索 “addi” 或在视图标题中点击 Settings。
 
@@ -212,7 +218,7 @@ A: 扩展对供应商和模型数量没有硬性限制，但建议根据您的�
 | 问题         | 排查步骤                                        |
 | ------------ | ----------------------------------------------- |
 | 无法切换模型 | 重启 VS Code / 确认 Provider Key / 重新勾选模型 |
-| 请求失败     | 查看输出 & 控制台日志 / 校验 API Endpoint & Key |
+| 请求失败     | 查看 Addi 输出日志 & 控制台 / 校验 API Endpoint & Key |
 | 流式不工作   | Provider 是否支持 SSE；禁用流后重试             |
 | 配置未同步   | 检查 `addi.saveConfigToSettingsSync` 设置       |
 
