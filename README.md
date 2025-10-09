@@ -135,6 +135,7 @@ Copilot 侧边栏 → 模型下拉 → 管理模型 → 选择 Addi → 勾选�
 | `addi.setLogLevel`  | Set Log Level        | 快速调整日志级别 |
 
 `Show Logs` 将在 VS Code 的 **输出 (Output)** 面板中定位 “Addi” 通道，可随时查看调试信息。通过 `Set Log Level` 或在设置中修改 `addi.logLevel`，即可在 `off / error / warn / info / debug` 之间切换输出详细程度。
+日志内容会自动脱敏，并额外记录模型解析、请求选项等关键上下文，便于排查问题。
 
 > 这些命令大多通过树视图右键或标题按钮触发，命令面板默认隐藏。
 
@@ -224,7 +225,7 @@ A: 扩展对供应商和模型数量没有硬性限制，但建议根据您的�
 
 ## 许可证 License
 
-MIT © 2024-present [deepwn](https://github.com/deepwn) — 详见 [LICENSE](LICENSE)。
+MIT © 2025-present [deepwn](https://github.com/deepwn) — 详见 [LICENSE](LICENSE)。
 
 ## 免责声明 Disclaimer
 

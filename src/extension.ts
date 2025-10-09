@@ -89,17 +89,6 @@ export function activate(context: vscode.ExtensionContext) {
 
   const commandHandler = new CommandHandler(manager, treeDataProvider, context);
 
-  // 调试命令：输出当前 Settings Sync 状态和存储内容（仅用于开发/验证）
-  context.subscriptions.push(
-    vscode.commands.registerCommand("addi.debug.printSettingsSyncState", async () => {
-      logger.show();
-      logger.info("Settings sync state requested", {
-        saveConfigToSettingsSync: manager.isSettingsSyncEnabled(),
-        providerCount: manager.getProviders().length,
-      });
-    })
-  );
-
   context.subscriptions.push(
     vscode.commands.registerCommand("addi.manage", async () => {
       await vscode.commands.executeCommand("addiProviders.focus");

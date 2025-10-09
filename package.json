@@ -316,12 +316,6 @@
         "category": "Addi"
       },
       {
-        "command": "addi.debug.printSettingsSyncState",
-        "title": "Print Settings Sync State",
-        "icon": "$(bug)",
-        "category": "Addi"
-      },
-      {
         "command": "addi.showLogs",
         "title": "Show Logs",
         "shortTitle": "Logs",

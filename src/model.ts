@@ -75,6 +75,13 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       messageCount: messages.length,
       hasOptions: Boolean(options),
     });
+    const messageSummary = this.summarizeMessages(messages);
+    const optionSummary = this.sanitizeChatOptions(options);
+    logger.debug("Chat request summary", {
+      requestedModelId: modelId,
+      messages: messageSummary,
+      options: optionSummary,
+    });
     const result = this.repository.findModel(modelId);
     if (!result) {
       logger.warn("Chat response requested for unknown model", { requestedModelId: modelId });
@@ -86,6 +93,8 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     logger.debug("Resolved model for chat response", {
       provider: logger.sanitizeProvider(provider),
       model: logger.sanitizeModel(storedModel),
+      options: optionSummary,
+      messages: messageSummary,
     });
     if (!provider.apiKey || provider.apiKey.trim() === "") {
       logger.warn("Provider missing API key", logger.sanitizeProvider(provider));
@@ -321,6 +330,116 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     return undefined;
   }
 
+  private summarizeMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): {
+    total: number;
+    byRole: Record<string, number>;
+    toolCallMessages: number;
+    toolResultMessages: number;
+    textCharacters: number;
+    attachmentParts: number;
+  } {
+    const summary = {
+      total: messages.length,
+      byRole: {} as Record<string, number>,
+      toolCallMessages: 0,
+      toolResultMessages: 0,
+      textCharacters: 0,
+      attachmentParts: 0,
+    };
+
+    for (const message of messages) {
+      const role = this.mapChatRole(message.role);
+      summary.byRole[role] = (summary.byRole[role] ?? 0) + 1;
+      const parts = Array.isArray(message.content) ? (message.content as readonly unknown[]) : [message.content];
+
+      if (this.extractToolCallFromParts(parts)) {
+        summary.toolCallMessages += 1;
+      }
+      if (this.extractToolResultFromParts(parts)) {
+        summary.toolResultMessages += 1;
+      }
+
+      for (const part of parts) {
+        if (typeof part === "string") {
+          summary.textCharacters += part.length;
+          continue;
+        }
+        if (part instanceof vscode.LanguageModelTextPart) {
+          summary.textCharacters += part.value?.length ?? 0;
+          continue;
+        }
+        if (part && typeof part === "object") {
+          const candidate = part as Record<string, unknown>;
+          const text = candidate["text"] ?? candidate["value"] ?? candidate["content"];
+          if (typeof text === "string") {
+            summary.textCharacters += text.length;
+          }
+          if (typeof candidate["mimeType"] === "string" || typeof candidate["type"] === "string") {
+            summary.attachmentParts += 1;
+          }
+        }
+      }
+    }
+
+    return summary;
+  }
+
+  private sanitizeChatOptions(options: vscode.ProvideLanguageModelChatResponseOptions | undefined): Record<string, unknown> | undefined {
+    if (!options) {
+      return undefined;
+    }
+
+    const sanitized: Record<string, unknown> = {};
+    const numericKeys = ["maxOutputTokens", "responseMaxTokens", "temperature", "topP", "presencePenalty", "frequencyPenalty", "maxInputTokens", "maxPromptTokens"];
+    for (const key of numericKeys) {
+      const value = this.getNumberOption(options, key);
+      if (value !== undefined) {
+        sanitized[key] = value;
+      }
+    }
+
+    const bag = options as unknown as Record<string, unknown>;
+    if (Array.isArray(bag["stopSequences"])) {
+      sanitized["stopSequenceCount"] = (bag["stopSequences"] as readonly unknown[]).length;
+    }
+
+    const responseFormat = bag["responseFormat"];
+    if (typeof responseFormat === "string") {
+      sanitized["responseFormat"] = responseFormat;
+    } else if (responseFormat && typeof responseFormat === "object") {
+      sanitized["responseFormatKeys"] = Object.keys(responseFormat as Record<string, unknown>);
+    }
+
+    if (Array.isArray(bag["tools"])) {
+      const toolEntries = (bag["tools"] as ReadonlyArray<Record<string, unknown>>).map((tool) => ({
+        id: typeof tool["id"] === "string" ? tool["id"] : undefined,
+        name: typeof tool["name"] === "string" ? tool["name"] : undefined,
+        hasParameters: tool["parameters"] !== undefined,
+      }));
+      sanitized["tools"] = { count: toolEntries.length, definitions: toolEntries };
+    }
+
+    if (bag["toolInvocationToken"] !== undefined) {
+      sanitized["hasToolInvocationToken"] = true;
+    }
+
+    const booleanKeys = ["stream", "jsonMode", "toolChoiceRequired", "silent"];
+    for (const key of booleanKeys) {
+      const value = bag[key];
+      if (typeof value === "boolean") {
+        sanitized[key] = value;
+      }
+    }
+
+    const excludedKeys = new Set<string>([...numericKeys, "stopSequences", "responseFormat", "tools", "toolInvocationToken", ...booleanKeys]);
+    const otherKeys = Object.keys(bag).filter((key) => !excludedKeys.has(key));
+    if (otherKeys.length > 0) {
+      sanitized["otherOptionKeys"] = otherKeys.sort();
+    }
+
+    return Object.keys(sanitized).length > 0 ? sanitized : undefined;
+  }
+
   private mapChatRole(role: unknown): string {
     const value = typeof role === "string" ? role.toLowerCase() : undefined;
     switch (value) {
@@ -346,10 +465,12 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     const url = this.resolveChatCompletionsUrl(provider.apiEndpoint ?? "", "https://api.openai.com/v1");
     const modelIdentifier = this.resolveModelIdentifier(model);
     const generation = this.extractGenerationParameters(options, model);
+    const optionsSanitized = this.sanitizeChatOptions(options);
     logger.debug("callOpenAiApi", {
       provider: logger.sanitizeProvider(provider),
       model: logger.sanitizeModel(model),
       generation,
+      options: optionsSanitized,
     });
     const rawTools = Array.isArray(options?.tools) ? (options?.tools as ReadonlyArray<Record<string, unknown>>) : undefined;
     const tools = rawTools?.map((tool) => ({
@@ -416,12 +537,14 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     const userMessages = this.toAnthropicMessages(messages);
     const modelIdentifier = this.resolveModelIdentifier(model);
     const generation = this.extractGenerationParameters(options, model);
+    const optionsSanitized = this.sanitizeChatOptions(options);
     logger.debug("callAnthropicApi", {
       provider: logger.sanitizeProvider(provider),
       model: logger.sanitizeModel(model),
       generation,
       hasSystemMessage: Boolean(systemMessage),
       messageCount: userMessages.length,
+      options: optionsSanitized,
     });
 
     const response = await fetch(this.buildUrl(baseUrl, "/v1/messages"), {
@@ -502,11 +625,13 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     const contents = this.toGoogleMessages(messages);
     const modelIdentifier = this.resolveModelIdentifier(model);
     const generation = this.extractGenerationParameters(options, model);
+    const optionsSanitized = this.sanitizeChatOptions(options);
     logger.debug("callGoogleApi", {
       provider: logger.sanitizeProvider(provider),
       model: logger.sanitizeModel(model),
       generation,
       messageCount: contents.length,
+      options: optionsSanitized,
     });
 
     const response = await fetch(`${baseUrl}/models/${modelIdentifier}:streamGenerateContent?key=${provider.apiKey}`, {
@@ -593,10 +718,12 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     const url = this.resolveChatCompletionsUrl(provider.apiEndpoint ?? "", "https://api.openai.com/v1");
     const modelIdentifier = this.resolveModelIdentifier(model);
     const generation = this.extractGenerationParameters(options, model);
+    const optionsSanitized = this.sanitizeChatOptions(options);
     logger.debug("callGenericOpenAiCompatibleApi", {
       provider: logger.sanitizeProvider(provider),
       model: logger.sanitizeModel(model),
       generation,
+      options: optionsSanitized,
     });
     const rawTools = Array.isArray(options?.tools) ? (options?.tools as ReadonlyArray<Record<string, unknown>>) : undefined;
     const tools = rawTools?.map((tool) => ({
