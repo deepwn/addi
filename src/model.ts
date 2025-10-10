@@ -1226,12 +1226,24 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       return undefined;
     }
 
+    if (!invokeOptions.toolInvocationToken) {
+      logger.warn("Tool invocation skipped - no token", { toolName: name });
+      progress.report(new vscode.LanguageModelTextPart(`Tool ${name} cannot run because the host did not provide tool access for this request.`));
+      return undefined;
+    }
+
     try {
       const toolResult = await (vscode as any).lm.invokeTool(name, invokeOptions, token);
       return toolResult;
     } catch (err) {
-      progress.report(new vscode.LanguageModelTextPart(`Tool invocation failed for ${name}: ${err instanceof Error ? err.message : String(err)}`));
-      throw err;
+      logger.warn("Tool invocation failed", {
+        toolName: name,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error(String(err));
     }
   }
 }
