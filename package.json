@@ -3,7 +3,7 @@
   "icon": "resources/icon-bg.min.png",
   "displayName": "Addi",
   "description": "add more custom AI providers and models for your copilot",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "deepwn",
   "repository": {
     "type": "git",
@@ -37,6 +37,10 @@
     "Other"
   ],
   "activationEvents": [],
+  "enabledApiProposals": [
+    "contribLanguageModelToolSets",
+    "languageModelCapabilities"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "icons": {

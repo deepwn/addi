@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { Model, Provider, ProviderRepository } from "./types";
 import { logger } from "./logger";
+import { ToolRegistry } from "./toolRegistry";
 
 export class ModelTreeItem extends vscode.TreeItem {
   constructor(public model: Model) {
@@ -77,10 +78,13 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     });
     const messageSummary = this.summarizeMessages(messages);
     const optionSummary = this.sanitizeChatOptions(options);
+    const toolDefinitions = this.resolveToolDefinitions(options);
     logger.debug("Chat request summary", {
       requestedModelId: modelId,
       messages: messageSummary,
       options: optionSummary,
+      toolCount: toolDefinitions?.length ?? 0,
+      toolSource: toolDefinitions && toolDefinitions.length > 0 ? (Array.isArray((options as any)?.tools) ? "host" : "fallback") : "none",
     });
     const result = this.repository.findModel(modelId);
     if (!result) {
@@ -111,24 +115,24 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     try {
       if (this.isOpenAiEndpoint(provider.apiEndpoint)) {
         logger.debug("Dispatching request to OpenAI endpoint", logger.sanitizeProvider(provider));
-        await this.callOpenAiApi(provider, storedModel, messages, options, progress, token);
+        await this.callOpenAiApi(provider, storedModel, messages, options, toolDefinitions, progress, token);
         return;
       }
 
       if (this.isAnthropicEndpoint(provider.apiEndpoint)) {
         logger.debug("Dispatching request to Anthropic endpoint", logger.sanitizeProvider(provider));
-        await this.callAnthropicApi(provider, storedModel, messages, options, progress, token, (options as any)?.toolInvocationToken);
+        await this.callAnthropicApi(provider, storedModel, messages, options, toolDefinitions, progress, token, (options as any)?.toolInvocationToken);
         return;
       }
 
       if (this.isGoogleEndpoint(provider.apiEndpoint)) {
         logger.debug("Dispatching request to Google endpoint", logger.sanitizeProvider(provider));
-        await this.callGoogleApi(provider, storedModel, messages, options, progress, token, (options as any)?.toolInvocationToken);
+        await this.callGoogleApi(provider, storedModel, messages, options, toolDefinitions, progress, token, (options as any)?.toolInvocationToken);
         return;
       }
 
       logger.debug("Dispatching request to generic OpenAI-compatible endpoint", logger.sanitizeProvider(provider));
-      await this.callGenericOpenAiCompatibleApi(provider, storedModel, messages, options, progress, token);
+      await this.callGenericOpenAiCompatibleApi(provider, storedModel, messages, options, toolDefinitions, progress, token);
     } catch (error) {
       logger.error("Model query error", {
         error: error instanceof Error ? error.message : String(error),
@@ -330,6 +334,81 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     return undefined;
   }
 
+  private resolveToolDefinitions(options: vscode.ProvideLanguageModelChatResponseOptions | undefined): ReadonlyArray<Record<string, unknown>> | undefined {
+    const bag = options as unknown as Record<string, unknown> | undefined;
+    const provided = Array.isArray(bag?.["tools"]) ? (bag!["tools"] as ReadonlyArray<Record<string, unknown>>) : undefined;
+    if (provided && provided.length > 0) {
+      ToolRegistry.captureHostTools(provided);
+      return provided;
+    }
+    const fallback = ToolRegistry.getFallbackToolDefinitions();
+    if (fallback.length > 0) {
+      return fallback;
+    }
+    return undefined;
+  }
+
+  private convertToFunctionTools(toolDefinitions: ReadonlyArray<Record<string, unknown>> | undefined):
+    | Array<{
+        type: "function";
+        function: { name: string; description?: string; parameters: Record<string, unknown> };
+      }>
+    | undefined {
+    if (!toolDefinitions || toolDefinitions.length === 0) {
+      return undefined;
+    }
+    const seen = new Set<string>();
+    const converted: Array<{ type: "function"; function: { name: string; description?: string; parameters: Record<string, unknown> } }> = [];
+    for (const definition of toolDefinitions) {
+      if (!definition || typeof definition !== "object") {
+        continue;
+      }
+      const record = definition as Record<string, unknown>;
+      const identifier = this.getToolIdentifierFromDefinition(record);
+      if (!identifier || seen.has(identifier)) {
+        continue;
+      }
+      seen.add(identifier);
+      const metadata = ToolRegistry.findTool(identifier);
+      const descriptionCandidate = metadata?.description ?? (typeof record["description"] === "string" ? (record["description"] as string) : typeof record["detail"] === "string" ? (record["detail"] as string) : undefined);
+      const parametersCandidate = metadata?.parameters ?? this.normalizeToolParameters(record["parameters"] ?? record["inputSchema"] ?? record["schema"]);
+      converted.push({
+        type: "function",
+        function: {
+          name: identifier,
+          description: descriptionCandidate ?? "",
+          parameters: parametersCandidate,
+        },
+      });
+    }
+    return converted.length > 0 ? converted : undefined;
+  }
+
+  private getToolIdentifierFromDefinition(record: Record<string, unknown>): string | undefined {
+    const keys = ["id", "identifier", "name"];
+    for (const key of keys) {
+      const value = record[key];
+      if (typeof value === "string" && value.trim().length > 0) {
+        return value.trim();
+      }
+    }
+    return undefined;
+  }
+
+  private normalizeToolParameters(value: unknown): Record<string, unknown> {
+    if (!value || typeof value !== "object") {
+      return { type: "object", properties: {} };
+    }
+    const record = value as Record<string, unknown>;
+    if (typeof record["type"] === "string" && record["type"].trim().length > 0) {
+      return record;
+    }
+    return {
+      type: "object",
+      properties: record,
+    };
+  }
+
   private summarizeMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): {
     total: number;
     byRole: Record<string, number>;
@@ -459,6 +538,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     model: Model,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
+    toolDefinitions: ReadonlyArray<Record<string, unknown>> | undefined,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken
   ): Promise<void> {
@@ -472,15 +552,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       generation,
       options: optionsSanitized,
     });
-    const rawTools = Array.isArray(options?.tools) ? (options?.tools as ReadonlyArray<Record<string, unknown>>) : undefined;
-    const tools = rawTools?.map((tool) => ({
-      type: "function",
-      function: {
-        name: (tool["id"] as string) ?? (tool["name"] as string) ?? "tool",
-        description: (tool["description"] as string) ?? "",
-        parameters: tool["parameters"] ?? { type: "object", properties: {} },
-      },
-    }));
+    const tools = this.convertToFunctionTools(toolDefinitions);
     const body: Record<string, unknown> = {
       model: modelIdentifier,
       messages: this.toOpenAiMessages(messages),
@@ -528,10 +600,12 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     model: Model,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
+    toolDefinitions: ReadonlyArray<Record<string, unknown>> | undefined,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken,
     toolInvocationToken?: unknown
   ): Promise<void> {
+    void toolDefinitions;
     const baseUrl = this.normalizeBaseUrl(provider.apiEndpoint ?? "", "https://api.anthropic.com");
     const systemMessage = this.extractSystemMessage(messages);
     const userMessages = this.toAnthropicMessages(messages);
@@ -617,10 +691,12 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     model: Model,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
+    toolDefinitions: ReadonlyArray<Record<string, unknown>> | undefined,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken,
     toolInvocationToken?: unknown
   ): Promise<void> {
+    void toolDefinitions;
     const baseUrl = this.normalizeBaseUrl(provider.apiEndpoint ?? "", "https://generativelanguage.googleapis.com/v1beta");
     const contents = this.toGoogleMessages(messages);
     const modelIdentifier = this.resolveModelIdentifier(model);
@@ -712,6 +788,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     model: Model,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
+    toolDefinitions: ReadonlyArray<Record<string, unknown>> | undefined,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken
   ): Promise<void> {
@@ -725,15 +802,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       generation,
       options: optionsSanitized,
     });
-    const rawTools = Array.isArray(options?.tools) ? (options?.tools as ReadonlyArray<Record<string, unknown>>) : undefined;
-    const tools = rawTools?.map((tool) => ({
-      type: "function",
-      function: {
-        name: (tool["id"] as string) ?? (tool["name"] as string) ?? "tool",
-        description: (tool["description"] as string) ?? "",
-        parameters: tool["parameters"] ?? { type: "object", properties: {} },
-      },
-    }));
+    const tools = this.convertToFunctionTools(toolDefinitions);
     const bodyGeneric: Record<string, unknown> = {
       model: modelIdentifier,
       messages: this.toOpenAiMessages(messages),
