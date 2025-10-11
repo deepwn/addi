@@ -8,6 +8,22 @@ import { logger } from "./logger";
 // playground logic moved to src/playground.ts
 import PlaygroundManager from "./playground";
 
+interface RemoteModelInfo {
+  id: string;
+  name?: string;
+  description?: string;
+  maxInputTokens?: number;
+  maxOutputTokens?: number;
+  capabilities?: Model["capabilities"];
+}
+
+type ModelSyncResult = {
+  added: number;
+  updated: number;
+  totalRemote: number;
+  mutated: boolean;
+};
+
 export class CommandHandler {
   constructor(private readonly manager: ProviderModelManager, private readonly treeDataProvider: AddiTreeDataProvider, private readonly context?: vscode.ExtensionContext) {
     logger.debug("CommandHandler initialized", {
@@ -186,6 +202,19 @@ export class CommandHandler {
     return Math.min(Math.max(Math.floor(value), 1), 1024);
   }
 
+  private coercePositiveInteger(value: unknown): number | undefined {
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+      return Math.floor(value);
+    }
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return Math.floor(parsed);
+      }
+    }
+    return undefined;
+  }
+
   private resolveModelIdentifierFromDraft(modelDraft: ModelDraft): string {
     const trimmedId = modelDraft.id?.trim();
     if (trimmedId && !/^[0-9]+$/.test(trimmedId)) {
@@ -336,6 +365,200 @@ export class CommandHandler {
     }
   }
 
+  private async fetchProviderModelsFromApi(provider: Provider): Promise<RemoteModelInfo[]> {
+    const endpoint = provider.apiEndpoint?.trim();
+    const apiKey = provider.apiKey?.trim();
+
+    if (!endpoint) {
+      throw new Error("Provider API endpoint is not configured");
+    }
+
+    if (!apiKey) {
+      throw new Error("Provider API key is not configured");
+    }
+
+    const providerType = provider.providerType ?? "generic";
+    logger.debug("fetchProviderModelsFromApi invoked", {
+      provider: logger.sanitizeProvider(provider),
+      providerType,
+    });
+
+    switch (providerType) {
+      case "openai":
+      case "generic": {
+        const baseUrl = this.normalizeBaseUrl(endpoint, "https://api.openai.com/v1");
+        const cleanedBase = baseUrl.replace(/\/(?:chat\/)?completions$/i, "");
+        const url = this.buildUrl(cleanedBase, "/models");
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(await this.readResponseError(response));
+        }
+
+        const payload = (await response.json()) as Record<string, unknown>;
+        const entries = Array.isArray(payload["data"]) ? payload["data"] : [];
+        const models: RemoteModelInfo[] = [];
+
+        for (const entry of entries) {
+          if (!entry || typeof entry !== "object") {
+            continue;
+          }
+          const record = entry as Record<string, unknown>;
+          const id = typeof record["id"] === "string" ? record["id"] : undefined;
+          if (!id) {
+            continue;
+          }
+          const displayName = typeof record["display_name"] === "string" ? record["display_name"] : undefined;
+          const ownedBy = typeof record["owned_by"] === "string" ? record["owned_by"] : undefined;
+          const description = typeof record["description"] === "string" ? record["description"] : ownedBy ? `Owner: ${ownedBy}` : undefined;
+          const info: RemoteModelInfo = {
+            id,
+            name: displayName ?? id,
+          };
+          if (description) {
+            info.description = description;
+          }
+          models.push(info);
+        }
+
+        logger.debug("Fetched OpenAI-compatible model list", {
+          provider: logger.sanitizeProvider(provider),
+          remoteCount: models.length,
+        });
+        return models;
+      }
+      case "anthropic": {
+        const baseUrl = this.normalizeBaseUrl(endpoint, "https://api.anthropic.com");
+        const url = this.buildUrl(baseUrl, "/v1/models");
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(await this.readResponseError(response));
+        }
+
+        const payload = (await response.json()) as Record<string, unknown>;
+        const listSource = Array.isArray(payload["models"]) ? payload["models"] : Array.isArray(payload["data"]) ? payload["data"] : [];
+        const models: RemoteModelInfo[] = [];
+
+        for (const entry of listSource) {
+          if (!entry || typeof entry !== "object") {
+            continue;
+          }
+          const record = entry as Record<string, unknown>;
+          const id = typeof record["id"] === "string" ? record["id"] : typeof record["name"] === "string" ? record["name"] : undefined;
+          if (!id) {
+            continue;
+          }
+          const displayName = typeof record["display_name"] === "string" ? record["display_name"] : undefined;
+          const description = typeof record["description"] === "string" ? record["description"] : undefined;
+          const maxInputTokens = this.coercePositiveInteger(record["input_token_limit"] ?? record["context_length"] ?? record["context_limit"]);
+          const maxOutputTokens = this.coercePositiveInteger(record["output_token_limit"] ?? record["max_output_tokens"]);
+
+          const info: RemoteModelInfo = {
+            id,
+            name: displayName ?? id,
+          };
+          if (description) {
+            info.description = description;
+          }
+          if (maxInputTokens !== undefined) {
+            info.maxInputTokens = maxInputTokens;
+          }
+          if (maxOutputTokens !== undefined) {
+            info.maxOutputTokens = maxOutputTokens;
+          }
+          models.push(info);
+        }
+
+        logger.debug("Fetched Anthropic model list", {
+          provider: logger.sanitizeProvider(provider),
+          remoteCount: models.length,
+        });
+        return models;
+      }
+      case "google": {
+        const baseUrl = this.normalizeBaseUrl(endpoint, "https://generativelanguage.googleapis.com/v1beta");
+        const url = `${this.buildUrl(baseUrl, "/models")}?key=${encodeURIComponent(apiKey)}`;
+        const response = await fetch(url, {
+          method: "GET",
+        });
+
+        if (!response.ok) {
+          throw new Error(await this.readResponseError(response));
+        }
+
+        const payload = (await response.json()) as Record<string, unknown>;
+        const entries = Array.isArray(payload["models"]) ? payload["models"] : [];
+        const models: RemoteModelInfo[] = [];
+
+        for (const entry of entries) {
+          if (!entry || typeof entry !== "object") {
+            continue;
+          }
+          const record = entry as Record<string, unknown>;
+          const name = typeof record["name"] === "string" ? record["name"] : undefined;
+          if (!name) {
+            continue;
+          }
+          const displayName = typeof record["displayName"] === "string" ? record["displayName"] : undefined;
+          const description = typeof record["description"] === "string" ? record["description"] : undefined;
+          const maxInputTokens = this.coercePositiveInteger(record["inputTokenLimit"]);
+          const maxOutputTokens = this.coercePositiveInteger(record["outputTokenLimit"]);
+
+          let capabilities: Model["capabilities"] | undefined;
+          const modalitiesSource = (record["inputModalities"] ?? record["supportedInputModalities"] ?? record["allowedInputModalities"] ?? record["supportedModalities"]) as unknown;
+          if (Array.isArray(modalitiesSource)) {
+            const hasImage = modalitiesSource.some((value) => typeof value === "string" && value.toUpperCase().includes("IMAGE"));
+            if (hasImage) {
+              capabilities = { imageInput: true };
+            }
+          }
+
+          const info: RemoteModelInfo = {
+            id: name,
+            name: displayName ?? name,
+          };
+          if (description) {
+            info.description = description;
+          }
+          if (maxInputTokens !== undefined) {
+            info.maxInputTokens = maxInputTokens;
+          }
+          if (maxOutputTokens !== undefined) {
+            info.maxOutputTokens = maxOutputTokens;
+          }
+          if (capabilities) {
+            info.capabilities = capabilities;
+          }
+          models.push(info);
+        }
+
+        logger.debug("Fetched Google model list", {
+          provider: logger.sanitizeProvider(provider),
+          remoteCount: models.length,
+        });
+        return models;
+      }
+      default:
+        logger.warn("fetchProviderModelsFromApi unsupported provider type", {
+          provider: logger.sanitizeProvider(provider),
+          providerType,
+        });
+        return [];
+    }
+  }
+
   // playground logic moved to PlaygroundManager
 
   async openPlayground(provider: Provider, model: Model | (ModelDraft & { id?: string; name?: string })): Promise<void> {
@@ -446,6 +669,7 @@ export class CommandHandler {
       this.treeDataProvider.refresh();
       UserFeedback.showInfo(`Provider "${name}" added`);
       logger.info("Provider created", logger.sanitizeProvider(created));
+      await this.syncProviderModels(created.id, "auto");
     } catch (error) {
       UserFeedback.showError(`Failed to add provider: ${error instanceof Error ? error.message : "Unknown error"}`);
       logger.error("addProvider failed", { error: error instanceof Error ? error.message : String(error) });
@@ -610,6 +834,194 @@ export class CommandHandler {
     } catch (error) {
       UserFeedback.showError(`Failed to update API key: ${error instanceof Error ? error.message : "Unknown error"}`);
       logger.error("editApiKey failed", { error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  async pullProviderModels(item: ProviderTreeItem): Promise<void> {
+    logger.info("Command pullProviderModels invoked", logger.sanitizeProvider(item.provider));
+    await this.syncProviderModels(item.provider.id, "manual");
+  }
+
+  private async syncProviderModels(providerId: string, source: "manual" | "auto"): Promise<void> {
+    const providers = this.manager.getProviders();
+    const providerIndex = providers.findIndex((p) => p.id === providerId);
+    if (providerIndex < 0) {
+      logger.warn("syncProviderModels missing provider", { providerId });
+      if (source === "manual") {
+        UserFeedback.showError("Provider not found");
+      }
+      return;
+    }
+
+    const provider = providers[providerIndex]!;
+    const endpoint = provider.apiEndpoint?.trim();
+    if (!endpoint) {
+      const message = `Provider "${provider.name}" is missing an API endpoint. Configure it and try pulling models again.`;
+      UserFeedback.showWarning(message);
+      logger.warn("syncProviderModels missing endpoint", logger.sanitizeProvider(provider));
+      return;
+    }
+
+    const apiKey = provider.apiKey?.trim();
+    if (!apiKey) {
+      const message = `Provider "${provider.name}" is missing an API key. Set the key and rerun "Pull Models List".`;
+      UserFeedback.showWarning(message);
+      logger.warn("syncProviderModels missing api key", logger.sanitizeProvider(provider));
+      return;
+    }
+
+    const fetchableProvider: Provider = {
+      ...provider,
+      apiEndpoint: endpoint,
+      apiKey,
+    };
+
+    logger.debug("syncProviderModels start", { provider: logger.sanitizeProvider(fetchableProvider), source });
+
+    try {
+      const result = await UserFeedback.showProgress<ModelSyncResult>("Fetching models list...", async (_progress, _token) => {
+        const remoteModels = await this.fetchProviderModelsFromApi(fetchableProvider);
+        const existingById = new Map(provider.models.map((model) => [model.id, model]));
+        let added = 0;
+        let updated = 0;
+
+        if (remoteModels.length === 0) {
+          logger.warn("fetchProviderModelsFromApi returned no models", { provider: logger.sanitizeProvider(fetchableProvider) });
+          return { added, updated, totalRemote: 0, mutated: false } satisfies ModelSyncResult;
+        }
+
+        const defaultFamily = ConfigManager.getDefaultModelFamily().trim() || "addi";
+        const defaultVersion = ConfigManager.getDefaultModelVersion().trim() || "1.0.0";
+        const defaultMaxInputTokens = ConfigManager.getDefaultMaxInputTokens();
+        const defaultMaxOutputTokens = ConfigManager.getDefaultMaxOutputTokens();
+
+        for (const remote of remoteModels) {
+          if (!remote.id) {
+            continue;
+          }
+
+          const existing = existingById.get(remote.id);
+          if (existing) {
+            let changed = false;
+
+            if (remote.name && remote.name !== existing.name && existing.name === existing.id) {
+              existing.name = remote.name;
+              changed = true;
+            }
+
+            if (remote.description) {
+              if (!existing.detail) {
+                existing.detail = remote.description;
+                changed = true;
+              } else if (!existing.tooltip) {
+                existing.tooltip = remote.description;
+                changed = true;
+              }
+            }
+
+            if (remote.maxInputTokens !== undefined && remote.maxInputTokens !== existing.maxInputTokens && existing.maxInputTokens === defaultMaxInputTokens) {
+              existing.maxInputTokens = remote.maxInputTokens;
+              changed = true;
+            }
+
+            if (remote.maxOutputTokens !== undefined && remote.maxOutputTokens !== existing.maxOutputTokens && existing.maxOutputTokens === defaultMaxOutputTokens) {
+              existing.maxOutputTokens = remote.maxOutputTokens;
+              changed = true;
+            }
+
+            if (remote.capabilities) {
+              const currentCaps = existing.capabilities ?? {};
+              const nextCaps: Model["capabilities"] = { ...currentCaps };
+              let capsChanged = false;
+
+              if (remote.capabilities.imageInput !== undefined && currentCaps.imageInput !== remote.capabilities.imageInput) {
+                nextCaps.imageInput = remote.capabilities.imageInput;
+                capsChanged = true;
+              }
+
+              if (remote.capabilities.toolCalling !== undefined && currentCaps.toolCalling !== remote.capabilities.toolCalling) {
+                nextCaps.toolCalling = remote.capabilities.toolCalling;
+                capsChanged = true;
+              }
+
+              if (capsChanged) {
+                existing.capabilities = nextCaps;
+                changed = true;
+              }
+            }
+
+            if (changed) {
+              updated++;
+            }
+
+            continue;
+          }
+
+          const model: Model = {
+            id: remote.id,
+            name: remote.name?.trim() || remote.id,
+            family: defaultFamily,
+            version: defaultVersion,
+            maxInputTokens: remote.maxInputTokens ?? defaultMaxInputTokens,
+            maxOutputTokens: remote.maxOutputTokens ?? defaultMaxOutputTokens,
+            capabilities: remote.capabilities ? { ...remote.capabilities } : {},
+          };
+
+          if (remote.description) {
+            model.detail = remote.description;
+          }
+
+          provider.models.push(model);
+          existingById.set(remote.id, model);
+          added++;
+        }
+
+        const mutated = added > 0 || updated > 0;
+        if (mutated) {
+          await this.manager.saveProviders(providers);
+        }
+
+        return { added, updated, totalRemote: remoteModels.length, mutated } satisfies ModelSyncResult;
+      });
+
+      if (!result) {
+        return;
+      }
+
+      if (result.totalRemote === 0) {
+        const message = `Provider "${provider.name}" did not return any models.`;
+        UserFeedback.showWarning(message);
+        logger.warn("syncProviderModels empty result", { provider: logger.sanitizeProvider(fetchableProvider) });
+        return;
+      }
+
+      if (!result.mutated) {
+        const message = `Provider "${provider.name}" already has all ${result.totalRemote} models.`;
+        UserFeedback.showInfo(message);
+        logger.info("syncProviderModels no changes", { provider: logger.sanitizeProvider(fetchableProvider), totalRemote: result.totalRemote });
+        return;
+      }
+
+      this.treeDataProvider.refresh();
+      const fragments: string[] = [];
+      if (result.added > 0) {
+        fragments.push(`${result.added} added`);
+      }
+      if (result.updated > 0) {
+        fragments.push(`${result.updated} updated`);
+      }
+      const summary = fragments.length > 0 ? fragments.join(", ") : "updated";
+      UserFeedback.showInfo(`Synced models for "${provider.name}" (${summary})`);
+      logger.info("syncProviderModels success", {
+        provider: logger.sanitizeProvider(fetchableProvider),
+        added: result.added,
+        updated: result.updated,
+        totalRemote: result.totalRemote,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      UserFeedback.showError(`Failed to sync models for "${provider.name}": ${message}`);
+      logger.error("syncProviderModels error", { provider: logger.sanitizeProvider(fetchableProvider), error: message });
     }
   }
 
