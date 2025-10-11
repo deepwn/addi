@@ -360,16 +360,9 @@
     "languageModelTools": []
   },
   "scripts": {
-    "vscode:prepublish": "yarn package",
-    "compile": "webpack",
-    "watch": "webpack --watch",
+    "test": "tsc -p . --outDir out && yarn package && vscode-test",
     "package": "webpack --mode production --devtool hidden-source-map",
-    "vsix": "yarn package && vsce package --baseImagesUrl https://raw.githubusercontent.com/deepwn/addi/refs/heads/main/ --yarn",
-    "compile-tests": "tsc -p . --outDir out",
-    "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "yarn compile-tests && yarn compile && yarn lint",
-    "lint": "eslint src",
-    "test": "vscode-test"
+    "release": "yarn package && vsce package --baseImagesUrl https://raw.githubusercontent.com/deepwn/addi/refs/heads/main/ --no-yarn"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
@@ -384,5 +377,6 @@
     "typescript": "^5.9.2",
     "webpack": "^5.101.3",
     "webpack-cli": "^6.0.1"
-  }
+  },
+  "packageManager": "yarn@4.10.3"
 }

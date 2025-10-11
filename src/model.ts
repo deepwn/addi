@@ -16,12 +16,11 @@ export class ModelTreeItem extends vscode.TreeItem {
       capabilityHints.push("vision");
     }
     if (model.capabilities?.toolCalling !== undefined) {
-      const toolValue = model.capabilities.toolCalling;
-      capabilityHints.push(`tool:${typeof toolValue === "number" ? toolValue : toolValue ? "yes" : "no"}`);
+      capabilityHints.push(`tools`);
     }
     const inputTokensDetail = TokenFormatter.formatDetailed(model.maxInputTokens);
     const outputTokensDetail = TokenFormatter.formatDetailed(model.maxOutputTokens);
-  let tooltip = `name: ${model.name}\nremoteId: ${model.id}\nfamily: ${model.family}\nversion: ${model.version}\nmaxInputTokens: ${inputTokensDetail}\nmaxOutputTokens: ${outputTokensDetail}`;
+  let tooltip = `name: ${model.name}\nremoteId: ${model.id}\nfamily: ${model.family}\nversion: ${model.version}\ninput: ${inputTokensDetail}\noutput: ${outputTokensDetail}`;
     if (model.tooltip) {
       tooltip += `\ntooltip: ${model.tooltip}`;
     }
@@ -35,7 +34,7 @@ export class ModelTreeItem extends vscode.TreeItem {
     const inputSummary = TokenFormatter.format(model.maxInputTokens);
     const outputSummary = TokenFormatter.format(model.maxOutputTokens);
     const tokenSuffix = inputSummary && outputSummary ? ` · ${inputSummary}↑/${outputSummary}↓` : "";
-    this.description = `${model.family} v${model.version}${tokenSuffix}`;
+    this.description = `${tokenSuffix}`;
   }
 }
 
