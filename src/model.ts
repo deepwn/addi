@@ -1,7 +1,10 @@
 import * as vscode from "vscode";
 import { Model, Provider, ProviderRepository } from "./types";
+import { TokenFormatter } from "./utils";
 import { logger } from "./logger";
 import { ToolRegistry } from "./toolRegistry";
+
+const TOKEN_LIMIT = 1024 * 1024 * 4;
 
 export class ModelTreeItem extends vscode.TreeItem {
   constructor(public model: Model) {
@@ -15,7 +18,9 @@ export class ModelTreeItem extends vscode.TreeItem {
       const toolValue = model.capabilities.toolCalling;
       capabilityHints.push(`tool:${typeof toolValue === "number" ? toolValue : toolValue ? "yes" : "no"}`);
     }
-    let tooltip = `name: ${model.name}\nfamily: ${model.family}\nversion: ${model.version}\nmaxInputTokens: ${model.maxInputTokens}\nmaxOutputTokens: ${model.maxOutputTokens}`;
+    const inputTokensDetail = TokenFormatter.formatDetailed(model.maxInputTokens);
+    const outputTokensDetail = TokenFormatter.formatDetailed(model.maxOutputTokens);
+    let tooltip = `name: ${model.name}\nfamily: ${model.family}\nversion: ${model.version}\nmaxInputTokens: ${inputTokensDetail}\nmaxOutputTokens: ${outputTokensDetail}`;
     if (model.tooltip) {
       tooltip += `\ntooltip: ${model.tooltip}`;
     }
@@ -26,7 +31,10 @@ export class ModelTreeItem extends vscode.TreeItem {
       tooltip += `\ncapabilities: ${capabilityHints.join(", ")}`;
     }
     this.tooltip = tooltip;
-    this.description = `${model.family} v${model.version}`;
+    const inputSummary = TokenFormatter.format(model.maxInputTokens);
+    const outputSummary = TokenFormatter.format(model.maxOutputTokens);
+    const tokenSuffix = inputSummary && outputSummary ? ` · ${inputSummary}↑/${outputSummary}↓` : "";
+    this.description = `${model.family} v${model.version}${tokenSuffix}`;
   }
 }
 
@@ -45,21 +53,26 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       filtered: filterProviders.length,
     });
     return filterProviders.flatMap((p) =>
-      p.models.map((m) => ({
-        id: `addi-provider:${m.id}`,
-        name: `${m.name} (${p.name})`,
-        family: m.family,
-        version: m.version,
-        maxInputTokens: m.maxInputTokens,
-        maxOutputTokens: m.maxOutputTokens,
-        tooltip: m.tooltip ?? `${p.name} - ${m.maxInputTokens}↑/${m.maxOutputTokens}↓`,
-        detail: m.detail ?? `${m.maxInputTokens}↑/${m.maxOutputTokens}↓`,
-        capabilities: {
-          imageInput: !!m.capabilities?.imageInput,
-          // LanguageModelChatInformation.capabilities.toolCalling expects number | boolean
-          toolCalling: (m.capabilities?.toolCalling ?? false) as number | boolean,
-        },
-      }))
+      p.models.map((m) => {
+        const friendlyInput = TokenFormatter.format(m.maxInputTokens) || String(m.maxInputTokens);
+        const friendlyOutput = TokenFormatter.format(m.maxOutputTokens) || String(m.maxOutputTokens);
+        const summary = `${friendlyInput}↑/${friendlyOutput}↓`;
+        return {
+          id: `addi-provider:${m.id}`,
+          name: `${m.name} (${p.name})`,
+          family: m.family,
+          version: m.version,
+          maxInputTokens: m.maxInputTokens,
+          maxOutputTokens: m.maxOutputTokens,
+          tooltip: m.tooltip ?? `${p.name} - ${summary}`,
+          detail: m.detail ?? summary,
+          capabilities: {
+            imageInput: !!m.capabilities?.imageInput,
+            // LanguageModelChatInformation.capabilities.toolCalling expects number | boolean
+            toolCalling: (m.capabilities?.toolCalling ?? false) as number | boolean,
+          },
+        };
+      })
     );
   }
 
@@ -221,7 +234,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
 
   private ensureMaxTokens(value: number | undefined, fallback: number): number {
     if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-      return Math.min(Math.max(Math.floor(value), 1), 8192);
+      return Math.min(Math.max(Math.floor(value), 1), TOKEN_LIMIT);
     }
     return fallback;
   }
@@ -370,7 +383,9 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       }
       seen.add(identifier);
       const metadata = ToolRegistry.findTool(identifier);
-      const descriptionCandidate = metadata?.description ?? (typeof record["description"] === "string" ? (record["description"] as string) : typeof record["detail"] === "string" ? (record["detail"] as string) : undefined);
+      const descriptionCandidate =
+        metadata?.description ??
+        (typeof record["description"] === "string" ? (record["description"] as string) : typeof record["detail"] === "string" ? (record["detail"] as string) : undefined);
       const parametersCandidate = metadata?.parameters ?? this.normalizeToolParameters(record["parameters"] ?? record["inputSchema"] ?? record["schema"]);
       converted.push({
         type: "function",

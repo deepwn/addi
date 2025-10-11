@@ -1,5 +1,5 @@
-import * as assert from 'assert';
-import { parseSseLine, ChatStreamChunk, streamChatCompletion } from '../apiClient';
+import * as assert from "assert";
+import { parseSseLine, ChatStreamChunk, streamChatCompletion } from "../apiClient";
 
 // Mock fetch & ReadableStream for streamChatCompletion test
 
@@ -24,25 +24,22 @@ class MockReadableStream {
 // Save original fetch
 const originalFetch = globalThis.fetch;
 
-suite('Streaming / SSE Parsing', () => {
-  teardown(()=>{ globalThis.fetch = originalFetch; });
-
-  test('parseSseLine basic cases', () => {
-    assert.strictEqual(parseSseLine(''), undefined);
-    assert.strictEqual(parseSseLine(':comment'), undefined);
-    assert.deepStrictEqual(parseSseLine('data: {"a":1}'), { a:1 });
-    assert.deepStrictEqual(parseSseLine('data: [DONE]'), { done:true });
-    assert.strictEqual(parseSseLine('other: x'), undefined);
+suite("Streaming / SSE Parsing", () => {
+  teardown(() => {
+    globalThis.fetch = originalFetch;
   });
 
-  test('streamChatCompletion yields deltas and done', async () => {
+  test("parseSseLine basic cases", () => {
+    assert.strictEqual(parseSseLine(""), undefined);
+    assert.strictEqual(parseSseLine(":comment"), undefined);
+    assert.deepStrictEqual(parseSseLine('data: {"a":1}'), { a: 1 });
+    assert.deepStrictEqual(parseSseLine("data: [DONE]"), { done: true });
+    assert.strictEqual(parseSseLine("other: x"), undefined);
+  });
+
+  test("streamChatCompletion yields deltas and done", async () => {
     // Simulated OpenAI SSE lines (2 deltas then done)
-    const ssePayload = [
-      'data: {"choices":[{"delta":{"content":"Hello"}}]}\n',
-      'data: {"choices":[{"delta":{"content":" World"}}]}\n',
-      '\n',
-      'data: [DONE]\n'
-    ];
+    const ssePayload = ['data: {"choices":[{"delta":{"content":"Hello"}}]}\n', 'data: {"choices":[{"delta":{"content":" World"}}]}\n', "\n", "data: [DONE]\n"];
 
     // Mock fetch to return our stream
     globalThis.fetch = (async () => ({
@@ -50,54 +47,63 @@ suite('Streaming / SSE Parsing', () => {
       body: new MockReadableStream(ssePayload) as unknown as ReadableStream<Uint8Array>,
       headers: new Headers(),
       status: 200,
-      statusText: 'OK',
-      type: 'basic',
-      url: 'https://api.openai.com/v1/chat/completions',
+      statusText: "OK",
+      type: "basic",
+      url: "https://api.openai.com/v1/chat/completions",
       redirected: false,
-      clone() { return this as unknown as Response; },
+      clone() {
+        return this as unknown as Response;
+      },
       arrayBuffer: async () => new ArrayBuffer(0),
-  blob: async () => new Blob([]),
+      blob: async () => new Blob([]),
       formData: async () => new FormData(),
       json: async () => ({}),
-      text: async () => '',
+      text: async () => "",
     })) as unknown as typeof fetch;
 
-  const provider = { id: 'p1', name: 'p1', apiEndpoint: 'https://api.openai.com/v1', apiKey: 'sk-test', providerType: 'openai', models: [] } as any;
-  const model = { id: 'gpt-4o-mini', name: 'gpt-4o-mini', family: 'gpt-4o-mini', maxOutputTokens: 128 } as any;
+    const provider = { id: "p1", name: "p1", apiEndpoint: "https://api.openai.com/v1", apiKey: "sk-test", providerType: "openai", models: [] } as any;
+    const model = { id: "gpt-4o-mini", name: "gpt-4o-mini", family: "gpt-4o-mini", maxOutputTokens: 128 } as any;
     const chunks: ChatStreamChunk[] = [];
-    for await (const c of streamChatCompletion(provider, model, { prompt: 'Hi' })) {
+    for await (const c of streamChatCompletion(provider, model, { prompt: "Hi" })) {
       chunks.push(c);
     }
 
     // Expect 2 deltas + done
-    const deltaTexts = chunks.filter(c=>c.type==='delta').map(c=>c.deltaText).join('');
-    assert.strictEqual(deltaTexts, 'Hello World');
-    const done = chunks.find(c=>c.type==='done');
-    assert.ok(done, 'should have done');
-    assert.strictEqual(done?.fullText, 'Hello World');
+    const deltaTexts = chunks
+      .filter((c) => c.type === "delta")
+      .map((c) => c.deltaText)
+      .join("");
+    assert.strictEqual(deltaTexts, "Hello World");
+    const done = chunks.find((c) => c.type === "done");
+    assert.ok(done, "should have done");
+    assert.strictEqual(done?.fullText, "Hello World");
   });
 
-  test('streamChatCompletion handles non-stream provider (anthropic) as error', async () => {
+  test("streamChatCompletion handles non-stream provider (anthropic) as error", async () => {
     globalThis.fetch = (async () => ({
       ok: true,
       body: null as unknown as ReadableStream<Uint8Array> | null,
       headers: new Headers(),
       status: 200,
-      statusText: 'OK',
-      type: 'basic',
-      url: 'https://api.anthropic.com/v1/messages',
+      statusText: "OK",
+      type: "basic",
+      url: "https://api.anthropic.com/v1/messages",
       redirected: false,
-      clone() { return this as unknown as Response; },
+      clone() {
+        return this as unknown as Response;
+      },
       arrayBuffer: async () => new ArrayBuffer(0),
-  blob: async () => new Blob([]),
+      blob: async () => new Blob([]),
       formData: async () => new FormData(),
       json: async () => ({}),
-      text: async () => '',
+      text: async () => "",
     })) as unknown as typeof fetch;
-  const provider = { id: 'p2', name: 'p2', apiEndpoint: 'https://api.anthropic.com', apiKey: 'key', providerType: 'anthropic', models: [] } as any;
-  const model = { id: 'claude-3', name: 'claude-3', family: 'claude', maxOutputTokens: 128 } as any;
+    const provider = { id: "p2", name: "p2", apiEndpoint: "https://api.anthropic.com", apiKey: "key", providerType: "anthropic", models: [] } as any;
+    const model = { id: "claude-3", name: "claude-3", family: "claude", maxOutputTokens: 128 } as any;
     const chunks: ChatStreamChunk[] = [];
-    for await (const c of streamChatCompletion(provider, model, { prompt: 'Hi' })) { chunks.push(c); }
-    assert.ok(chunks.some(c=>c.type==='error'));
+    for await (const c of streamChatCompletion(provider, model, { prompt: "Hi" })) {
+      chunks.push(c);
+    }
+    assert.ok(chunks.some((c) => c.type === "error"));
   });
 });

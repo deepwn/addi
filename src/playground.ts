@@ -1,8 +1,11 @@
 import * as vscode from "vscode";
 import { Provider, Model } from "./types";
+import { ConfigManager } from "./utils";
 import { ChatMessage } from "./apiClient";
 import { TextDecoder } from "util";
 import { logger } from "./logger";
+
+const PLAYGROUND_TOKEN_LIMIT = 1024 * 1024 * 4; // allow up to ~4M tokens when overridden
 
 export class PlaygroundManager {
   constructor(private readonly context: vscode.ExtensionContext) {}
@@ -34,7 +37,8 @@ export class PlaygroundManager {
     const stored = this.context?.workspaceState.get<unknown>(presetKey);
     let temperature = 0.7;
     let topP: number | undefined = 1.0;
-    let maxOutputTokens: number | undefined = model.maxOutputTokens || 1024;
+    let maxInputTokens: number | undefined = model.maxInputTokens ? Math.min(model.maxInputTokens, PLAYGROUND_TOKEN_LIMIT) : ConfigManager.getDefaultMaxInputTokens();
+    let maxOutputTokens: number | undefined = model.maxOutputTokens ? Math.min(model.maxOutputTokens, PLAYGROUND_TOKEN_LIMIT) : 1024;
     let presencePenalty: number | undefined = 0;
     let frequencyPenalty: number | undefined = 0;
     let systemPrompt: string | undefined = undefined;
@@ -46,8 +50,17 @@ export class PlaygroundManager {
       if (typeof s["topP"] === "number") {
         topP = s["topP"] as number;
       }
+      if (typeof s["maxInputTokens"] === "number") {
+        const candidate = s["maxInputTokens"] as number;
+        if (Number.isFinite(candidate) && candidate > 0) {
+          maxInputTokens = Math.min(Math.floor(candidate), PLAYGROUND_TOKEN_LIMIT);
+        }
+      }
       if (typeof s["maxOutputTokens"] === "number") {
-        maxOutputTokens = s["maxOutputTokens"] as number;
+        const candidate = s["maxOutputTokens"] as number;
+        if (Number.isFinite(candidate) && candidate > 0) {
+          maxOutputTokens = Math.min(Math.floor(candidate), PLAYGROUND_TOKEN_LIMIT);
+        }
       }
       if (typeof s["presencePenalty"] === "number") {
         presencePenalty = s["presencePenalty"] as number;
@@ -64,6 +77,7 @@ export class PlaygroundManager {
       void this.context?.workspaceState.update(presetKey, {
         temperature,
         topP,
+        maxInputTokens,
         maxOutputTokens,
         presencePenalty,
         frequencyPenalty,
@@ -91,7 +105,7 @@ export class PlaygroundManager {
           providerName: provider.name,
           modelId: model.id,
           modelName: model.name || model.id,
-          params: { temperature, topP, maxOutputTokens, presencePenalty, frequencyPenalty, systemPrompt },
+          params: { temperature, topP, maxInputTokens, maxOutputTokens, presencePenalty, frequencyPenalty, systemPrompt },
         },
       });
     };
@@ -110,10 +124,16 @@ export class PlaygroundManager {
         if (typeof msg.topP === "number") {
           topP = Math.min(Math.max(msg.topP, 0), 1);
         }
+        if (typeof msg.maxInputTokens === "number") {
+          const v = Math.floor(msg.maxInputTokens);
+          if (isFinite(v) && v > 0) {
+            maxInputTokens = Math.min(Math.max(v, 1), PLAYGROUND_TOKEN_LIMIT);
+          }
+        }
         if (typeof msg.maxOutputTokens === "number") {
           const v = Math.floor(msg.maxOutputTokens);
           if (isFinite(v) && v > 0) {
-            maxOutputTokens = Math.min(Math.max(v, 1), 8192);
+            maxOutputTokens = Math.min(Math.max(v, 1), PLAYGROUND_TOKEN_LIMIT);
           }
         }
         if (typeof msg.presencePenalty === "number") {
@@ -143,12 +163,16 @@ export class PlaygroundManager {
         const requestOptionsInput: {
           temperature?: number;
           topP?: number;
+          maxInputTokens?: number;
           maxOutputTokens?: number;
           presencePenalty?: number;
           frequencyPenalty?: number;
         } = { temperature: localTemp };
         if (typeof topP === "number") {
           requestOptionsInput.topP = topP;
+        }
+        if (typeof maxInputTokens === "number") {
+          requestOptionsInput.maxInputTokens = maxInputTokens;
         }
         if (typeof maxOutputTokens === "number") {
           requestOptionsInput.maxOutputTokens = maxOutputTokens;
@@ -224,10 +248,16 @@ export class PlaygroundManager {
         if (typeof msg.topP === "number") {
           topP = Math.min(Math.max(msg.topP, 0), 1);
         }
+        if (typeof msg.maxInputTokens === "number") {
+          const v = Math.floor(msg.maxInputTokens);
+          if (isFinite(v) && v > 0) {
+            maxInputTokens = Math.min(Math.max(v, 1), PLAYGROUND_TOKEN_LIMIT);
+          }
+        }
         if (typeof msg.maxOutputTokens === "number") {
           const v = Math.floor(msg.maxOutputTokens);
           if (isFinite(v) && v > 0) {
-            maxOutputTokens = Math.min(Math.max(v, 1), 8192);
+            maxOutputTokens = Math.min(Math.max(v, 1), PLAYGROUND_TOKEN_LIMIT);
           }
         }
         if (typeof msg.presencePenalty === "number") {
@@ -341,6 +371,7 @@ export class PlaygroundManager {
   private createChatRequestOptions(params: {
     temperature?: number;
     topP?: number;
+    maxInputTokens?: number;
     maxOutputTokens?: number;
     presencePenalty?: number;
     frequencyPenalty?: number;
@@ -353,8 +384,11 @@ export class PlaygroundManager {
     if (typeof params.topP === "number" && Number.isFinite(params.topP)) {
       options["topP"] = Math.min(Math.max(params.topP, 0), 1);
     }
+    if (typeof params.maxInputTokens === "number" && Number.isFinite(params.maxInputTokens)) {
+      options["maxInputTokens"] = Math.min(Math.max(Math.floor(params.maxInputTokens), 1), PLAYGROUND_TOKEN_LIMIT);
+    }
     if (typeof params.maxOutputTokens === "number" && Number.isFinite(params.maxOutputTokens)) {
-      options["maxOutputTokens"] = Math.min(Math.max(Math.floor(params.maxOutputTokens), 1), 8192);
+      options["maxOutputTokens"] = Math.min(Math.max(Math.floor(params.maxOutputTokens), 1), PLAYGROUND_TOKEN_LIMIT);
     }
     if (typeof params.presencePenalty === "number" && Number.isFinite(params.presencePenalty)) {
       options["presencePenalty"] = Math.min(Math.max(params.presencePenalty, -2), 2);

@@ -39,11 +39,13 @@ const mockWorkspace = {
 
 // 设置模拟：仅在属性可配置或尚未定义时重写，避免 VS Code 运行时抛出 Cannot redefine property
 try {
-  const desc = Object.getOwnPropertyDescriptor(vscode, 'workspace');
-  if(!desc || desc.configurable){
+  const desc = Object.getOwnPropertyDescriptor(vscode, "workspace");
+  if (!desc || desc.configurable) {
     Object.defineProperty(vscode, "workspace", { value: mockWorkspace, configurable: true });
   }
-} catch { /* ignore override issues in real host */ }
+} catch {
+  /* ignore override issues in real host */
+}
 
 suite("Extension Test Suite", () => {
   vscode.window.showInformationMessage("Start all tests.");
@@ -351,17 +353,17 @@ suite("Extension Test Suite", () => {
 
     test("should normalize legacy model fields on import (imageInput/toolCalling)", async () => {
       const legacyProvider = {
-        id: 'legacy-1',
-        name: 'Legacy Provider',
-        providerType: 'generic',
-        apiEndpoint: 'https://api.legacy',
-        apiKey: 'key',
+        id: "legacy-1",
+        name: "Legacy Provider",
+        providerType: "generic",
+        apiEndpoint: "https://api.legacy",
+        apiKey: "key",
         models: [
           {
-            id: 'm-legacy',
-            name: 'LegacyModel',
-            family: 'legacy',
-            version: '1.0',
+            id: "m-legacy",
+            name: "LegacyModel",
+            family: "legacy",
+            version: "1.0",
             // legacy placement of capabilities
             imageInput: true,
             toolCalling: 1,
@@ -373,15 +375,15 @@ suite("Extension Test Suite", () => {
       const imported = JSON.parse(JSON.stringify([legacyProvider]));
       await manager.saveProviders(imported as any);
 
-  const providers = manager.getProviders();
-  assert.strictEqual(providers.length, 1);
-  assert.ok(providers[0]);
-  assert.ok(Array.isArray(providers[0].models) && providers[0].models.length > 0);
-  const normalizedModel = providers[0].models[0]!;
-  assert.ok(normalizedModel.capabilities !== undefined);
-  assert.strictEqual(normalizedModel.capabilities?.imageInput, true);
-  // legacy numeric flag should be preserved as number by normalizeCapabilities
-  assert.strictEqual(normalizedModel.capabilities?.toolCalling, 1);
+      const providers = manager.getProviders();
+      assert.strictEqual(providers.length, 1);
+      assert.ok(providers[0]);
+      assert.ok(Array.isArray(providers[0].models) && providers[0].models.length > 0);
+      const normalizedModel = providers[0].models[0]!;
+      assert.ok(normalizedModel.capabilities !== undefined);
+      assert.strictEqual(normalizedModel.capabilities?.imageInput, true);
+      // legacy numeric flag should be preserved as number by normalizeCapabilities
+      assert.strictEqual(normalizedModel.capabilities?.toolCalling, 1);
     });
   });
 });

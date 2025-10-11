@@ -173,7 +173,7 @@ export class ProviderModelManager {
     }
     providers.push(newProvider);
     await this.saveProviders(providers);
-      logger.info("Provider added", logger.sanitizeProvider(newProvider));
+    logger.info("Provider added", logger.sanitizeProvider(newProvider));
     return newProvider;
   }
 
@@ -189,10 +189,10 @@ export class ProviderModelManager {
         providers[index]!.providerType = "generic";
       }
       await this.saveProviders(providers);
-        logger.info("Provider updated", logger.sanitizeProvider(providers[index]!));
+      logger.info("Provider updated", logger.sanitizeProvider(providers[index]!));
       return true;
     }
-      logger.warn("Attempted to update missing provider", { providerId: id });
+    logger.warn("Attempted to update missing provider", { providerId: id });
     return false;
   }
 
@@ -201,10 +201,10 @@ export class ProviderModelManager {
     const filtered = providers.filter((p) => p.id !== id);
     if (filtered.length !== providers.length) {
       await this.saveProviders(filtered);
-        logger.info("Provider deleted", { providerId: id });
+      logger.info("Provider deleted", { providerId: id });
       return true;
     }
-      logger.warn("Attempted to delete missing provider", { providerId: id });
+    logger.warn("Attempted to delete missing provider", { providerId: id });
     return false;
   }
 
@@ -229,13 +229,13 @@ export class ProviderModelManager {
       }
       providers[providerIndex]!.models.push(newModel);
       await this.saveProviders(providers);
-        logger.info("Model added", {
-          provider: logger.sanitizeProvider(providers[providerIndex]!),
-          model: logger.sanitizeModel(newModel),
-        });
+      logger.info("Model added", {
+        provider: logger.sanitizeProvider(providers[providerIndex]!),
+        model: logger.sanitizeModel(newModel),
+      });
       return newModel;
     }
-      logger.warn("Attempted to add model to missing provider", { providerId });
+    logger.warn("Attempted to add model to missing provider", { providerId });
     return null;
   }
 
@@ -265,14 +265,14 @@ export class ProviderModelManager {
         }
         providers[providerIndex]!.models[modelIndex] = updatedModel;
         await this.saveProviders(providers);
-          logger.info("Model updated", {
-            provider: logger.sanitizeProvider(providers[providerIndex]!),
-            model: logger.sanitizeModel(updatedModel),
-          });
+        logger.info("Model updated", {
+          provider: logger.sanitizeProvider(providers[providerIndex]!),
+          model: logger.sanitizeModel(updatedModel),
+        });
         return true;
       }
     }
-      logger.warn("Attempted to update missing model", { providerId, modelId });
+    logger.warn("Attempted to update missing model", { providerId, modelId });
     return false;
   }
 
@@ -291,7 +291,7 @@ export class ProviderModelManager {
 
     if (deleted) {
       await this.saveProviders(providers);
-        logger.info("Model deleted", { modelId });
+      logger.info("Model deleted", { modelId });
     }
 
     return deleted;
@@ -302,14 +302,14 @@ export class ProviderModelManager {
     for (const provider of providers) {
       const model = provider.models.find((m) => m.id === modelId);
       if (model) {
-          logger.debug("Model lookup hit", {
-            provider: logger.sanitizeProvider(provider),
-            model: logger.sanitizeModel(model),
-          });
+        logger.debug("Model lookup hit", {
+          provider: logger.sanitizeProvider(provider),
+          model: logger.sanitizeModel(model),
+        });
         return { provider, model };
       }
     }
-      logger.warn("Model lookup miss", { modelId });
+    logger.warn("Model lookup miss", { modelId });
     return null;
   }
 }

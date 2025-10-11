@@ -36,6 +36,8 @@ export interface ChatStreamChunk {
   error?: string;
 }
 
+const MAX_TOKEN_LIMIT = 1024 * 1024 * 4;
+
 /**
  * 将 OpenAI / 兼容 SSE 行解析成 json 对象（忽略空行与以 : 开头的注释）
  */
@@ -255,7 +257,7 @@ function ensureMaxTokens(value: number | undefined): number {
   if (!Number.isFinite(value) || !value || value <= 0) {
     return 128;
   }
-  return Math.min(Math.max(Math.floor(value), 1), 8192);
+  return Math.min(Math.max(Math.floor(value), 1), MAX_TOKEN_LIMIT);
 }
 
 function resolveModelIdentifier(model: Model): string {

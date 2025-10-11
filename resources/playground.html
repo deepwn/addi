@@ -225,6 +225,9 @@
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         gap: 18px;
       }
+      .tokens-grid {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
       .field-group {
         font-size: 12px;
         display: flex;
@@ -558,6 +561,38 @@
             </button>
           </div>
           <div class="settings-section">
+            <label class="field-group">
+              <span class="field-label">System Prompt</span>
+              <textarea
+                id="systemPrompt"
+                class="system-prompt"
+                placeholder="(可选) 指定系统指令，例如: 你是一个专业的助手"
+              ></textarea>
+            </label>
+            <div class="settings-grid tokens-grid">
+              <label class="field-group">
+                <span class="field-label">Max Input Tokens</span>
+                <input
+                  id="maxIn"
+                  class="number-input"
+                  type="text"
+                  inputmode="decimal"
+                  spellcheck="false"
+                  value="4096"
+                />
+              </label>
+              <label class="field-group">
+                <span class="field-label">Max Output Tokens</span>
+                <input
+                  id="maxOut"
+                  class="number-input"
+                  type="text"
+                  inputmode="decimal"
+                  spellcheck="false"
+                  value="1024"
+                />
+              </label>
+            </div>
             <div class="settings-grid">
               <label class="field-group">
                 <span class="field-label"
@@ -593,17 +628,6 @@
                   max="1"
                   step="0.01"
                   value="1"
-                />
-              </label>
-              <label class="field-group">
-                <span class="field-label">Max Output Tokens</span>
-                <input
-                  id="maxOut"
-                  class="number-input"
-                  type="number"
-                  min="1"
-                  max="4096"
-                  value="1024"
                 />
               </label>
               <label class="field-group">
@@ -654,14 +678,6 @@
                 </div>
               </label>
             </div>
-            <label class="field-group">
-              <span class="field-label">System Prompt</span>
-              <textarea
-                id="systemPrompt"
-                class="system-prompt"
-                placeholder="(可选) 指定系统指令，例如: 你是一个专业的助手"
-              ></textarea>
-            </label>
           </div>
         </aside>
       </div>
@@ -683,6 +699,46 @@
         let busy = false;
         let started = false;
         let focusTimer;
+        const TOKEN_LIMIT = 1024 * 1024 * 4;
+
+        function parseTokenInput(raw, fallback) {
+          if (raw === undefined || raw === null) return fallback;
+          if (typeof raw === "number") {
+            if (!isFinite(raw) || raw <= 0) return fallback;
+            return Math.min(Math.max(Math.floor(raw), 1), TOKEN_LIMIT);
+          }
+          const text = String(raw).trim().toLowerCase().replace(/[_\s]+/g, "");
+          if (!text) return fallback;
+          const match = text.match(/^([0-9]+(?:\.[0-9]+)?)([kmg]?)$/);
+          if (!match) return fallback;
+          const base = parseFloat(match[1]);
+          if (!isFinite(base) || base <= 0) return fallback;
+          const suffix = match[2];
+          const multipliers = { k: 1024, m: 1024 * 1024, g: 1024 * 1024 * 1024 };
+          const multiplier = suffix ? multipliers[suffix] || 1 : 1;
+          const value = Math.round(base * multiplier);
+          if (!isFinite(value) || value <= 0) return fallback;
+          return Math.min(Math.max(value, 1), TOKEN_LIMIT);
+        }
+
+        function formatTokenValue(value) {
+          if (!isFinite(value) || value <= 0) return "";
+          const thresholds = [
+            { suffix: "g", factor: 1024 * 1024 * 1024 },
+            { suffix: "m", factor: 1024 * 1024 },
+            { suffix: "k", factor: 1024 },
+          ];
+          for (const { suffix, factor } of thresholds) {
+            const scaled = value / factor;
+            if (scaled >= 1) {
+              const formatted = Number.isInteger(scaled)
+                ? String(scaled)
+                : scaled.toFixed(scaled >= 10 ? 1 : 2).replace(/\.0+$/, "").replace(/\.([0-9]*[1-9])0+$/, ".$1");
+              return `${formatted}${suffix}`;
+            }
+          }
+          return String(Math.floor(value));
+        }
 
         if (cancelBtn) {
           cancelBtn.style.display = "none";
@@ -842,11 +898,15 @@
           const el = document.getElementById("topP");
           return el ? parseFloat(el.value) : 1.0;
         }
+        function currentMaxIn() {
+          const el = document.getElementById("maxIn");
+          const raw = el ? el.value : "";
+          return parseTokenInput(raw, 4096);
+        }
         function currentMaxOut() {
           const el = document.getElementById("maxOut");
-          const v = el ? parseInt(el.value, 10) : 1024;
-          if (!isFinite(v) || v <= 0) return 128;
-          return Math.min(Math.max(v, 1), 8192);
+          const raw = el ? el.value : "";
+          return parseTokenInput(raw, 1024);
         }
         function currentPresence() {
           const el = document.getElementById("presencePenalty");
@@ -876,6 +936,7 @@
               prompt,
               temperature: currentTemperature(),
               topP: currentTopP(),
+              maxInputTokens: currentMaxIn(),
               maxOutputTokens: currentMaxOut(),
               presencePenalty: currentPresence(),
               frequencyPenalty: currentFrequency(),
@@ -901,9 +962,17 @@
           });
         }
         const maxOutInput = document.getElementById("maxOut");
+        const maxInInput = document.getElementById("maxIn");
+        if (maxInInput) {
+          maxInInput.addEventListener("change", () => {
+            vscode && vscode.postMessage({ type: "playgroundSetParams", maxInputTokens: currentMaxIn() });
+            maxInInput.value = formatTokenValue(currentMaxIn());
+          });
+        }
         if (maxOutInput) {
           maxOutInput.addEventListener("change", () => {
             vscode && vscode.postMessage({ type: "playgroundSetParams", maxOutputTokens: currentMaxOut() });
+            maxOutInput.value = formatTokenValue(currentMaxOut());
           });
         }
         const presenceSlider = document.getElementById("presencePenalty");
@@ -1040,7 +1109,11 @@
               if (typeof p.topP === "number") setVal("topP", p.topP, "topPValue");
               if (typeof p.maxOutputTokens === "number") {
                 const el = document.getElementById("maxOut");
-                if (el) el.value = String(p.maxOutputTokens);
+                if (el) el.value = formatTokenValue(p.maxOutputTokens);
+              }
+              if (typeof p.maxInputTokens === "number") {
+                const el = document.getElementById("maxIn");
+                if (el) el.value = formatTokenValue(p.maxInputTokens);
               }
               if (typeof p.presencePenalty === "number") setVal("presencePenalty", p.presencePenalty, "presenceValue");
               if (typeof p.frequencyPenalty === "number") setVal("frequencyPenalty", p.frequencyPenalty, "frequencyValue");

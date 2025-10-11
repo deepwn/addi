@@ -101,7 +101,13 @@ export class AddiLogger {
     this.ensureChannel().appendLine(formatted);
   }
 
-  sanitizeProvider(provider?: { id?: string; name?: string; apiEndpoint?: string | null; apiKey?: string | null; providerType?: string | null }): Record<string, unknown> | undefined {
+  sanitizeProvider(provider?: {
+    id?: string;
+    name?: string;
+    apiEndpoint?: string | null;
+    apiKey?: string | null;
+    providerType?: string | null;
+  }): Record<string, unknown> | undefined {
     if (!provider) {
       return undefined;
     }

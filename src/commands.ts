@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as crypto from "crypto";
 import { ProviderModelManager, ProviderTreeItem, AddiTreeDataProvider } from "./provider";
 import { ModelTreeItem } from "./model";
-import { ConfigManager, InputValidator, UserFeedback } from "./utils";
+import { ConfigManager, InputValidator, TokenFormatter, UserFeedback } from "./utils";
 import { ModelDraft, Provider, Model } from "./types";
 import { logger } from "./logger";
 // playground logic moved to src/playground.ts
@@ -25,6 +25,8 @@ type ModelSyncResult = {
 };
 
 export class CommandHandler {
+  private static readonly TOKEN_LIMIT = 1024 * 1024 * 4;
+
   constructor(private readonly manager: ProviderModelManager, private readonly treeDataProvider: AddiTreeDataProvider, private readonly context?: vscode.ExtensionContext) {
     logger.debug("CommandHandler initialized", {
       hasContext: Boolean(context),
@@ -72,7 +74,7 @@ export class CommandHandler {
         model: logger.sanitizeModel(modelDraft),
         error: errorMsg,
       });
-      const decision = await vscode.window.showWarningMessage(`Model API test failed: ${errorMsg}`, { modal: true }, "Cancel", continueLabel);
+      const decision = await UserFeedback.showWarningWithActions(`Model API test failed: ${errorMsg}`, ["Cancel", continueLabel]);
       if (decision !== continueLabel) {
         UserFeedback.showWarning("Canceled model operation");
         logger.debug("User canceled after failed API test", {
@@ -155,6 +157,22 @@ export class CommandHandler {
     return `${normalizedBase}${normalizedPath}`;
   }
 
+  private resolveModelsUrl(endpoint: string, fallback: string): string {
+    const baseUrl = this.normalizeBaseUrl(endpoint, fallback);
+  const [baseWithoutQueryRaw, queryString] = baseUrl.split("?", 2);
+  const baseWithoutQuery = baseWithoutQueryRaw || baseUrl;
+
+  let path = baseWithoutQuery.replace(/\/(?:chat\/)?completions$/i, "");
+
+    // Azure OpenAI style endpoints include deployment segment; models live under /openai.
+    if (/\/openai\/deployments\//i.test(path)) {
+      path = path.replace(/\/openai\/deployments\/[^/]+$/i, "/openai");
+    }
+
+    const modelsUrl = this.buildUrl(path, "/models");
+    return queryString ? `${modelsUrl}?${queryString}` : modelsUrl;
+  }
+
   private resolveChatCompletionsUrl(endpoint: string, fallback: string): string {
     const base = this.normalizeBaseUrl(endpoint, fallback);
     const lower = base.toLowerCase();
@@ -199,17 +217,17 @@ export class CommandHandler {
     if (!Number.isFinite(value) || value <= 0) {
       return 128;
     }
-    return Math.min(Math.max(Math.floor(value), 1), 1024);
+    return Math.min(Math.max(Math.floor(value), 1), CommandHandler.TOKEN_LIMIT);
   }
 
   private coercePositiveInteger(value: unknown): number | undefined {
     if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-      return Math.floor(value);
+      return Math.min(Math.floor(value), CommandHandler.TOKEN_LIMIT);
     }
     if (typeof value === "string") {
       const parsed = Number(value);
       if (Number.isFinite(parsed) && parsed > 0) {
-        return Math.floor(parsed);
+        return Math.min(Math.floor(parsed), CommandHandler.TOKEN_LIMIT);
       }
     }
     return undefined;
@@ -249,15 +267,15 @@ export class CommandHandler {
       throw new Error(await this.readResponseError(response));
     }
 
-      const data: unknown = await response.json();
-      if (!data || typeof data !== "object") {
-        throw new Error("OpenAI API response format error");
-      }
-      const record = data as Record<string, unknown>;
-      const choices = record["choices"] as unknown;
-      if (!Array.isArray(choices) || choices.length === 0) {
-        throw new Error("OpenAI API response format error");
-      }
+    const data: unknown = await response.json();
+    if (!data || typeof data !== "object") {
+      throw new Error("OpenAI API response format error");
+    }
+    const record = data as Record<string, unknown>;
+    const choices = record["choices"] as unknown;
+    if (!Array.isArray(choices) || choices.length === 0) {
+      throw new Error("OpenAI API response format error");
+    }
   }
 
   private async testAnthropicApi(apiEndpoint: string, apiKey: string, modelDraft: ModelDraft, signal: AbortSignal): Promise<void> {
@@ -284,14 +302,14 @@ export class CommandHandler {
       throw new Error(await this.readResponseError(response));
     }
 
-      const data: unknown = await response.json();
-      if (!data || typeof data !== "object") {
-        throw new Error("Anthropic API response format error");
-      }
-      const record = data as Record<string, unknown>;
-      if (!("content" in record)) {
-        throw new Error("Anthropic API response format error");
-      }
+    const data: unknown = await response.json();
+    if (!data || typeof data !== "object") {
+      throw new Error("Anthropic API response format error");
+    }
+    const record = data as Record<string, unknown>;
+    if (!("content" in record)) {
+      throw new Error("Anthropic API response format error");
+    }
   }
 
   private async testGoogleApi(apiEndpoint: string, apiKey: string, modelDraft: ModelDraft, signal: AbortSignal): Promise<void> {
@@ -321,15 +339,15 @@ export class CommandHandler {
       throw new Error(await this.readResponseError(response));
     }
 
-      const data: unknown = await response.json();
-      if (!data || typeof data !== "object") {
-        throw new Error("Google API response format error");
-      }
-      const record = data as Record<string, unknown>;
-      const candidates = record["candidates"] as unknown;
-      if (!Array.isArray(candidates) || candidates.length === 0) {
-        throw new Error("Google API response format error");
-      }
+    const data: unknown = await response.json();
+    if (!data || typeof data !== "object") {
+      throw new Error("Google API response format error");
+    }
+    const record = data as Record<string, unknown>;
+    const candidates = record["candidates"] as unknown;
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+      throw new Error("Google API response format error");
+    }
   }
 
   private async testGenericOpenAiCompatibleApi(apiEndpoint: string, apiKey: string, modelDraft: ModelDraft, signal: AbortSignal): Promise<void> {
@@ -386,9 +404,7 @@ export class CommandHandler {
     switch (providerType) {
       case "openai":
       case "generic": {
-        const baseUrl = this.normalizeBaseUrl(endpoint, "https://api.openai.com/v1");
-        const cleanedBase = baseUrl.replace(/\/(?:chat\/)?completions$/i, "");
-        const url = this.buildUrl(cleanedBase, "/models");
+        const url = this.resolveModelsUrl(endpoint, "https://api.openai.com/v1");
         const response = await fetch(url, {
           method: "GET",
           headers: {
@@ -517,7 +533,10 @@ export class CommandHandler {
           const maxOutputTokens = this.coercePositiveInteger(record["outputTokenLimit"]);
 
           let capabilities: Model["capabilities"] | undefined;
-          const modalitiesSource = (record["inputModalities"] ?? record["supportedInputModalities"] ?? record["allowedInputModalities"] ?? record["supportedModalities"]) as unknown;
+          const modalitiesSource = (record["inputModalities"] ??
+            record["supportedInputModalities"] ??
+            record["allowedInputModalities"] ??
+            record["supportedModalities"]) as unknown;
           if (Array.isArray(modalitiesSource)) {
             const hasImage = modalitiesSource.some((value) => typeof value === "string" && value.toUpperCase().includes("IMAGE"));
             if (hasImage) {
@@ -1095,8 +1114,12 @@ export class CommandHandler {
 
     const imageInput = imageInputPick.label === "Yes";
     const toolCalling = toolCallingPick.label === "Yes";
-    const maxInputTokens = parseInt(maxInputTokensStr, 10);
-    const maxOutputTokens = parseInt(maxOutputTokensStr, 10);
+    const maxInputTokens = TokenFormatter.parse(maxInputTokensStr);
+    const maxOutputTokens = TokenFormatter.parse(maxOutputTokensStr);
+    if (!maxInputTokens || !maxOutputTokens) {
+      UserFeedback.showError("Token values are invalid");
+      return;
+    }
     const modelDraft: ModelDraft = {
       id,
       name,
@@ -1230,8 +1253,12 @@ export class CommandHandler {
 
     const imageInput = imageInputPick.label === "Yes";
     const toolCalling = toolCallingPick.label === "Yes";
-    const maxInputTokens = parseInt(maxInputTokensStr, 10);
-    const maxOutputTokens = parseInt(maxOutputTokensStr, 10);
+    const maxInputTokens = TokenFormatter.parse(maxInputTokensStr);
+    const maxOutputTokens = TokenFormatter.parse(maxOutputTokensStr);
+    if (!maxInputTokens || !maxOutputTokens) {
+      UserFeedback.showError("Token values are invalid");
+      return;
+    }
     const modelDraft: ModelDraft = {
       id,
       name,
@@ -1472,7 +1499,7 @@ export class CommandHandler {
       const saveDialogOptions: vscode.SaveDialogOptions = {
         filters: {
           "Config Files": ["json", "encrypt.txt"],
-          "All Files": ["*"]
+          "All Files": ["*"],
         },
         title: "Export Configuration",
       };
@@ -1512,7 +1539,7 @@ export class CommandHandler {
       const openDialogOptions: vscode.OpenDialogOptions = {
         filters: {
           "Config Files": ["json", "encrypt.txt"],
-          "All Files": ["*"]
+          "All Files": ["*"],
         },
         title: "Import Configuration",
         canSelectMany: false,
@@ -1585,11 +1612,7 @@ export class CommandHandler {
               if ("imageInput" in caps && typeof caps["imageInput"] !== "boolean") {
                 throw new Error("Configuration capability imageInput must be boolean");
               }
-              if (
-                "toolCalling" in caps &&
-                typeof caps["toolCalling"] !== "boolean" &&
-                typeof caps["toolCalling"] !== "number"
-              ) {
+              if ("toolCalling" in caps && typeof caps["toolCalling"] !== "boolean" && typeof caps["toolCalling"] !== "number") {
                 throw new Error("Configuration capability toolCalling must be boolean or number");
               }
             }
