@@ -239,12 +239,6 @@ export class ProviderModelManager {
         maxOutputTokens: modelData.maxOutputTokens,
         capabilities: this.normalizeCapabilities(modelData.capabilities),
       };
-      if (modelData.tooltip !== undefined) {
-        newModel.tooltip = modelData.tooltip;
-      }
-      if (modelData.detail !== undefined) {
-        newModel.detail = modelData.detail;
-      }
       providers[providerIndex]!.models.push(newModel);
       await this.saveProviders(providers);
       logger.info("Model added", {
@@ -274,14 +268,6 @@ export class ProviderModelManager {
           maxOutputTokens: modelData.maxOutputTokens ?? existingModel.maxOutputTokens,
           capabilities: this.normalizeCapabilities(modelData.capabilities, existingModel.capabilities),
         };
-        const tooltip = modelData.tooltip !== undefined ? modelData.tooltip : existingModel.tooltip;
-        if (tooltip !== undefined) {
-          updatedModel.tooltip = tooltip;
-        }
-        const detail = modelData.detail !== undefined ? modelData.detail : existingModel.detail;
-        if (detail !== undefined) {
-          updatedModel.detail = detail;
-        }
         providers[providerIndex]!.models[modelIndex] = updatedModel;
         await this.saveProviders(providers);
         logger.info("Model updated", {

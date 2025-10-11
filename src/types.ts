@@ -10,8 +10,6 @@ export type ModelDraft = {
   version: string;
   maxInputTokens: number;
   maxOutputTokens: number;
-  tooltip?: string;
-  detail?: string;
   capabilities: ModelCapabilities;
   sid?: string;
 };

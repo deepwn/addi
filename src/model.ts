@@ -21,12 +21,6 @@ export class ModelTreeItem extends vscode.TreeItem {
     const inputTokensDetail = TokenFormatter.formatDetailed(model.maxInputTokens);
     const outputTokensDetail = TokenFormatter.formatDetailed(model.maxOutputTokens);
   let tooltip = `name: ${model.name}\nremoteId: ${model.id}\nfamily: ${model.family}\nversion: ${model.version}\ninput: ${inputTokensDetail}\noutput: ${outputTokensDetail}`;
-    if (model.tooltip) {
-      tooltip += `\ntooltip: ${model.tooltip}`;
-    }
-    if (model.detail) {
-      tooltip += `\ndetail: ${model.detail}`;
-    }
     if (capabilityHints.length > 0) {
       tooltip += `\ncapabilities: ${capabilityHints.join(", ")}`;
     }
@@ -64,8 +58,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
           version: m.version,
           maxInputTokens: m.maxInputTokens,
           maxOutputTokens: m.maxOutputTokens,
-          tooltip: m.tooltip ?? `${p.name} - ${summary}`,
-          detail: m.detail ?? `${summary} · ${m.id}`,
+          tooltip: `${p.name} - ${summary}`,
           capabilities: {
             imageInput: !!m.capabilities?.imageInput,
             // LanguageModelChatInformation.capabilities.toolCalling expects number | boolean

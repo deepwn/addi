@@ -362,7 +362,8 @@
   "scripts": {
     "test": "tsc -p . --outDir out && yarn package && vscode-test",
     "package": "webpack --mode production --devtool hidden-source-map",
-    "release": "yarn package && vsce package --baseImagesUrl https://raw.githubusercontent.com/deepwn/addi/refs/heads/main/ --no-yarn"
+    "release": "yarn package && vsce package --baseImagesUrl https://raw.githubusercontent.com/deepwn/addi/refs/heads/main/ --no-yarn",
+    "debug": "code --extensionDevelopmentPath=."
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

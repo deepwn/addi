@@ -12,6 +12,7 @@ interface RemoteModelInfo {
   id: string;
   name?: string;
   description?: string;
+  family?: string;
   maxInputTokens?: number;
   maxOutputTokens?: number;
   capabilities?: Model["capabilities"];
@@ -442,6 +443,9 @@ export class CommandHandler {
           };
           if (description) {
             info.description = description;
+          }
+          if (ownedBy && ownedBy.trim()) {
+            info.family = ownedBy.trim();
           }
           models.push(info);
         }
@@ -932,14 +936,10 @@ export class CommandHandler {
               changed = true;
             }
 
-            if (remote.description) {
-              if (!existing.detail) {
-                existing.detail = remote.description;
-                changed = true;
-              } else if (!existing.tooltip) {
-                existing.tooltip = remote.description;
-                changed = true;
-              }
+            const remoteFamily = remote.family?.trim();
+            if (remoteFamily && remoteFamily !== existing.family) {
+              existing.family = remoteFamily;
+              changed = true;
             }
 
             if (remote.maxInputTokens !== undefined && remote.maxInputTokens !== existing.maxInputTokens && existing.maxInputTokens === defaultMaxInputTokens) {
@@ -980,20 +980,17 @@ export class CommandHandler {
             continue;
           }
 
+          const remoteFamily = remote.family?.trim();
           const model: Model = {
             sid: IdGenerator.generate(),
             id: remote.id.trim(),
             name: remote.name?.trim() || remote.id,
-            family: defaultFamily,
+            family: remoteFamily || defaultFamily,
             version: defaultVersion,
             maxInputTokens: remote.maxInputTokens ?? defaultMaxInputTokens,
             maxOutputTokens: remote.maxOutputTokens ?? defaultMaxOutputTokens,
             capabilities: remote.capabilities ? { ...remote.capabilities } : {},
           };
-
-          if (remote.description) {
-            model.detail = remote.description;
-          }
 
           provider.models.push(model);
           existingById.set(remote.id, model);
