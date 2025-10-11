@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as crypto from "crypto";
 import { ProviderModelManager, ProviderTreeItem, AddiTreeDataProvider } from "./provider";
 import { ModelTreeItem } from "./model";
-import { ConfigManager, InputValidator, TokenFormatter, UserFeedback } from "./utils";
+import { ConfigManager, IdGenerator, InputValidator, TokenFormatter, UserFeedback } from "./utils";
 import { ModelDraft, Provider, Model } from "./types";
 import { logger } from "./logger";
 // playground logic moved to src/playground.ts
@@ -159,10 +159,10 @@ export class CommandHandler {
 
   private resolveModelsUrl(endpoint: string, fallback: string): string {
     const baseUrl = this.normalizeBaseUrl(endpoint, fallback);
-  const [baseWithoutQueryRaw, queryString] = baseUrl.split("?", 2);
-  const baseWithoutQuery = baseWithoutQueryRaw || baseUrl;
+    const [baseWithoutQueryRaw, queryString] = baseUrl.split("?", 2);
+    const baseWithoutQuery = baseWithoutQueryRaw || baseUrl;
 
-  let path = baseWithoutQuery.replace(/\/(?:chat\/)?completions$/i, "");
+    let path = baseWithoutQuery.replace(/\/(?:chat\/)?completions$/i, "");
 
     // Azure OpenAI style endpoints include deployment segment; models live under /openai.
     if (/\/openai\/deployments\//i.test(path)) {
@@ -235,14 +235,18 @@ export class CommandHandler {
 
   private resolveModelIdentifierFromDraft(modelDraft: ModelDraft): string {
     const trimmedId = modelDraft.id?.trim();
-    if (trimmedId && !/^[0-9]+$/.test(trimmedId)) {
+    if (trimmedId) {
       return trimmedId;
     }
     const trimmedFamily = (modelDraft.family ?? "addi").trim();
     if (trimmedFamily) {
       return trimmedFamily;
     }
-    return trimmedId || "addi";
+    const draftSid = modelDraft.sid?.trim();
+    if (draftSid) {
+      return draftSid;
+    }
+    return "addi";
   }
 
   private async testOpenAiApi(apiEndpoint: string, apiKey: string, modelDraft: ModelDraft, signal: AbortSignal): Promise<void> {
@@ -977,7 +981,8 @@ export class CommandHandler {
           }
 
           const model: Model = {
-            id: remote.id,
+            sid: IdGenerator.generate(),
+            id: remote.id.trim(),
             name: remote.name?.trim() || remote.id,
             family: defaultFamily,
             version: defaultVersion,
@@ -1173,10 +1178,10 @@ export class CommandHandler {
     logger.info("Command editModel invoked", {
       model: logger.sanitizeModel(item.model),
     });
-    const result = this.manager.findModel(item.model.id);
+    const result = this.manager.findModel(item.model.sid);
     if (!result) {
       UserFeedback.showError("Model not found");
-      logger.warn("editModel failed to find model", { modelId: item.model.id });
+      logger.warn("editModel failed to find model", { modelSid: item.model.sid, modelId: item.model.id });
       return;
     }
     const { provider, model } = result;
@@ -1282,7 +1287,7 @@ export class CommandHandler {
     }
 
     try {
-      const success = await this.manager.updateModel(provider.id, model.id, {
+      const success = await this.manager.updateModel(provider.id, model.sid, {
         ...modelDraft,
       });
       if (success) {
@@ -1319,7 +1324,7 @@ export class CommandHandler {
 
     try {
       await UserFeedback.showProgress("Deleting model...", async (_progress, _token) => {
-        const success = await this.manager.deleteModel(item.model.id);
+        const success = await this.manager.deleteModel(item.model.sid);
         if (success) {
           this.treeDataProvider.refresh();
           UserFeedback.showInfo(`Model "${item.model.name}" deleted successfully`);

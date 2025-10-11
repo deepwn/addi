@@ -311,8 +311,8 @@ export class PlaygroundManager {
 
   private async selectChatModel(model?: Model): Promise<vscode.LanguageModelChat | undefined> {
     try {
-      if (model?.id) {
-        const [match] = await vscode.lm.selectChatModels({ id: `addi-provider:${model.id}` });
+      if (model?.sid) {
+        const [match] = await vscode.lm.selectChatModels({ id: `addi-provider:${model.sid}` });
         if (match) {
           return match;
         }

@@ -127,6 +127,7 @@ suite("Extension Test Suite", () => {
         apiKey: "test-api-key",
       });
       const model = await manager.addModel(provider.id, {
+        id: "test-model",
         name: "Test Model",
         family: "Test Family",
         version: "1.0.0",
@@ -158,6 +159,7 @@ suite("Extension Test Suite", () => {
         apiKey: "test-api-key",
       });
       const model = await manager.addModel(provider.id, {
+        id: "test-model",
         name: "Test Model",
         family: "Test Family",
         version: "1.0.0",
@@ -171,7 +173,7 @@ suite("Extension Test Suite", () => {
 
       assert.notStrictEqual(model, null);
       if (model) {
-        const success = await manager.updateModel(provider.id, model.id, {
+        const success = await manager.updateModel(provider.id, model.sid, {
           name: "Updated Model",
         });
         assert.strictEqual(success, true);
@@ -191,6 +193,7 @@ suite("Extension Test Suite", () => {
         apiKey: "test-api-key",
       });
       const model = await manager.addModel(provider.id, {
+        id: "test-model",
         name: "Test Model",
         family: "Test Family",
         version: "1.0.0",
@@ -204,7 +207,7 @@ suite("Extension Test Suite", () => {
 
       assert.notStrictEqual(model, null);
       if (model) {
-        const success = await manager.deleteModel(model.id);
+        const success = await manager.deleteModel(model.sid);
         assert.strictEqual(success, true);
 
         const providers = manager.getProviders();
@@ -222,6 +225,7 @@ suite("Extension Test Suite", () => {
         apiKey: "test-api-key",
       });
       const model = await manager.addModel(provider.id, {
+        id: "test-model",
         name: "Test Model",
         family: "Test Family",
         version: "1.0.0",
@@ -235,7 +239,7 @@ suite("Extension Test Suite", () => {
 
       assert.notStrictEqual(model, null);
       if (model) {
-        const result = manager.findModel(model.id);
+        const result = manager.findModel(model.sid);
         assert.notStrictEqual(result, null);
         if (result) {
           assert.strictEqual(result.model.name, "Test Model");
@@ -306,6 +310,7 @@ suite("Extension Test Suite", () => {
         apiKey: "test-api-key",
       });
       await manager.addModel(provider.id, {
+        id: "test-model-1",
         name: "Test Model 1",
         family: "Test Family",
         version: "1.0.0",
@@ -317,6 +322,7 @@ suite("Extension Test Suite", () => {
         },
       });
       await manager.addModel(provider.id, {
+        id: "test-model-2",
         name: "Test Model 2",
         family: "Test Family",
         version: "2.0.0",

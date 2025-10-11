@@ -262,14 +262,14 @@ function ensureMaxTokens(value: number | undefined): number {
 
 function resolveModelIdentifier(model: Model): string {
   const trimmedId = model.id?.trim();
-  if (trimmedId && !/^[0-9]+$/.test(trimmedId)) {
+  if (trimmedId) {
     return trimmedId;
   }
   const trimmedFamily = model.family?.trim();
   if (trimmedFamily) {
     return trimmedFamily;
   }
-  return trimmedId || model.family;
+  return model.sid;
 }
 
 function isOpenAiEndpoint(endpoint: string): boolean {

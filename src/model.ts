@@ -9,6 +9,7 @@ const TOKEN_LIMIT = 1024 * 1024 * 4;
 export class ModelTreeItem extends vscode.TreeItem {
   constructor(public model: Model) {
     super(model.name, vscode.TreeItemCollapsibleState.None);
+    this.id = model.sid;
     this.contextValue = "model";
     const capabilityHints: string[] = [];
     if (model.capabilities?.imageInput) {
@@ -20,7 +21,7 @@ export class ModelTreeItem extends vscode.TreeItem {
     }
     const inputTokensDetail = TokenFormatter.formatDetailed(model.maxInputTokens);
     const outputTokensDetail = TokenFormatter.formatDetailed(model.maxOutputTokens);
-    let tooltip = `name: ${model.name}\nfamily: ${model.family}\nversion: ${model.version}\nmaxInputTokens: ${inputTokensDetail}\nmaxOutputTokens: ${outputTokensDetail}`;
+  let tooltip = `name: ${model.name}\nremoteId: ${model.id}\nfamily: ${model.family}\nversion: ${model.version}\nmaxInputTokens: ${inputTokensDetail}\nmaxOutputTokens: ${outputTokensDetail}`;
     if (model.tooltip) {
       tooltip += `\ntooltip: ${model.tooltip}`;
     }
@@ -58,14 +59,14 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
         const friendlyOutput = TokenFormatter.format(m.maxOutputTokens) || String(m.maxOutputTokens);
         const summary = `${friendlyInput}↑/${friendlyOutput}↓`;
         return {
-          id: `addi-provider:${m.id}`,
+          id: `addi-provider:${m.sid}`,
           name: `${m.name} (${p.name})`,
           family: m.family,
           version: m.version,
           maxInputTokens: m.maxInputTokens,
           maxOutputTokens: m.maxOutputTokens,
           tooltip: m.tooltip ?? `${p.name} - ${summary}`,
-          detail: m.detail ?? summary,
+          detail: m.detail ?? `${summary} · ${m.id}`,
           capabilities: {
             imageInput: !!m.capabilities?.imageInput,
             // LanguageModelChatInformation.capabilities.toolCalling expects number | boolean
@@ -83,9 +84,9 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken
   ): Promise<void> {
-    const modelId = typeof model.id === "string" && model.id.startsWith("addi-provider:") ? model.id.replace("addi-provider:", "") : model.id;
+    const sid = typeof model.id === "string" && model.id.startsWith("addi-provider:") ? model.id.replace("addi-provider:", "") : model.id;
     logger.info("Chat response requested", {
-      requestedModelId: modelId,
+      requestedModelSid: sid,
       messageCount: messages.length,
       hasOptions: Boolean(options),
     });
@@ -93,15 +94,15 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     const optionSummary = this.sanitizeChatOptions(options);
     const toolDefinitions = this.resolveToolDefinitions(options);
     logger.debug("Chat request summary", {
-      requestedModelId: modelId,
+      requestedModelSid: sid,
       messages: messageSummary,
       options: optionSummary,
       toolCount: toolDefinitions?.length ?? 0,
       toolSource: toolDefinitions && toolDefinitions.length > 0 ? (Array.isArray((options as any)?.tools) ? "host" : "fallback") : "none",
     });
-    const result = this.repository.findModel(modelId);
+    const result = this.repository.findModel(sid);
     if (!result) {
-      logger.warn("Chat response requested for unknown model", { requestedModelId: modelId });
+      logger.warn("Chat response requested for unknown model", { requestedModelSid: sid });
       progress.report(new vscode.LanguageModelTextPart("cannot find the specified model."));
       return;
     }
@@ -210,14 +211,14 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
 
   private resolveModelIdentifier(model: Model): string {
     const trimmedId = model.id?.trim();
-    if (trimmedId && !/^[0-9]+$/.test(trimmedId)) {
+    if (trimmedId) {
       return trimmedId;
     }
     const trimmedFamily = model.family?.trim();
     if (trimmedFamily) {
       return trimmedFamily;
     }
-    return trimmedId || model.family;
+    return model.sid;
   }
 
   private getNumberOption(options: vscode.ProvideLanguageModelChatResponseOptions | undefined, key: string): number | undefined {

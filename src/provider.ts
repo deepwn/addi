@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { Model, Provider } from "./types";
-import { ConfigManager } from "./utils";
+import { Model, Provider, ModelDraft } from "./types";
+import { ConfigManager, IdGenerator } from "./utils";
 import { ModelTreeItem } from "./model";
 import { logger } from "./logger";
 
@@ -131,6 +131,21 @@ export class ProviderModelManager {
         }
         mutableModel["capabilities"] = normalizedCapabilities;
 
+        const sidCandidate = typeof mutableModel["sid"] === "string" ? mutableModel["sid"].trim() : "";
+        if (!sidCandidate) {
+          mutableModel["sid"] = IdGenerator.generate();
+          changed = true;
+        }
+
+        const remoteIdRaw = typeof mutableModel["id"] === "string" ? mutableModel["id"].trim() : "";
+        if (!remoteIdRaw) {
+          mutableModel["id"] = mutableModel["sid"] as string;
+          changed = true;
+        } else if (remoteIdRaw !== mutableModel["id"]) {
+          mutableModel["id"] = remoteIdRaw;
+          changed = true;
+        }
+
         if (!changed) {
           return model;
         }
@@ -164,7 +179,7 @@ export class ProviderModelManager {
     const providers = this.getProviders();
     const newProvider: Provider = {
       ...providerData,
-      id: Date.now().toString(),
+      id: IdGenerator.generate(),
       models: [],
     };
     // 确保 providerType 存在
@@ -208,12 +223,15 @@ export class ProviderModelManager {
     return false;
   }
 
-  async addModel(providerId: string, modelData: Omit<Model, "id"> & { id?: string }): Promise<Model | null> {
+  async addModel(providerId: string, modelData: ModelDraft): Promise<Model | null> {
     const providers = this.getProviders();
     const providerIndex = providers.findIndex((p) => p.id === providerId);
     if (providerIndex >= 0) {
+      const sid = modelData.sid?.trim() || IdGenerator.generate();
+      const remoteId = modelData.id?.trim() || sid;
       const newModel: Model = {
-        id: modelData.id ?? Date.now().toString(),
+        sid,
+        id: remoteId,
         name: modelData.name,
         family: modelData.family,
         version: modelData.version,
@@ -239,15 +257,16 @@ export class ProviderModelManager {
     return null;
   }
 
-  async updateModel(providerId: string, modelId: string, modelData: Partial<Model>): Promise<boolean> {
+  async updateModel(providerId: string, modelSid: string, modelData: Partial<ModelDraft>): Promise<boolean> {
     const providers = this.getProviders();
     const providerIndex = providers.findIndex((p) => p.id === providerId);
     if (providerIndex >= 0) {
-      const modelIndex = providers[providerIndex]!.models.findIndex((m) => m.id === modelId);
+      const modelIndex = providers[providerIndex]!.models.findIndex((m) => m.sid === modelSid);
       if (modelIndex >= 0) {
         const existingModel = providers[providerIndex]!.models[modelIndex]!;
         const updatedModel: Model = {
-          id: (modelData.id ?? existingModel.id) as string,
+          sid: existingModel.sid,
+          id: (modelData.id ?? existingModel.id)?.trim() || existingModel.id,
           name: modelData.name ?? existingModel.name,
           family: modelData.family ?? existingModel.family,
           version: modelData.version ?? existingModel.version,
@@ -272,17 +291,17 @@ export class ProviderModelManager {
         return true;
       }
     }
-    logger.warn("Attempted to update missing model", { providerId, modelId });
+    logger.warn("Attempted to update missing model", { providerId, modelSid });
     return false;
   }
 
-  async deleteModel(modelId: string): Promise<boolean> {
+  async deleteModel(modelSid: string): Promise<boolean> {
     const providers = this.getProviders();
     let deleted = false;
 
     for (const provider of providers) {
       const initialLength = provider.models.length;
-      provider.models = provider.models.filter((m) => m.id !== modelId);
+      provider.models = provider.models.filter((m) => m.sid !== modelSid);
       if (provider.models.length !== initialLength) {
         deleted = true;
         break;
@@ -291,16 +310,16 @@ export class ProviderModelManager {
 
     if (deleted) {
       await this.saveProviders(providers);
-      logger.info("Model deleted", { modelId });
+      logger.info("Model deleted", { modelSid });
     }
 
     return deleted;
   }
 
-  findModel(modelId: string): { provider: Provider; model: Model } | null {
+  findModel(modelSid: string): { provider: Provider; model: Model } | null {
     const providers = this.getProviders();
     for (const provider of providers) {
-      const model = provider.models.find((m) => m.id === modelId);
+      const model = provider.models.find((m) => m.sid === modelSid);
       if (model) {
         logger.debug("Model lookup hit", {
           provider: logger.sanitizeProvider(provider),
@@ -309,7 +328,7 @@ export class ProviderModelManager {
         return { provider, model };
       }
     }
-    logger.warn("Model lookup miss", { modelId });
+    logger.warn("Model lookup miss", { modelSid });
     return null;
   }
 }

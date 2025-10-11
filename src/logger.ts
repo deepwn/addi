@@ -120,11 +120,12 @@ export class AddiLogger {
     };
   }
 
-  sanitizeModel(model?: { id?: string; name?: string; family?: string; version?: string }): Record<string, unknown> | undefined {
+  sanitizeModel(model?: { sid?: string; id?: string; name?: string; family?: string; version?: string }): Record<string, unknown> | undefined {
     if (!model) {
       return undefined;
     }
     return {
+      sid: model.sid,
       id: model.id,
       name: model.name,
       family: model.family,

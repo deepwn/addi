@@ -3,7 +3,7 @@ export interface ModelCapabilities {
   toolCalling?: boolean | number;
 }
 
-export interface Model {
+export type ModelDraft = {
   id: string;
   name: string;
   family: string;
@@ -13,6 +13,11 @@ export interface Model {
   tooltip?: string;
   detail?: string;
   capabilities: ModelCapabilities;
+  sid?: string;
+};
+
+export interface Model extends Omit<ModelDraft, "sid"> {
+  sid: string;
 }
 
 export type ProviderType = "openai" | "anthropic" | "google" | "generic";
@@ -28,19 +33,7 @@ export interface Provider {
   models: Model[];
 }
 
-export type ModelDraft = {
-  id: string;
-  name: string;
-  family: string;
-  version: string;
-  maxInputTokens: number;
-  maxOutputTokens: number;
-  tooltip?: string;
-  detail?: string;
-  capabilities: ModelCapabilities;
-};
-
 export interface ProviderRepository {
   getProviders(): Provider[];
-  findModel(modelId: string): { provider: Provider; model: Model } | null;
+  findModel(modelSid: string): { provider: Provider; model: Model } | null;
 }

@@ -105,7 +105,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.commands.registerCommand("addi.deleteModel", (item: ModelTreeItem) => commandHandler.deleteModel(item)));
   context.subscriptions.push(
     vscode.commands.registerCommand("addi.useModel", (item: ModelTreeItem) => {
-      const result = manager.findModel(item.model.id);
+      const result = manager.findModel(item.model.sid);
       if (!result) {
         void vscode.window.showErrorMessage("Model not found");
         return;
