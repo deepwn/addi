@@ -36,6 +36,10 @@
   - [Q: 如何知道我的模型是否正在使用中？](#q-如何知道我的模型是否正在使用中)
   - [Q: 我可以添加多少个供应商和模型？](#q-我可以添加多少个供应商和模型)
 - [故障排除 Troubleshooting](#故障排除-troubleshooting)
+- [开发 Development](#开发-development)
+  - [环境准备](#环境准备)
+  - [开发命令](#开发命令)
+  - [清理缓存](#清理缓存)
 - [许可证 License](#许可证-license)
 - [免责声明 Disclaimer](#免责声明-disclaimer)
 - [致谢 Thanks](#致谢-thanks)
@@ -230,6 +234,49 @@ MIT © 2025-present [deepwn](https://github.com/deepwn) — 详见 [LICENSE](LIC
 ## 免责声明 Disclaimer
 
 本扩展仅提供客户端功能，使用第三方 / 自建 API 带来的数据与安全风险由使用者自行承担。我们不对直接或间接损失负责。
+
+## 开发 Development
+
+### 环境准备
+
+```powershell
+git clone https://github.com/deepwn/addi.git
+cd addi
+npm install
+```
+
+### 开发命令
+
+```bash
+# 编译
+npm run compile
+
+# 开发模式监听
+npm run watch
+
+# 运行测试
+npm test
+
+# 打包扩展
+npm run package
+
+# 清理缓存和构建文件
+npm run clean
+
+# 快速清理（无详细信息）
+npm run clean:fast
+```
+
+### 清理缓存
+
+项目包含清理命令来节省磁盘空间：
+
+```bash
+npm run clean  # 完整清理，显示详细信息
+npm run clean:fast  # 快速清理
+```
+
+详细说明请参考 [CLEANING.md](CLEANING.md)。
 
 ## 致谢 Thanks
 

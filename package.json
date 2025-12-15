@@ -367,7 +367,9 @@
     "watch": "webpack --mode development --watch",
     "compile": "webpack --mode development",
     "release": "npm run package && npx @vscode/vsce package --baseImagesUrl https://raw.githubusercontent.com/deepwn/addi/refs/heads/main/ --no-yarn",
-    "debug": "code --extensionDevelopmentPath=."
+    "debug": "code --extensionDevelopmentPath=.",
+    "clean": "node scripts/clean.js",
+    "clean:fast": "rimraf dist out .vscode-test *.vsix"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
@@ -378,6 +380,7 @@
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2",
     "eslint": "^9.34.0",
+    "rimraf": "^6.1.2",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.2",
     "webpack": "^5.101.3",
