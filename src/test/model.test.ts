@@ -2,11 +2,13 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 import { AddiChatProvider } from "../model";
 import { ToolRegistry } from "../toolRegistry";
+import { MessageConverter } from "../services/messageConverter";
+import { LLMClient } from "../services/llmClient";
 
 suite("Model provider conversions", () => {
   test("toOpenAiMessages should handle tool call parts and text parts", () => {
-    const fakeRepo: any = { getProviders: () => [], findModel: () => null };
-    const provider = new AddiChatProvider(fakeRepo as any);
+    // const fakeRepo: any = { getProviders: () => [], findModel: () => null };
+    // const provider = new AddiChatProvider(fakeRepo as any);
 
     // Build a fake LanguageModelChatRequestMessage with a tool call encoded as object
     const toolPart = { name: "addi.createFile", arguments: JSON.stringify({ path: "a.txt", content: "x" }), callId: "cid-1" };
@@ -18,8 +20,8 @@ suite("Model provider conversions", () => {
       name: undefined,
     } as vscode.LanguageModelChatRequestMessage;
 
-    // invoke the private toOpenAiMessages via any cast
-    const out = (provider as any).toOpenAiMessages([msg]);
+    // invoke MessageConverter.toOpenAiMessages
+    const out = MessageConverter.toOpenAiMessages([msg]);
     assert.ok(Array.isArray(out), "expected array");
     assert.strictEqual(out.length, 1);
     const entry = out[0] as any;
@@ -50,7 +52,9 @@ suite("Model provider conversions", () => {
       const definitions = (provider as any).resolveToolDefinitions(undefined) as ReadonlyArray<Record<string, unknown>> | undefined;
       assert.ok(definitions, "expected fallback definitions");
       assert.strictEqual(definitions!.length, 1);
-      const functions = (provider as any).convertToFunctionTools(definitions) as
+      
+      const llmClient = new LLMClient();
+      const functions = (llmClient as any).convertToFunctionTools(definitions) as
         | Array<{ type: string; function: { name: string; parameters: Record<string, unknown> } }>
         | undefined;
       assert.ok(functions && functions.length === 1, "expected converted functions");
