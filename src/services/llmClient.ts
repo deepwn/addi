@@ -564,7 +564,7 @@ export class LLMClient {
     // For newer OpenAI-style tool_calls streaming we may receive incremental tool_calls entries
     const pendingToolCalls: Record<number, { id?: string | undefined; name?: string | undefined; arguments?: string | undefined }> = {};
 
-    while (true) {
+    outerLoop: while (true) {
       if (token.isCancellationRequested) {
         reader.cancel();
         break;
@@ -584,7 +584,7 @@ export class LLMClient {
           continue;
         }
         if (trimmed === "data: [DONE]") {
-          return;
+          break outerLoop;
         }
         if (trimmed.startsWith("data: ")) {
           try {
@@ -638,6 +638,11 @@ export class LLMClient {
                   pendingFunctionCall.arguments = (pendingFunctionCall.arguments ?? "") + fn.arguments;
                 }
               }
+            }
+
+            const reasoning = delta?.reasoning_content ?? data?.choices?.[0]?.message?.reasoning_content;
+            if (typeof reasoning === "string") {
+              progress.report(new vscode.LanguageModelTextPart(reasoning));
             }
 
             const content = delta?.content ?? data?.choices?.[0]?.message?.content;
