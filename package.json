@@ -36,7 +36,9 @@
     "Machine Learning",
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguageModelChat:addi-provider"
+  ],
   "enabledApiProposals": [
     "contribLanguageModelToolSets",
     "languageModelCapabilities"
@@ -360,9 +362,11 @@
     "languageModelTools": []
   },
   "scripts": {
-    "test": "tsc -p . --outDir out && yarn package && vscode-test",
+    "test": "tsc -p . --outDir out && npm run package && vscode-test",
     "package": "webpack --mode production --devtool hidden-source-map",
-    "release": "yarn package && vsce package --baseImagesUrl https://raw.githubusercontent.com/deepwn/addi/refs/heads/main/ --no-yarn",
+    "watch": "webpack --mode development --watch",
+    "compile": "webpack --mode development",
+    "release": "npm run package && vsce package --baseImagesUrl https://raw.githubusercontent.com/deepwn/addi/refs/heads/main/ --no-yarn",
     "debug": "code --extensionDevelopmentPath=."
   },
   "devDependencies": {

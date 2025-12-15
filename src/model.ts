@@ -528,6 +528,12 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
   }
 
   private mapChatRole(role: unknown): string {
+    if (role === vscode.LanguageModelChatMessageRole.Assistant) {
+      return "assistant";
+    }
+    if (role === vscode.LanguageModelChatMessageRole.User) {
+      return "user";
+    }
     const value = typeof role === "string" ? role.toLowerCase() : undefined;
     switch (value) {
       case "assistant":
@@ -594,8 +600,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       },
       progress,
       token,
-      true,
-      (options as any)?.toolInvocationToken
+      true
     );
     logger.debug("callOpenAiApi completed", {
       provider: logger.sanitizeProvider(provider),
@@ -844,8 +849,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       },
       progress,
       token,
-      false,
-      (options as any)?.toolInvocationToken
+      false
     );
     logger.debug("callGenericOpenAiCompatibleApi completed", {
       provider: logger.sanitizeProvider(provider),
@@ -854,11 +858,17 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
   }
   private toOpenAiMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): Array<Record<string, unknown>> {
     return messages.map((msg) => {
-      const role = this.mapChatRole(msg.role);
+      let role = this.mapChatRole(msg.role);
       const parts = Array.isArray(msg.content) ? (msg.content as readonly unknown[]) : [msg.content];
       const toolCall = this.extractToolCallFromParts(parts);
       const toolResult = this.extractToolResultFromParts(parts);
       const contentText = this.extractTextFromMessageParts(parts);
+
+      if (toolCall) {
+        role = "assistant";
+      } else if (toolResult) {
+        role = "tool";
+      }
 
       const entry: Record<string, unknown> = {
         role,
@@ -877,7 +887,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
           },
         ];
         entry["content"] = contentText;
-      } else if (toolResult && role === "tool") {
+      } else if (toolResult) {
         entry["content"] = toolResult.content;
         if (toolResult.id) {
           entry["tool_call_id"] = toolResult.id;
@@ -972,8 +982,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     request: { url: string; headers: Record<string, string>; body: Record<string, unknown> },
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken,
-    strict: boolean,
-    toolInvocationToken?: unknown
+    strict: boolean
   ): Promise<void> {
     const response = await fetch(request.url, {
       method: "POST",
@@ -1114,25 +1123,6 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
                     const normalizedInput: object = typeof inputObj === "object" && inputObj !== null ? (inputObj as object) : { value: inputObj };
                     const idToUse = callId ?? `tool_call_${i}_${Date.now().toString()}`;
                     progress.report(new vscode.LanguageModelToolCallPart(idToUse, name, normalizedInput));
-                    // Attempt to actually invoke the tool if registered so side-effects (like file creation) occur.
-                    try {
-                      // invokeTool will validate input against declared schema and run the tool implementation
-                      const tokenForInvoke = toolInvocationToken as unknown | undefined;
-                      const invokeOptions = { input: normalizedInput, toolInvocationToken: tokenForInvoke } as unknown as vscode.LanguageModelToolInvocationOptions<object>;
-                      const toolResult = await this.invokeToolWithLogging(name, invokeOptions, token, progress);
-                      // Report a short textual summary of the tool result to the chat stream
-                      try {
-                        const summary =
-                          toolResult && Array.isArray((toolResult as any).content)
-                            ? (toolResult as any).content.map((p: any) => (p instanceof vscode.LanguageModelTextPart ? p.value : String(p))).join("")
-                            : String(toolResult);
-                        progress.report(new vscode.LanguageModelTextPart(summary || `Tool ${name} invoked successfully.`));
-                      } catch (err) {
-                        progress.report(new vscode.LanguageModelTextPart(`Tool ${name} invoked.`));
-                      }
-                    } catch (err) {
-                      progress.report(new vscode.LanguageModelTextPart(`Tool invocation failed for ${name}: ${err instanceof Error ? err.message : String(err)}`));
-                    }
                   }
                   // reset pending tool calls and return to hand off to VS Code
                   for (const k of Object.keys(pendingToolCalls)) {
@@ -1162,22 +1152,6 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
                   const idToUse = pending.id ?? `tool_call_${idx}_${Date.now().toString()}`;
                   const name = pending.name ?? "tool";
                   progress.report(new vscode.LanguageModelToolCallPart(idToUse, name, normalizedInput));
-                  try {
-                    const tokenForInvoke = toolInvocationToken as unknown | undefined;
-                    const invokeOptions = { input: normalizedInput, toolInvocationToken: tokenForInvoke } as unknown as vscode.LanguageModelToolInvocationOptions<object>;
-                    const toolResult = await this.invokeToolWithLogging(name, invokeOptions, token, progress);
-                    try {
-                      const summary =
-                        toolResult && Array.isArray((toolResult as any).content)
-                          ? (toolResult as any).content.map((p: any) => (p instanceof vscode.LanguageModelTextPart ? p.value : String(p))).join("")
-                          : String(toolResult);
-                      progress.report(new vscode.LanguageModelTextPart(summary || `Tool ${name} invoked successfully.`));
-                    } catch (_err) {
-                      progress.report(new vscode.LanguageModelTextPart(`Tool ${name} invoked.`));
-                    }
-                  } catch (err) {
-                    progress.report(new vscode.LanguageModelTextPart(`Tool invocation failed for ${name}: ${err instanceof Error ? err.message : String(err)}`));
-                  }
                 }
                 // clear pending tool calls
                 for (const k of Object.keys(pendingToolCalls)) {
@@ -1216,6 +1190,39 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
             // Do not spam progress with every parse error; skip reporting here.
           }
         }
+      }
+    }
+
+    // Emit any pending tool calls that weren't flushed by a finish_reason event
+    const indexes = Object.keys(pendingToolCalls)
+      .map((s) => Number(s))
+      .sort((a, b) => a - b);
+    for (const idx of indexes) {
+      const pending = pendingToolCalls[idx];
+      if (!pending) {
+        continue;
+      }
+      let inputObj: unknown = pending.arguments ?? {};
+      if (typeof pending.arguments === "string") {
+        try {
+          inputObj = JSON.parse(pending.arguments);
+        } catch {
+          inputObj = pending.arguments;
+        }
+      }
+      const normalizedInput: object = typeof inputObj === "object" && inputObj !== null ? (inputObj as object) : { value: inputObj };
+      const idToUse = pending.id ?? `tool_call_${idx}_${Date.now().toString()}`;
+      const name = pending.name ?? "tool";
+      progress.report(new vscode.LanguageModelToolCallPart(idToUse, name, normalizedInput));
+    }
+
+    if (pendingFunctionCall) {
+      try {
+        const callId = `fn_${Date.now().toString()}`;
+        const inputObj = pendingFunctionCall.arguments ? JSON.parse(pendingFunctionCall.arguments) : {};
+        progress.report(new vscode.LanguageModelToolCallPart(callId, pendingFunctionCall.name ?? "", inputObj));
+      } catch (err) {
+        progress.report(new vscode.LanguageModelTextPart(pendingFunctionCall.arguments ?? ""));
       }
     }
   }
@@ -1292,35 +1299,5 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     }
   }
 
-  private async invokeToolWithLogging(
-    name: string,
-    invokeOptions: vscode.LanguageModelToolInvocationOptions<object>,
-    token: vscode.CancellationToken,
-    progress: vscode.Progress<vscode.LanguageModelResponsePart>
-  ): Promise<unknown> {
-    if (!vscode?.lm || typeof (vscode as any).lm.invokeTool !== "function") {
-      progress.report(new vscode.LanguageModelTextPart(`Tool invocation not available in this host for ${name}.`));
-      return undefined;
-    }
 
-    if (!invokeOptions.toolInvocationToken) {
-      logger.warn("Tool invocation skipped - no token", { toolName: name });
-      progress.report(new vscode.LanguageModelTextPart(`Tool ${name} cannot run because the host did not provide tool access for this request.`));
-      return undefined;
-    }
-
-    try {
-      const toolResult = await (vscode as any).lm.invokeTool(name, invokeOptions, token);
-      return toolResult;
-    } catch (err) {
-      logger.warn("Tool invocation failed", {
-        toolName: name,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      if (err instanceof Error) {
-        throw err;
-      }
-      throw new Error(String(err));
-    }
-  }
 }
