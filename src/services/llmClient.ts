@@ -559,6 +559,7 @@ export class LLMClient {
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    let buffer = "";
     // For OpenAI-style function_call detection we may receive parts indicating a function call
     let pendingFunctionCall: { name?: string; arguments?: string } | null = null;
     // For newer OpenAI-style tool_calls streaming we may receive incremental tool_calls entries
@@ -571,12 +572,16 @@ export class LLMClient {
       }
 
       const { done, value } = await reader.read();
-      if (done) {
-        break;
+      if (!done) {
+        buffer += decoder.decode(value, { stream: true });
       }
 
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split("\n");
+      const lines = buffer.split("\n");
+      if (!done) {
+        buffer = lines.pop() ?? "";
+      } else {
+        buffer = "";
+      }
 
       for (const line of lines) {
         const trimmed = line.trim();
@@ -730,6 +735,14 @@ export class LLMClient {
                 pendingFunctionCall = null;
               }
             }
+
+            if (finishReason) {
+              // If we have pending tool calls, we must not break yet, we need to let the tool_calls logic below handle it
+              // But wait, the tool_calls logic is ABOVE this check.
+              // If finishReason is "tool_calls", we already returned.
+              // If finishReason is "stop" or "length", we break.
+              break outerLoop;
+            }
           } catch (error) {
             // If strict parsing is required we warn, but also report a textual hint so user sees progress
             if (strict) {
@@ -741,6 +754,9 @@ export class LLMClient {
             // Do not spam progress with every parse error; skip reporting here.
           }
         }
+      }
+      if (done) {
+        break;
       }
     }
 
@@ -785,6 +801,7 @@ export class LLMClient {
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    let buffer = "";
 
     while (true) {
       if (token.isCancellationRequested) {
@@ -793,12 +810,16 @@ export class LLMClient {
       }
 
       const { done, value } = await reader.read();
-      if (done) {
-        break;
+      if (!done) {
+        buffer += decoder.decode(value, { stream: true });
       }
 
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split("\n");
+      const lines = buffer.split("\n");
+      if (!done) {
+        buffer = lines.pop() ?? "";
+      } else {
+        buffer = "";
+      }
 
       for (const line of lines) {
         if (line.startsWith("data: ") && line !== "data: [DONE]") {
@@ -810,6 +831,9 @@ export class LLMClient {
           }
         }
       }
+      if (done) {
+        break;
+      }
     }
   }
 
@@ -820,6 +844,7 @@ export class LLMClient {
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    let buffer = "";
 
     while (true) {
       if (token.isCancellationRequested) {
@@ -828,12 +853,16 @@ export class LLMClient {
       }
 
       const { done, value } = await reader.read();
-      if (done) {
-        break;
+      if (!done) {
+        buffer += decoder.decode(value, { stream: true });
       }
 
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split("\n");
+      const lines = buffer.split("\n");
+      if (!done) {
+        buffer = lines.pop() ?? "";
+      } else {
+        buffer = "";
+      }
 
       for (const line of lines) {
         const trimmed = line.trim();
@@ -846,6 +875,9 @@ export class LLMClient {
         } catch (error) {
           logger.warn("Failed to parse line-delimited JSON", { error: error instanceof Error ? error.message : String(error) });
         }
+      }
+      if (done) {
+        break;
       }
     }
   }
