@@ -4,6 +4,18 @@ All notable changes to the "addi" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.0.4] - 2025-12-15
+
+### Fixed
+
+- **Tool Invocation**: Resolved an issue where certain tool invocations would fail due to incorrect parameter serialization.
+- **Stream Termination**: Fixed a critical bug where responses were cut off prematurely if the network packet split the stream at a specific point.
+- **Latency**: Resolved an issue causing a long delay after tool execution by optimizing how the extension detects the end of a stream.
+- **Progress Indicators**: Improved the handling of "Thinking" and other progress events to ensure they are displayed correctly.
+
+### Changed
+- **Project Management**: Migrated from Yarn to NPM for dependency management and packaging.
+
 ## [0.0.3] - 2025-10-10
 
 - Enabled proposed APIs required for language model tool interoperability (`contribLanguageModelToolSets`, `languageModelCapabilities`).
