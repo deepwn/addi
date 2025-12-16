@@ -48,6 +48,25 @@ export class LLMClient {
       body["tools"] = tools;
     }
 
+    const sanitizedBody = { ...body };
+    if (Array.isArray(sanitizedBody["messages"])) {
+      sanitizedBody["messages"] = (sanitizedBody["messages"] as any[]).map((msg) => {
+        if (Array.isArray(msg.content)) {
+          return {
+            ...msg,
+            content: msg.content.map((part: any) => {
+              if (part.type === "image_url" && part.image_url?.url?.startsWith("data:")) {
+                return { ...part, image_url: { ...part.image_url, url: "<base64_image_data>" } };
+              }
+              return part;
+            }),
+          };
+        }
+        return msg;
+      });
+    }
+    logger.debug("callOpenAiApi request body", { body: sanitizedBody });
+
     await this.streamOpenAiCompatibleResponse(
       {
         url,
@@ -93,6 +112,35 @@ export class LLMClient {
       options: optionsSanitized,
     });
 
+    const body = {
+      model: modelIdentifier,
+      max_tokens: generation.maxTokens,
+      system: systemMessage || undefined,
+      messages: userMessages,
+      stream: true,
+      temperature: generation.temperature,
+      top_p: generation.topP,
+    };
+
+    const sanitizedBody = { ...body };
+    if (Array.isArray(sanitizedBody["messages"])) {
+      sanitizedBody["messages"] = (sanitizedBody["messages"] as any[]).map((msg) => {
+        if (Array.isArray(msg.content)) {
+          return {
+            ...msg,
+            content: msg.content.map((part: any) => {
+              if (part.type === "image" && part.source?.data) {
+                 return { ...part, source: { ...part.source, data: "<base64_image_data>" } };
+              }
+              return part;
+            }),
+          };
+        }
+        return msg;
+      });
+    }
+    logger.debug("callAnthropicApi request body", { body: sanitizedBody });
+
     const response = await fetch(this.buildUrl(baseUrl, "/v1/messages"), {
       method: "POST",
       headers: {
@@ -100,15 +148,7 @@ export class LLMClient {
         "x-api-key": provider.apiKey!,
         "anthropic-version": "2023-06-01",
       },
-      body: JSON.stringify({
-        model: modelIdentifier,
-        max_tokens: generation.maxTokens,
-        system: systemMessage || undefined,
-        messages: userMessages,
-        stream: true,
-        temperature: generation.temperature,
-        top_p: generation.topP,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -181,21 +221,42 @@ export class LLMClient {
       options: optionsSanitized,
     });
 
+    const body = {
+      contents,
+      generationConfig: {
+        maxOutputTokens: generation.maxTokens,
+        temperature: generation.temperature,
+        topP: generation.topP,
+        presencePenalty: generation.presencePenalty,
+        frequencyPenalty: generation.frequencyPenalty,
+      },
+    };
+
+    const sanitizedBody = { ...body };
+    if (Array.isArray(sanitizedBody["contents"])) {
+      sanitizedBody["contents"] = (sanitizedBody["contents"] as any[]).map((msg) => {
+        if (Array.isArray(msg.parts)) {
+          return {
+            ...msg,
+            parts: msg.parts.map((part: any) => {
+              if (part.inline_data?.data) {
+                 return { ...part, inline_data: { ...part.inline_data, data: "<base64_image_data>" } };
+              }
+              return part;
+            }),
+          };
+        }
+        return msg;
+      });
+    }
+    logger.debug("callGoogleApi request body", { body: sanitizedBody });
+
     const response = await fetch(`${baseUrl}/models/${modelIdentifier}:streamGenerateContent?key=${provider.apiKey}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        contents,
-        generationConfig: {
-          maxOutputTokens: generation.maxTokens,
-          temperature: generation.temperature,
-          topP: generation.topP,
-          presencePenalty: generation.presencePenalty,
-          frequencyPenalty: generation.frequencyPenalty,
-        },
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -295,6 +356,25 @@ export class LLMClient {
     if (tools && tools.length > 0) {
       bodyGeneric["tools"] = tools;
     }
+
+    const sanitizedBody = { ...bodyGeneric };
+    if (Array.isArray(sanitizedBody["messages"])) {
+      sanitizedBody["messages"] = (sanitizedBody["messages"] as any[]).map((msg) => {
+        if (Array.isArray(msg.content)) {
+          return {
+            ...msg,
+            content: msg.content.map((part: any) => {
+              if (part.type === "image_url" && part.image_url?.url?.startsWith("data:")) {
+                return { ...part, image_url: { ...part.image_url, url: "<base64_image_data>" } };
+              }
+              return part;
+            }),
+          };
+        }
+        return msg;
+      });
+    }
+    logger.debug("callGenericOpenAiCompatibleApi request body", { body: sanitizedBody });
 
     await this.streamOpenAiCompatibleResponse(
       {
@@ -516,6 +596,21 @@ export class LLMClient {
     });
 
     if (!response.ok) {
+      let errorBody = "";
+      try {
+        errorBody = await response.text();
+      } catch {
+        errorBody = "<failed to read response body>";
+      }
+      
+      logger.error("API request failed", {
+        url: request.url,
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: errorBody,
+      });
+
       if (response.status === 401 || response.status === 403) {
         progress.report(new vscode.LanguageModelTextPart("Authentication or consent issue: please check API key or user consent for this model."));
         return;
@@ -528,7 +623,7 @@ export class LLMClient {
         progress.report(new vscode.LanguageModelTextPart("Server error from model provider. Please try again later."));
         return;
       }
-      throw new Error(`OpenAI Compatible API Error: ${response.status} ${response.statusText}`);
+      throw new Error(`OpenAI Compatible API Error: ${response.status} ${response.statusText} - ${errorBody}`);
     }
 
     if (!response.body) {

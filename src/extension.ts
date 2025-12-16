@@ -18,7 +18,9 @@ function readLogLevel(): LogLevel {
 export function activate(context: vscode.ExtensionContext) {
   const initialLogLevel = readLogLevel();
   logger.initialize(context, initialLogLevel);
-  logger.info("Extension activation start");
+  const extension = vscode.extensions.getExtension("deepwn.addi");
+  const version = extension?.packageJSON?.version ?? "unknown";
+  logger.info(`Extension activation start (v${version})`);
 
   const manager = new ProviderModelManager(context);
   const applySettingsSyncPreference = () => {

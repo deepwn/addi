@@ -88,10 +88,12 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     });
     const messageSummary = MessageConverter.summarizeMessages(messages);
     const toolDefinitions = this.resolveToolDefinitions(options);
+    const toolNames = toolDefinitions?.map(t => t.name) ?? [];
     logger.debug("Chat request summary", {
       requestedModelSid: sid,
       messages: messageSummary,
       toolCount: toolDefinitions?.length ?? 0,
+      toolNames,
       toolSource: toolDefinitions && toolDefinitions.length > 0 ? (Array.isArray((options as any)?.tools) ? "host" : "fallback") : "none",
     });
     const result = this.repository.findModel(sid);
@@ -119,27 +121,21 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       return;
     }
 
+    const startTime = Date.now();
     try {
       if (this.isOpenAiEndpoint(provider.apiEndpoint)) {
         logger.debug("Dispatching request to OpenAI endpoint", logger.sanitizeProvider(provider));
         await this.llmClient.callOpenAiApi(provider, storedModel, messages, options, toolDefinitions, progress, token);
-        return;
-      }
-
-      if (this.isAnthropicEndpoint(provider.apiEndpoint)) {
+      } else if (this.isAnthropicEndpoint(provider.apiEndpoint)) {
         logger.debug("Dispatching request to Anthropic endpoint", logger.sanitizeProvider(provider));
         await this.llmClient.callAnthropicApi(provider, storedModel, messages, options, toolDefinitions, progress, token, options?.modelOptions?.["toolInvocationToken"]);
-        return;
-      }
-
-      if (this.isGoogleEndpoint(provider.apiEndpoint)) {
+      } else if (this.isGoogleEndpoint(provider.apiEndpoint)) {
         logger.debug("Dispatching request to Google endpoint", logger.sanitizeProvider(provider));
         await this.llmClient.callGoogleApi(provider, storedModel, messages, options, toolDefinitions, progress, token, options?.modelOptions?.["toolInvocationToken"]);
-        return;
+      } else {
+        logger.debug("Dispatching request to generic OpenAI-compatible endpoint", logger.sanitizeProvider(provider));
+        await this.llmClient.callGenericOpenAiCompatibleApi(provider, storedModel, messages, options, toolDefinitions, progress, token);
       }
-
-      logger.debug("Dispatching request to generic OpenAI-compatible endpoint", logger.sanitizeProvider(provider));
-      await this.llmClient.callGenericOpenAiCompatibleApi(provider, storedModel, messages, options, toolDefinitions, progress, token);
     } catch (error) {
       logger.error("Model query error", {
         error: error instanceof Error ? error.message : String(error),
@@ -147,6 +143,12 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
         model: logger.sanitizeModel(storedModel),
       });
       progress.report(new vscode.LanguageModelTextPart(`model query error: ${error instanceof Error ? error.message : "unknown"}`));
+    } finally {
+      const duration = Date.now() - startTime;
+      logger.info("Chat response completed", {
+        requestedModelSid: sid,
+        durationMs: duration,
+      });
     }
   }
 

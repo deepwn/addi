@@ -43,7 +43,7 @@ export class ProviderModelManager {
   async saveProviders(providers: Provider[]): Promise<void> {
     this.normalizeProvidersInPlace(providers as Array<Provider & Record<string, unknown>>);
     await this.context.globalState.update(ProviderModelManager.STORAGE_KEY, providers);
-    logger.debug("Saved providers", { providerCount: providers.length });
+    logger.info("Saved providers", { providerCount: providers.length });
   }
 
   private normalizeProvidersInPlace(providers: Array<Provider & Record<string, unknown>>): boolean {

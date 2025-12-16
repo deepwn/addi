@@ -33,7 +33,7 @@ export class PlaygroundManager {
     // 不再在扩展端更改或定制 markdown-it 的渲染规则；前端/主机会自行处理渲染样式
 
     const history: ChatMessage[] = [];
-    const presetKey = `addi.playground.params`;
+    const presetKey = `addi.playground.params.${model.sid}`;
     const stored = this.context?.workspaceState.get<unknown>(presetKey);
     let temperature = 0.7;
     let topP: number | undefined = 1.0;
