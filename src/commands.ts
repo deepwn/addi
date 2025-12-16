@@ -2,11 +2,13 @@ import * as vscode from "vscode";
 import * as crypto from "crypto";
 import { ProviderModelManager, ProviderTreeItem, AddiTreeDataProvider } from "./provider";
 import { ModelTreeItem } from "./model";
-import { ConfigManager, IdGenerator, InputValidator, TokenFormatter, UserFeedback } from "./utils";
+import { ConfigManager, IdGenerator, UserFeedback } from "./utils";
 import { ModelDraft, Provider, Model } from "./types";
 import { logger } from "./logger";
 // playground logic moved to src/playground.ts
 import PlaygroundManager from "./playground";
+
+import { DetailsViewProvider } from "./detailsView";
 
 interface RemoteModelInfo {
   id: string;
@@ -27,6 +29,7 @@ type ModelSyncResult = {
 
 export class CommandHandler {
   private static readonly TOKEN_LIMIT = 1024 * 1024 * 4;
+  private detailsViewProvider?: DetailsViewProvider;
 
   constructor(private readonly manager: ProviderModelManager, private readonly treeDataProvider: AddiTreeDataProvider, private readonly context?: vscode.ExtensionContext) {
     logger.debug("CommandHandler initialized", {
@@ -34,125 +37,11 @@ export class CommandHandler {
     });
   }
 
-  private async promptModelApiTest(provider: Provider, modelDraft: ModelDraft, continueLabel: string): Promise<boolean> {
-    logger.debug("promptModelApiTest invoked", {
-      provider: logger.sanitizeProvider(provider),
-      model: logger.sanitizeModel(modelDraft),
-    });
-    const testChoice = await vscode.window.showQuickPick([{ label: "check" }, { label: "skip" }], { placeHolder: "should check model API?" });
-
-    if (!testChoice) {
-      UserFeedback.showWarning("canceled model operation");
-      logger.warn("Model API test selection canceled", {
-        provider: logger.sanitizeProvider(provider),
-        model: logger.sanitizeModel(modelDraft),
-      });
-      return false;
-    }
-
-    if (testChoice.label === "skip") {
-      logger.debug("Model API test skipped", {
-        provider: logger.sanitizeProvider(provider),
-        model: logger.sanitizeModel(modelDraft),
-      });
-      return true;
-    }
-
-    try {
-      await UserFeedback.showProgress("Testing model API...", async (_progress, token) => {
-        await this.testModelApi(provider, modelDraft, token);
-      });
-      // UserFeedback.showInfo("Model API test passed"); // Removed as per user request to avoid conflict with "Model added"
-      logger.info("Model API test passed", {
-        provider: logger.sanitizeProvider(provider),
-        model: logger.sanitizeModel(modelDraft),
-      });
-      return true;
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.warn("Model API test failed", {
-        provider: logger.sanitizeProvider(provider),
-        model: logger.sanitizeModel(modelDraft),
-        error: errorMsg,
-      });
-
-      while (true) {
-        const decision = await UserFeedback.showErrorWithActions(`Model API test failed: ${errorMsg}`, ["Show Logs", "Cancel", continueLabel]);
-
-        if (decision === "Show Logs") {
-          logger.show();
-          continue;
-        }
-
-        if (decision !== continueLabel) {
-          UserFeedback.showWarning("Canceled model operation");
-          logger.debug("User canceled after failed API test", {
-            provider: logger.sanitizeProvider(provider),
-            model: logger.sanitizeModel(modelDraft),
-          });
-          return false;
-        }
-        return true;
-      }
-    }
+  public setDetailsViewProvider(provider: DetailsViewProvider) {
+    this.detailsViewProvider = provider;
   }
 
-  private async testModelApi(provider: Provider, modelDraft: ModelDraft, token: vscode.CancellationToken): Promise<void> {
-    const apiEndpoint = provider.apiEndpoint?.trim();
-    const apiKey = provider.apiKey?.trim();
 
-    if (!apiEndpoint) {
-      logger.warn("testModelApi aborted due to missing endpoint", logger.sanitizeProvider(provider));
-      throw new Error("unconfigured API endpoint for the provider");
-    }
-
-    if (!apiKey) {
-      logger.warn("testModelApi aborted due to missing API key", logger.sanitizeProvider(provider));
-      throw new Error("unconfigured API key for the provider");
-    }
-
-    logger.debug("testModelApi starting", {
-      provider: logger.sanitizeProvider(provider),
-      model: logger.sanitizeModel(modelDraft),
-    });
-
-    const abortController = new AbortController();
-    const subscription = token.onCancellationRequested(() => abortController.abort());
-
-    try {
-      switch (provider.providerType) {
-        case "openai":
-          await this.testOpenAiApi(apiEndpoint, apiKey, modelDraft, abortController.signal);
-          logger.debug("testModelApi openai completed", logger.sanitizeProvider(provider));
-          return;
-        case "anthropic":
-          await this.testAnthropicApi(apiEndpoint, apiKey, modelDraft, abortController.signal);
-          logger.debug("testModelApi anthropic completed", logger.sanitizeProvider(provider));
-          return;
-        case "google":
-          await this.testGoogleApi(apiEndpoint, apiKey, modelDraft, abortController.signal);
-          logger.debug("testModelApi google completed", logger.sanitizeProvider(provider));
-          return;
-        default:
-          await this.testGenericOpenAiCompatibleApi(apiEndpoint, apiKey, modelDraft, abortController.signal);
-          logger.debug("testModelApi generic completed", logger.sanitizeProvider(provider));
-          return;
-      }
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        logger.warn("testModelApi aborted", logger.sanitizeProvider(provider));
-        throw new Error("Model API test canceled");
-      }
-      logger.warn("testModelApi failed", {
-        provider: logger.sanitizeProvider(provider),
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    } finally {
-      subscription.dispose();
-      logger.debug("testModelApi finished cleanup", logger.sanitizeProvider(provider));
-    }
-  }
 
   // Endpoint pattern helpers removed: providerType 现在由用户显式选择，不再通过 endpoint 推断。
 
@@ -183,14 +72,7 @@ export class CommandHandler {
     return queryString ? `${modelsUrl}?${queryString}` : modelsUrl;
   }
 
-  private resolveChatCompletionsUrl(endpoint: string, fallback: string): string {
-    const base = this.normalizeBaseUrl(endpoint, fallback);
-    const lower = base.toLowerCase();
-    if (lower.endsWith("/chat/completions")) {
-      return base;
-    }
-    return this.buildUrl(base, "/chat/completions");
-  }
+
 
   private async readResponseError(response: Response): Promise<string> {
     const statusInfo = `${response.status} ${response.statusText}`;
@@ -219,16 +101,7 @@ export class CommandHandler {
     }
   }
 
-  private getTestPrompt(): string {
-    return "Hello from Addi connectivity test.";
-  }
 
-  private ensureMaxTokens(value: number): number {
-    if (!Number.isFinite(value) || value <= 0) {
-      return 128;
-    }
-    return Math.min(Math.max(Math.floor(value), 1), CommandHandler.TOKEN_LIMIT);
-  }
 
   private coercePositiveInteger(value: unknown): number | undefined {
     if (typeof value === "number" && Number.isFinite(value) && value > 0) {
@@ -243,159 +116,9 @@ export class CommandHandler {
     return undefined;
   }
 
-  private resolveModelIdentifierFromDraft(modelDraft: ModelDraft): string {
-    const trimmedId = modelDraft.id?.trim();
-    if (trimmedId) {
-      return trimmedId;
-    }
-    const trimmedFamily = (modelDraft.family ?? "addi").trim();
-    if (trimmedFamily) {
-      return trimmedFamily;
-    }
-    const draftSid = modelDraft.sid?.trim();
-    if (draftSid) {
-      return draftSid;
-    }
-    return "addi";
-  }
 
-  private async testOpenAiApi(apiEndpoint: string, apiKey: string, modelDraft: ModelDraft, signal: AbortSignal): Promise<void> {
-    const url = this.resolveChatCompletionsUrl(apiEndpoint, "https://api.openai.com/v1");
-    const modelIdentifier = this.resolveModelIdentifierFromDraft(modelDraft);
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: modelIdentifier,
-        messages: [{ role: "user", content: this.getTestPrompt() }],
-        max_tokens: this.ensureMaxTokens(modelDraft.maxOutputTokens),
-        stream: false,
-      }),
-      signal,
-    });
 
-    if (!response.ok) {
-      throw new Error(await this.readResponseError(response));
-    }
 
-    const data: unknown = await response.json();
-    if (!data || typeof data !== "object") {
-      throw new Error("OpenAI API response format error");
-    }
-    const record = data as Record<string, unknown>;
-    const choices = record["choices"] as unknown;
-    if (!Array.isArray(choices) || choices.length === 0) {
-      throw new Error("OpenAI API response format error");
-    }
-  }
-
-  private async testAnthropicApi(apiEndpoint: string, apiKey: string, modelDraft: ModelDraft, signal: AbortSignal): Promise<void> {
-    const baseUrl = this.normalizeBaseUrl(apiEndpoint, "https://api.anthropic.com");
-    const url = this.buildUrl(baseUrl, "/v1/messages");
-    const modelIdentifier = this.resolveModelIdentifierFromDraft(modelDraft);
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: modelIdentifier,
-        max_tokens: this.ensureMaxTokens(modelDraft.maxOutputTokens),
-        messages: [{ role: "user", content: this.getTestPrompt() }],
-        stream: false,
-      }),
-      signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(await this.readResponseError(response));
-    }
-
-    const data: unknown = await response.json();
-    if (!data || typeof data !== "object") {
-      throw new Error("Anthropic API response format error");
-    }
-    const record = data as Record<string, unknown>;
-    if (!("content" in record)) {
-      throw new Error("Anthropic API response format error");
-    }
-  }
-
-  private async testGoogleApi(apiEndpoint: string, apiKey: string, modelDraft: ModelDraft, signal: AbortSignal): Promise<void> {
-    const baseUrl = this.normalizeBaseUrl(apiEndpoint, "https://generativelanguage.googleapis.com/v1beta");
-    const modelIdentifier = this.resolveModelIdentifierFromDraft(modelDraft);
-    const url = `${baseUrl}/models/${encodeURIComponent(modelIdentifier)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: this.getTestPrompt() }],
-          },
-        ],
-        generationConfig: {
-          maxOutputTokens: this.ensureMaxTokens(modelDraft.maxOutputTokens),
-        },
-      }),
-      signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(await this.readResponseError(response));
-    }
-
-    const data: unknown = await response.json();
-    if (!data || typeof data !== "object") {
-      throw new Error("Google API response format error");
-    }
-    const record = data as Record<string, unknown>;
-    const candidates = record["candidates"] as unknown;
-    if (!Array.isArray(candidates) || candidates.length === 0) {
-      throw new Error("Google API response format error");
-    }
-  }
-
-  private async testGenericOpenAiCompatibleApi(apiEndpoint: string, apiKey: string, modelDraft: ModelDraft, signal: AbortSignal): Promise<void> {
-    const url = this.resolveChatCompletionsUrl(apiEndpoint, "https://api.openai.com/v1");
-    const modelIdentifier = this.resolveModelIdentifierFromDraft(modelDraft);
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: modelIdentifier,
-        messages: [{ role: "user", content: this.getTestPrompt() }],
-        max_tokens: this.ensureMaxTokens(modelDraft.maxOutputTokens),
-        stream: false,
-      }),
-      signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(await this.readResponseError(response));
-    }
-
-    const data: unknown = await response.json();
-    if (!data || typeof data !== "object") {
-      throw new Error("OpenAI compatible API response format error");
-    }
-    const record = data as Record<string, unknown>;
-    const choices = record["choices"] as unknown;
-    if (!Array.isArray(choices) || choices.length === 0) {
-      throw new Error("OpenAI compatible API response format error");
-    }
-  }
 
   private async fetchProviderModelsFromApi(provider: Provider): Promise<RemoteModelInfo[]> {
     const endpoint = provider.apiEndpoint?.trim();
@@ -614,203 +337,21 @@ export class CommandHandler {
 
   async addProvider(): Promise<void> {
     logger.info("Command addProvider invoked");
-    const name = await UserFeedback.showInputBox({
-      prompt: "Please enter the provider name",
-      validateInput: InputValidator.validateName,
-    });
-
-    if (!name) {
-      logger.debug("addProvider canceled at name input");
-      return;
-    }
-
-    const description = await UserFeedback.showInputBox({
-      prompt: "Please enter the provider description (optional)",
-      value: "",
-    });
-
-    const website = await UserFeedback.showInputBox({
-      prompt: "Please enter the provider website (optional)",
-      value: "",
-    });
-
-    // 先选择 providerType，再决定是否需要/如何填写 endpoint
-    const typePick = await vscode.window.showQuickPick(
-      [
-        { label: "OpenAI", value: "openai" },
-        { label: "Anthropic", value: "anthropic" },
-        { label: "Google", value: "google" },
-        { label: "Generic (OpenAI Compatible)", value: "generic" },
-      ],
-      { placeHolder: "Select provider type", canPickMany: false, title: "Provider Type" }
-    );
-    if (!typePick) {
-      UserFeedback.showWarning("Provider creation canceled (no type selected)");
-      logger.warn("addProvider canceled at type selection");
-      return;
-    }
-    const providerType = typePick.value as Provider["providerType"];
-
-    // 不同类型给出默认 endpoint 建议（用户可修改）
-    let suggestedEndpoint = "";
-    switch (providerType) {
-      case "openai":
-        suggestedEndpoint = "https://api.openai.com/v1";
-        break;
-      case "anthropic":
-        suggestedEndpoint = "https://api.anthropic.com";
-        break;
-      case "google":
-        suggestedEndpoint = "https://generativelanguage.googleapis.com/v1beta";
-        break;
-      default:
-        suggestedEndpoint = ""; // generic 不强制
-        break;
-    }
-
-    const apiEndpoint = await UserFeedback.showInputBox({
-      prompt: providerType === "generic" ? "Please enter the API endpoint" : "API endpoint (auto-filled, you can adjust)",
-      value: suggestedEndpoint,
-    });
-
-    const apiKey = await UserFeedback.showInputBox({
-      prompt: "Please enter the API key (optional)",
-      value: "",
-      password: true,
-    });
-
-    try {
-      const providerData: Omit<Provider, "id" | "models"> = { name, providerType };
-
-      if (description) {
-        providerData.description = description;
-      }
-      if (website) {
-        providerData.website = website;
-      }
-      if (apiEndpoint) {
-        providerData.apiEndpoint = apiEndpoint;
-      }
-      if (apiKey) {
-        providerData.apiKey = apiKey;
-      }
-      if (providerType) {
-        providerData.providerType = providerType;
-      }
-
-      logger.debug("Submitting provider for creation", {
-        provider: logger.sanitizeProvider(providerData as Provider),
-      });
-      const created = await this.manager.addProvider(providerData);
-      this.treeDataProvider.refresh();
-      UserFeedback.showInfo(`Provider "${name}" added`);
-      logger.info("Provider created", logger.sanitizeProvider(created));
-      await this.syncProviderModels(created.id, "auto");
-    } catch (error) {
-      UserFeedback.showError(`Failed to add provider: ${error instanceof Error ? error.message : "Unknown error"}`);
-      logger.error("addProvider failed", { error: error instanceof Error ? error.message : String(error) });
+    if (this.detailsViewProvider) {
+      this.detailsViewProvider.showAddProvider();
+    } else {
+      UserFeedback.showError("Details view provider not initialized");
     }
   }
 
   async editProvider(item: ProviderTreeItem): Promise<void> {
     logger.info("Command editProvider invoked", logger.sanitizeProvider(item.provider));
-    const name = await UserFeedback.showInputBox({
-      prompt: "Edit provider name",
-      value: item.provider.name,
-      validateInput: InputValidator.validateName,
-    });
-
-    if (!name) {
-      logger.debug("editProvider canceled at name input", logger.sanitizeProvider(item.provider));
-      return;
-    }
-
-    const description = await UserFeedback.showInputBox({
-      prompt: "Edit provider description (optional)",
-      value: item.provider.description || "",
-    });
-
-    const website = await UserFeedback.showInputBox({
-      prompt: "Edit provider website (optional)",
-      value: item.provider.website || "",
-    });
-
-    // 先选择 / 修改 providerType
-    const currentType = item.provider.providerType || "generic";
-    const typePick = await vscode.window.showQuickPick(
-      [
-        { label: "OpenAI", value: "openai", picked: currentType === "openai" },
-        { label: "Anthropic", value: "anthropic", picked: currentType === "anthropic" },
-        { label: "Google", value: "google", picked: currentType === "google" },
-        { label: "Generic (OpenAI Compatible)", value: "generic", picked: currentType === "generic" },
-      ],
-      { placeHolder: "Select provider type", canPickMany: false, title: "Provider Type" }
-    );
-    const providerType: Provider["providerType"] = (typePick?.value as Provider["providerType"]) || currentType;
-
-    // 如果之前没有 endpoint，且类型是已知的，给出默认建议
-    let suggestedEndpoint = item.provider.apiEndpoint || "";
-    if (!suggestedEndpoint) {
-      switch (providerType) {
-        case "openai":
-          suggestedEndpoint = "https://api.openai.com/v1";
-          break;
-        case "anthropic":
-          suggestedEndpoint = "https://api.anthropic.com";
-          break;
-        case "google":
-          suggestedEndpoint = "https://generativelanguage.googleapis.com/v1beta";
-          break;
-        default:
-          suggestedEndpoint = "";
-          break;
-      }
-    }
-
-    const apiEndpoint = await UserFeedback.showInputBox({
-      prompt: providerType === "generic" ? "Edit API endpoint (optional)" : "Edit API endpoint (auto-suggested; adjust if needed)",
-      value: suggestedEndpoint,
-    });
-
-    const apiKey = await UserFeedback.showInputBox({
-      prompt: "Edit API key (optional)",
-      value: item.provider.apiKey || "",
-      password: true,
-    });
-
-    try {
-      const providerData: Partial<Omit<Provider, "id" | "models">> = { name, providerType };
-
-      if (description) {
-        providerData.description = description;
-      }
-      if (website) {
-        providerData.website = website;
-      }
-      if (apiEndpoint) {
-        providerData.apiEndpoint = apiEndpoint;
-      }
-      if (apiKey) {
-        providerData.apiKey = apiKey;
-      }
-      providerData.providerType = providerType;
-
-      logger.debug("Submitting provider update", {
-        original: logger.sanitizeProvider(item.provider),
-        update: logger.sanitizeProvider(providerData as Provider),
-      });
-      const success = await this.manager.updateProvider(item.provider.id, providerData);
-      if (success) {
-        this.treeDataProvider.refresh();
-        UserFeedback.showInfo(`Provider "${name}" updated`);
-        logger.info("Provider updated", logger.sanitizeProvider({ ...item.provider, ...providerData } as Provider));
-      } else {
-        UserFeedback.showError("Failed to update provider");
-        logger.warn("Provider update failed", logger.sanitizeProvider(item.provider));
-      }
-    } catch (error) {
-      UserFeedback.showError(`Failed to update provider: ${error instanceof Error ? error.message : "Unknown error"}`);
-      logger.error("editProvider failed", { error: error instanceof Error ? error.message : String(error) });
+    if (this.detailsViewProvider) {
+      this.detailsViewProvider.update(item);
+      // Focus the details view
+      vscode.commands.executeCommand("addiDetails.focus");
+    } else {
+      UserFeedback.showError("Details view provider not initialized");
     }
   }
 
@@ -828,6 +369,9 @@ export class CommandHandler {
         const success = await this.manager.deleteProvider(item.provider.id);
         if (success) {
           this.treeDataProvider.refresh();
+          if (this.detailsViewProvider) {
+            this.detailsViewProvider.cancelEdit();
+          }
           UserFeedback.showInfo(`Provider "${item.provider.name}" deleted`);
           logger.info("Provider deleted", logger.sanitizeProvider(item.provider));
         } else {
@@ -1057,143 +601,10 @@ export class CommandHandler {
 
   async addModel(item: ProviderTreeItem): Promise<void> {
     logger.info("Command addModel invoked", logger.sanitizeProvider(item.provider));
-    let id = await UserFeedback.showInputBox({
-      prompt: "Enter model ID (unique identifier, recommended: alphanumeric / underscore)",
-      validateInput: (v) => (v.trim().length > 0 ? null : "Model ID cannot be empty"),
-    });
-    if (!id) {
-      logger.debug("addModel canceled at id input", logger.sanitizeProvider(item.provider));
-      return;
-    }
-    id = id.trim();
-
-    const name = await UserFeedback.showInputBox({
-      prompt: "Enter model name",
-      validateInput: InputValidator.validateName,
-      value: id,
-    });
-    if (!name) {
-      logger.debug("addModel canceled at name input", logger.sanitizeProvider(item.provider));
-      return;
-    }
-
-    const defaultFamily = ConfigManager.getDefaultModelFamily().trim() || "addi";
-    const familyInput = await UserFeedback.showInputBox({
-      prompt: "Enter model family (optional)",
-      value: defaultFamily,
-    });
-    if (familyInput === undefined) {
-      logger.debug("addModel canceled at family input", logger.sanitizeProvider(item.provider));
-      return;
-    }
-    const family = familyInput.trim() || defaultFamily;
-
-    const defaultVersion = ConfigManager.getDefaultModelVersion().trim() || "1.0.0";
-    const versionInput = await UserFeedback.showInputBox({
-      prompt: "Enter model version (optional)",
-      value: defaultVersion,
-      validateInput: (v) => (v ? InputValidator.validateVersion(v) : null),
-    });
-    if (versionInput === undefined) {
-      logger.debug("addModel canceled at version input", logger.sanitizeProvider(item.provider));
-      return;
-    }
-    const version = versionInput.trim() || defaultVersion;
-
-    const maxInputTokensStr = await UserFeedback.showInputBox({
-      prompt: "Enter max input tokens",
-      value: TokenFormatter.format(ConfigManager.getDefaultMaxInputTokens()),
-      validateInput: InputValidator.validateTokens,
-    });
-    if (!maxInputTokensStr) {
-      logger.debug("addModel canceled at maxInputTokens input", logger.sanitizeProvider(item.provider));
-      return;
-    }
-
-    const maxOutputTokensStr = await UserFeedback.showInputBox({
-      prompt: "Enter max output tokens",
-      value: TokenFormatter.format(ConfigManager.getDefaultMaxOutputTokens()),
-      validateInput: InputValidator.validateTokens,
-    });
-    if (!maxOutputTokensStr) {
-      logger.debug("addModel canceled at maxOutputTokens input", logger.sanitizeProvider(item.provider));
-      return;
-    }
-
-    const imageInputPick = await vscode.window.showQuickPick([{ label: "Yes" }, { label: "No" }], {
-      placeHolder: "Does it support visual processing (image input)?",
-      canPickMany: false,
-    });
-    if (!imageInputPick) {
-      UserFeedback.showWarning("Model addition canceled");
-      logger.warn("addModel canceled at imageInput selection", logger.sanitizeProvider(item.provider));
-      return;
-    }
-
-    const toolCallingPick = await vscode.window.showQuickPick([{ label: "Yes" }, { label: "No" }], {
-      placeHolder: "Does it support tool calling?",
-      canPickMany: false,
-    });
-    if (!toolCallingPick) {
-      UserFeedback.showWarning("Model addition canceled");
-      logger.warn("addModel canceled at toolCalling selection", logger.sanitizeProvider(item.provider));
-      return;
-    }
-
-    const imageInput = imageInputPick.label === "Yes";
-    const toolCalling = toolCallingPick.label === "Yes";
-    const maxInputTokens = TokenFormatter.parse(maxInputTokensStr);
-    const maxOutputTokens = TokenFormatter.parse(maxOutputTokensStr);
-    if (!maxInputTokens || !maxOutputTokens) {
-      UserFeedback.showError("Token values are invalid");
-      return;
-    }
-    const modelDraft: ModelDraft = {
-      id,
-      name,
-      family,
-      version,
-      maxInputTokens,
-      maxOutputTokens,
-      capabilities: {
-        imageInput,
-        toolCalling,
-      },
-    };
-
-    const proceed = await this.promptModelApiTest(item.provider, modelDraft, "Still add");
-    if (!proceed) {
-      logger.warn("addModel aborted after API test", {
-        provider: logger.sanitizeProvider(item.provider),
-        model: logger.sanitizeModel(modelDraft),
-      });
-      return;
-    }
-
-    try {
-      const model = await this.manager.addModel(item.provider.id, {
-        ...modelDraft,
-      });
-      if (model) {
-        this.treeDataProvider.refresh();
-        UserFeedback.showInfo(`Model "${name}" added to provider "${item.provider.name}"`);
-        logger.info("Model added", {
-          provider: logger.sanitizeProvider(item.provider),
-          model: logger.sanitizeModel(model),
-        });
-      } else {
-        UserFeedback.showError("Failed to add model");
-        logger.warn("addModel manager returned null", {
-          provider: logger.sanitizeProvider(item.provider),
-          model: logger.sanitizeModel(modelDraft),
-        });
-      }
-    } catch (error) {
-      UserFeedback.showError(`Failed to add model: ${error instanceof Error ? error.message : "Unknown error"}`);
-      logger.error("addModel failed", {
-        error: error instanceof Error ? error.message : String(error),
-        provider: logger.sanitizeProvider(item.provider),
-      });
+    if (this.detailsViewProvider) {
+      this.detailsViewProvider.showAddModel(item.provider.id);
+    } else {
+      UserFeedback.showError("Details view provider not initialized");
     }
   }
 
@@ -1201,155 +612,12 @@ export class CommandHandler {
     logger.info("Command editModel invoked", {
       model: logger.sanitizeModel(item.model),
     });
-    const result = this.manager.findModel(item.model.sid);
-    if (!result) {
-      UserFeedback.showError("Model not found");
-      logger.warn("editModel failed to find model", { modelSid: item.model.sid, modelId: item.model.id });
-      return;
-    }
-    const { provider, model } = result;
-
-    let id = await UserFeedback.showInputBox({
-      prompt: "Edit model ID (unique identifier, recommended: alphanumeric / underscore)",
-      value: model.id,
-      validateInput: (v) => (v.trim().length > 0 ? null : "Model ID cannot be empty"),
-    });
-    if (!id) {
-      logger.debug("editModel canceled at id input", {
-        provider: logger.sanitizeProvider(provider),
-        model: logger.sanitizeModel(model),
-      });
-      return;
-    }
-    id = id.trim();
-
-    const name = await UserFeedback.showInputBox({
-      prompt: "Edit model name",
-      value: model.name,
-      validateInput: InputValidator.validateName,
-    });
-    if (!name) {
-      logger.debug("editModel canceled at name input", logger.sanitizeModel(model));
-      return;
-    }
-
-    const currentFamily = (model.family && model.family.trim()) || "addi";
-    const familyInput = await UserFeedback.showInputBox({
-      prompt: "Edit model family",
-      value: currentFamily,
-    });
-    if (familyInput === undefined) {
-      logger.debug("editModel canceled at family input", logger.sanitizeModel(model));
-      return;
-    }
-    const family = familyInput.trim() || "addi";
-
-    const currentVersion = model.version || "1.0.0";
-    const versionInput = await UserFeedback.showInputBox({
-      prompt: "Edit model version",
-      value: currentVersion,
-      validateInput: (v) => (v ? InputValidator.validateVersion(v) : null),
-    });
-    if (versionInput === undefined) {
-      logger.debug("editModel canceled at version input", logger.sanitizeModel(model));
-      return;
-    }
-    const version = versionInput.trim() || "1.0.0";
-
-    const maxInputTokensStr = await UserFeedback.showInputBox({
-      prompt: "Enter max input tokens",
-      value: TokenFormatter.format(model.maxInputTokens),
-      validateInput: InputValidator.validateTokens,
-    });
-    if (!maxInputTokensStr) {
-      logger.debug("editModel canceled at maxInputTokens input", logger.sanitizeModel(model));
-      return;
-    }
-
-    const maxOutputTokensStr = await UserFeedback.showInputBox({
-      prompt: "Enter max output tokens",
-      value: TokenFormatter.format(model.maxOutputTokens),
-      validateInput: InputValidator.validateTokens,
-    });
-    if (!maxOutputTokensStr) {
-      logger.debug("editModel canceled at maxOutputTokens input", logger.sanitizeModel(model));
-      return;
-    }
-
-    const imageInputPick = await vscode.window.showQuickPick([{ label: "Yes" }, { label: "No" }], {
-      placeHolder: "Does it support visual processing (image input)?",
-      canPickMany: false,
-    });
-    if (!imageInputPick) {
-      UserFeedback.showWarning("Model editing canceled");
-      logger.warn("editModel canceled at imageInput selection", logger.sanitizeModel(model));
-      return;
-    }
-
-    const toolCallingPick = await vscode.window.showQuickPick([{ label: "Yes" }, { label: "No" }], {
-      placeHolder: "Does it support tool calling?",
-      canPickMany: false,
-    });
-    if (!toolCallingPick) {
-      UserFeedback.showWarning("Model editing canceled");
-      logger.warn("editModel canceled at toolCalling selection", logger.sanitizeModel(model));
-      return;
-    }
-
-    const imageInput = imageInputPick.label === "Yes";
-    const toolCalling = toolCallingPick.label === "Yes";
-    const maxInputTokens = TokenFormatter.parse(maxInputTokensStr);
-    const maxOutputTokens = TokenFormatter.parse(maxOutputTokensStr);
-    if (!maxInputTokens || !maxOutputTokens) {
-      UserFeedback.showError("Token values are invalid");
-      return;
-    }
-    const modelDraft: ModelDraft = {
-      id,
-      name,
-      family,
-      version,
-      maxInputTokens,
-      maxOutputTokens,
-      capabilities: {
-        imageInput,
-        toolCalling,
-      },
-    };
-
-    const proceed = await this.promptModelApiTest(provider, modelDraft, "Still update");
-    if (!proceed) {
-      logger.warn("editModel aborted after API test", {
-        provider: logger.sanitizeProvider(provider),
-        model: logger.sanitizeModel(modelDraft),
-      });
-      return;
-    }
-
-    try {
-      const success = await this.manager.updateModel(provider.id, model.sid, {
-        ...modelDraft,
-      });
-      if (success) {
-        this.treeDataProvider.refresh();
-        UserFeedback.showInfo(`Model "${name}" updated successfully`);
-        logger.info("Model updated", {
-          provider: logger.sanitizeProvider(provider),
-          model: logger.sanitizeModel({ ...modelDraft, id: modelDraft.id } as Model),
-        });
-      } else {
-        UserFeedback.showError("Failed to update model");
-        logger.warn("editModel manager returned false", {
-          provider: logger.sanitizeProvider(provider),
-          model: logger.sanitizeModel(model),
-        });
-      }
-    } catch (error) {
-      UserFeedback.showError(`Failed to update model: ${error instanceof Error ? error.message : "Unknown error"}`);
-      logger.error("editModel failed", {
-        error: error instanceof Error ? error.message : String(error),
-        provider: logger.sanitizeProvider(provider),
-      });
+    if (this.detailsViewProvider) {
+      this.detailsViewProvider.update(item);
+      // Focus the details view
+      vscode.commands.executeCommand("addiDetails.focus");
+    } else {
+      UserFeedback.showError("Details view provider not initialized");
     }
   }
 
@@ -1367,6 +635,9 @@ export class CommandHandler {
         const success = await this.manager.deleteModel(item.model.sid);
         if (success) {
           this.treeDataProvider.refresh();
+          if (this.detailsViewProvider) {
+            this.detailsViewProvider.cancelEdit();
+          }
           UserFeedback.showInfo(`Model "${item.model.name}" deleted successfully`);
           logger.info("Model deleted", logger.sanitizeModel(item.model));
         } else {

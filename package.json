@@ -96,6 +96,13 @@
               "icon": "$(add)"
             }
           ]
+        },
+        {
+          "type": "webview",
+          "id": "addiDetails",
+          "name": "Details",
+          "icon": "$(info)",
+          "when": "addi:showDetails"
         }
       ]
     },

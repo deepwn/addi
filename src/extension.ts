@@ -4,6 +4,7 @@ import { ProviderModelManager, AddiTreeDataProvider, ProviderTreeItem } from "./
 import { CommandHandler } from "./commands";
 import { ModelTreeItem } from "./model";
 import { logger, LogLevel } from "./logger";
+import { DetailsViewProvider } from "./detailsView";
 
 function readLogLevel(): LogLevel {
   const config = vscode.workspace.getConfiguration("addi");
@@ -116,6 +117,19 @@ export function activate(context: vscode.ExtensionContext) {
   );
   context.subscriptions.push(vscode.commands.registerCommand("addi.exportConfig", () => commandHandler.exportConfig()));
   context.subscriptions.push(vscode.commands.registerCommand("addi.importConfig", () => commandHandler.importConfig()));
+
+  const detailsProvider = new DetailsViewProvider(context.extensionUri, manager, () => treeDataProvider.refresh());
+  commandHandler.setDetailsViewProvider(detailsProvider);
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(DetailsViewProvider.viewType, detailsProvider)
+  );
+
+  treeView.onDidChangeSelection((_e) => {
+    // Clicking an item should not open the details view (edit mode).
+    // Instead, it should clear the details view (collapse/discard changes).
+    // Editing is triggered explicitly via the "Edit" context menu command.
+    // detailsProvider.update(undefined); // Removed to keep details view open
+  });
 }
 
 export function deactivate() {}
