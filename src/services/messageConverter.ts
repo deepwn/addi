@@ -1,5 +1,11 @@
 import * as vscode from "vscode";
 
+export interface CustomImagePart {
+  type: "image";
+  mimeType: string;
+  base64Data: string;
+}
+
 export class MessageConverter {
   static mapChatRole(role: unknown): string {
     if (role === vscode.LanguageModelChatMessageRole.Assistant) {
@@ -24,6 +30,9 @@ export class MessageConverter {
   static extractTextFromMessageParts(parts: readonly unknown[]): string {
     const textParts: string[] = [];
     for (const part of parts) {
+      if (this.isImagePart(part)) {
+        continue;
+      }
       if (typeof part === "string") {
         textParts.push(part);
         continue;
@@ -40,6 +49,16 @@ export class MessageConverter {
       }
     }
     return textParts.join("");
+  }
+
+  static isImagePart(part: unknown): part is CustomImagePart {
+    return (
+      typeof part === "object" &&
+      part !== null &&
+      (part as any).type === "image" &&
+      typeof (part as any).base64Data === "string" &&
+      typeof (part as any).mimeType === "string"
+    );
   }
 
   static extractToolCallFromParts(parts: readonly unknown[]): { name: string; arguments: string; id?: string } | undefined {
@@ -97,7 +116,22 @@ export class MessageConverter {
       const parts = Array.isArray(msg.content) ? (msg.content as readonly unknown[]) : [msg.content];
       const toolCall = this.extractToolCallFromParts(parts);
       const toolResult = this.extractToolResultFromParts(parts);
-      const contentText = this.extractTextFromMessageParts(parts);
+      
+      // Handle content parts (text and images)
+      const contentParts: any[] = [];
+      for (const part of parts) {
+        if (this.isImagePart(part)) {
+          contentParts.push({
+            type: "image_url",
+            image_url: { url: `data:${part.mimeType};base64,${part.base64Data}` },
+          });
+        } else {
+          const text = this.extractTextFromMessageParts([part]);
+          if (text) {
+            contentParts.push({ type: "text", text });
+          }
+        }
+      }
 
       if (toolCall) {
         role = "assistant";
@@ -121,14 +155,24 @@ export class MessageConverter {
             },
           },
         ];
-        entry["content"] = contentText;
+        // OpenAI expects null content for tool calls usually, or it can be present.
+        // If we have text content alongside tool call, we should include it?
+        // For now, let's keep existing behavior but use contentParts if available and not tool call.
+        const contentText = this.extractTextFromMessageParts(parts);
+        entry["content"] = contentText || null; 
       } else if (toolResult) {
         entry["content"] = toolResult.content;
         if (toolResult.id) {
           entry["tool_call_id"] = toolResult.id;
         }
       } else {
-        entry["content"] = contentText;
+        // If we have mixed content (images), use array. If only text, use string (for better compatibility).
+        const hasImage = contentParts.some(p => p.type === "image_url");
+        if (hasImage) {
+            entry["content"] = contentParts;
+        } else {
+            entry["content"] = this.extractTextFromMessageParts(parts);
+        }
       }
 
       return entry;
@@ -153,43 +197,73 @@ export class MessageConverter {
     return "";
   }
 
-  static toAnthropicMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): Array<{ role: string; content: string }> {
-    const result: Array<{ role: string; content: string }> = [];
+  static toAnthropicMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): Array<Record<string, unknown>> {
+    const result: Array<Record<string, unknown>> = [];
     for (const msg of messages) {
       if (msg.name === "system") {
         continue;
       }
       const role = msg.role === vscode.LanguageModelChatMessageRole.User ? "user" : "assistant";
-      const content =
-        typeof msg.content === "string"
-          ? msg.content
-          : Array.isArray(msg.content)
-          ? msg.content
-              .filter((p): p is vscode.LanguageModelTextPart => p instanceof vscode.LanguageModelTextPart)
-              .map((p: vscode.LanguageModelTextPart) => p.value)
-              .join("")
-          : String(msg.content);
-      result.push({ role, content });
+      
+      const parts = Array.isArray(msg.content) ? (msg.content as readonly unknown[]) : [msg.content];
+      const contentParts: any[] = [];
+
+      for (const part of parts) {
+        if (this.isImagePart(part)) {
+          contentParts.push({
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: part.mimeType,
+              data: part.base64Data,
+            },
+          });
+        } else {
+          const text = this.extractTextFromMessageParts([part]);
+          if (text) {
+            contentParts.push({ type: "text", text });
+          }
+        }
+      }
+
+      const hasImage = contentParts.some(p => p.type === "image");
+      
+      if (hasImage) {
+         result.push({ role, content: contentParts });
+      } else {
+         const textContent = contentParts.map(p => p.text).join("");
+         result.push({ role, content: textContent });
+      }
     }
     return result;
   }
 
-  static toGoogleMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): Array<{ role: string; parts: Array<{ text: string }> }> {
-    const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+  static toGoogleMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): Array<{ role: string; parts: Array<Record<string, unknown>> }> {
+    const contents: Array<{ role: string; parts: Array<Record<string, unknown>> }> = [];
     let currentRole = "";
-    let currentParts: Array<{ text: string }> = [];
+    let currentParts: Array<Record<string, unknown>> = [];
 
     messages.forEach((msg) => {
       const role = msg.role === vscode.LanguageModelChatMessageRole.User ? "user" : "model";
-      const content =
-        typeof msg.content === "string"
-          ? msg.content
-          : Array.isArray(msg.content)
-          ? (msg.content as Array<unknown>)
-              .filter((p): p is vscode.LanguageModelTextPart => p instanceof vscode.LanguageModelTextPart)
-              .map((p) => p.value)
-              .join("")
-          : String(msg.content);
+      
+      const parts = Array.isArray(msg.content) ? (msg.content as readonly unknown[]) : [msg.content];
+      const msgParts: Array<Record<string, unknown>> = [];
+
+      for (const part of parts) {
+        if (this.isImagePart(part)) {
+          msgParts.push({
+            inline_data: {
+              mime_type: part.mimeType,
+              data: part.base64Data,
+            },
+          });
+        } else {
+          const text = this.extractTextFromMessageParts([part]);
+          if (text) {
+            msgParts.push({ text });
+          }
+        }
+      }
 
       if (role !== currentRole && currentParts.length > 0) {
         contents.push({
@@ -200,7 +274,7 @@ export class MessageConverter {
       }
 
       currentRole = role;
-      currentParts.push({ text: content });
+      currentParts.push(...msgParts);
     });
 
     if (currentParts.length > 0) {

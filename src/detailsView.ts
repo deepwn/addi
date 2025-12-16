@@ -243,15 +243,64 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
         location: vscode.ProgressLocation.Notification,
         title: `Verifying connection to ${data.name || data.id}...`,
         cancellable: true
-    }, async (_progress, token) => {
+    }, async (progress, token) => {
         const controller = new AbortController();
         token.onCancellationRequested(() => {
             controller.abort();
         });
         try {
-            await ModelTester.testModelApi(this._currentProvider!, modelDraft, controller.signal);
-            this._lastVerifiedData = JSON.stringify(data);
-            vscode.window.showInformationMessage(`Verification successful for ${data.name || data.id}!`);
+            const detectInput = data.maxInputTokens === '?' || data.maxInputTokens === '';
+            const detectOutput = data.maxOutputTokens === '?' || data.maxOutputTokens === '';
+            
+            const result = await ModelTester.testModelApi(this._currentProvider!, modelDraft, {
+                detectInput,
+                detectOutput,
+                checkVision: data.imageInput,
+                checkTools: data.toolCalling
+            }, controller.signal, (msg) => {
+                progress.report({ message: msg });
+            });
+
+            if (result.success) {
+                this._lastVerifiedData = JSON.stringify(data);
+                let msg = `Verification successful for ${data.name || data.id}!`;
+                
+                // Update UI if values detected or capabilities changed
+                const updates: any = {};
+                let hasUpdates = false;
+
+                if (result.detectedMaxInputTokens) {
+                    updates.maxInputTokens = result.detectedMaxInputTokens;
+                    msg += ` Detected Input: ${result.detectedMaxInputTokens}`;
+                    hasUpdates = true;
+                }
+                if (result.detectedMaxOutputTokens) {
+                    updates.maxOutputTokens = result.detectedMaxOutputTokens;
+                    msg += ` Detected Output: ${result.detectedMaxOutputTokens}`;
+                    hasUpdates = true;
+                }
+                if (data.imageInput && result.visionSupported === false) {
+                    updates.imageInput = false;
+                    msg += ` (Vision capability removed)`;
+                    hasUpdates = true;
+                }
+                if (data.toolCalling && result.toolCallingSupported === false) {
+                    updates.toolCalling = false;
+                    msg += ` (Tool capability removed)`;
+                    hasUpdates = true;
+                }
+
+                if (hasUpdates && this._view) {
+                    this._view.webview.postMessage({
+                        type: 'updateFields',
+                        payload: updates
+                    });
+                }
+
+                vscode.window.showInformationMessage(msg);
+            } else {
+                throw new Error(result.error || "Unknown error");
+            }
         } catch (e) {
             this._lastVerifiedData = undefined;
             vscode.window.showErrorMessage(`Verification failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -293,13 +342,27 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
                 location: vscode.ProgressLocation.Notification,
                 title: "Verifying model connection...",
                 cancellable: true
-            }, async (_progress, token) => {
+            }, async (progress, token) => {
                  const controller = new AbortController();
                  token.onCancellationRequested(() => controller.abort());
                  try {
-                     await ModelTester.testModelApi(this._currentProvider!, modelData as any, controller.signal);
-                     verified = true;
-                     this._lastVerifiedData = JSON.stringify(data);
+                     // For auto-verify on save, we only check basic connectivity and capabilities if checked.
+                     // We do NOT auto-detect tokens here as it might be slow and user didn't ask for it explicitly via '?'
+                     const result = await ModelTester.testModelApi(this._currentProvider!, modelData as any, {
+                         detectInput: false,
+                         detectOutput: false,
+                         checkVision: data.imageInput,
+                         checkTools: data.toolCalling
+                     }, controller.signal, (msg) => {
+                         progress.report({ message: msg });
+                     });
+                     
+                     if (result.success) {
+                        verified = true;
+                        this._lastVerifiedData = JSON.stringify(data);
+                     } else {
+                        throw new Error(result.error || "Verification failed");
+                     }
                  } catch (e) {
                      errorMsg = e instanceof Error ? e.message : String(e);
                      this._lastVerifiedData = undefined;
@@ -536,6 +599,13 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
                         switch (message.type) {
                             case 'update':
                                 updateContent(message.item, message.mode);
+                                break;
+                            case 'updateFields':
+                                const updates = message.payload;
+                                if (updates.maxInputTokens) mInput.value = updates.maxInputTokens;
+                                if (updates.maxOutputTokens) mOutput.value = updates.maxOutputTokens;
+                                if (updates.imageInput !== undefined) mVision.checked = updates.imageInput;
+                                if (updates.toolCalling !== undefined) mTools.checked = updates.toolCalling;
                                 break;
                         }
                     });
