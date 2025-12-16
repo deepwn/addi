@@ -61,7 +61,7 @@ export class TokenFormatter {
     if (!trimmed) {
       return undefined;
     }
-    const match = /^([0-9]+(?:\.[0-9]+)?)([kmg]?)$/.exec(trimmed);
+    const match = /^([0-9]+(?:\.[0-9]+)?)([k]?)$/.exec(trimmed);
     if (!match) {
       return undefined;
     }
@@ -85,15 +85,17 @@ export class TokenFormatter {
     if (!Number.isFinite(value) || value === undefined || value <= 0) {
       return "";
     }
-    if (value >= 1024) {
-      const scaled = value / 1024;
-      const formatted = Number.isInteger(scaled)
-        ? scaled.toString()
-        : scaled
-            .toFixed(scaled >= 10 ? 1 : 2)
+    const formatNum = (n: number) => {
+      return Number.isInteger(n)
+        ? n.toString()
+        : n
+            .toFixed(n >= 10 ? 1 : 2)
             .replace(/\.0+$/, "")
             .replace(/\.([0-9]*[1-9])0+$/, ".$1");
-      return `${formatted}k`;
+    };
+
+    if (value >= 1024) {
+      return `${formatNum(value / 1024)}k`;
     }
     return Math.floor(value).toString();
   }
@@ -126,8 +128,8 @@ export class InputValidator {
 }
 
 export class UserFeedback {
-  private static async showMessage(type: "info" | "warning" | "error", message: string, actions: string[] = []): Promise<string | undefined> {
-    const options: vscode.MessageOptions = { modal: false }; // ensure toast-style notification
+  private static async showMessage(type: "info" | "warning" | "error", message: string, actions: string[] = [], modal = false): Promise<string | undefined> {
+    const options: vscode.MessageOptions = { modal };
     switch (type) {
       case "warning":
         return await vscode.window.showWarningMessage(message, options, ...actions);
@@ -138,20 +140,24 @@ export class UserFeedback {
     }
   }
 
-  static showInfo(message: string): void {
-    void this.showMessage("info", message);
+  static showInfo(message: string, modal = false): void {
+    void this.showMessage("info", message, [], modal);
   }
 
-  static showError(message: string): void {
-    void this.showMessage("error", message);
+  static showError(message: string, modal = false): void {
+    void this.showMessage("error", message, [], modal);
   }
 
-  static showWarning(message: string): void {
-    void this.showMessage("warning", message);
+  static showWarning(message: string, modal = false): void {
+    void this.showMessage("warning", message, [], modal);
   }
 
-  static async showWarningWithActions(message: string, actions: string[]): Promise<string | undefined> {
-    return await this.showMessage("warning", message, actions);
+  static async showWarningWithActions(message: string, actions: string[], modal = false): Promise<string | undefined> {
+    return await this.showMessage("warning", message, actions, modal);
+  }
+
+  static async showErrorWithActions(message: string, actions: string[], modal = false): Promise<string | undefined> {
+    return await this.showMessage("error", message, actions, modal);
   }
 
   static async showInputBox(options: vscode.InputBoxOptions): Promise<string | undefined> {

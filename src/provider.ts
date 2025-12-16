@@ -322,6 +322,7 @@ export class ProviderModelManager {
 export class ProviderTreeItem extends vscode.TreeItem {
   constructor(public provider: Provider) {
     super(provider.name, vscode.TreeItemCollapsibleState.Collapsed);
+    this.id = provider.id;
     this.contextValue = "provider";
 
     if (provider.description) {

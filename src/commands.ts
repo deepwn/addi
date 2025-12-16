@@ -62,7 +62,7 @@ export class CommandHandler {
       await UserFeedback.showProgress("Testing model API...", async (_progress, token) => {
         await this.testModelApi(provider, modelDraft, token);
       });
-      UserFeedback.showInfo("Model API test passed");
+      // UserFeedback.showInfo("Model API test passed"); // Removed as per user request to avoid conflict with "Model added"
       logger.info("Model API test passed", {
         provider: logger.sanitizeProvider(provider),
         model: logger.sanitizeModel(modelDraft),
@@ -75,16 +75,25 @@ export class CommandHandler {
         model: logger.sanitizeModel(modelDraft),
         error: errorMsg,
       });
-      const decision = await UserFeedback.showWarningWithActions(`Model API test failed: ${errorMsg}`, ["Cancel", continueLabel]);
-      if (decision !== continueLabel) {
-        UserFeedback.showWarning("Canceled model operation");
-        logger.debug("User canceled after failed API test", {
-          provider: logger.sanitizeProvider(provider),
-          model: logger.sanitizeModel(modelDraft),
-        });
-        return false;
+
+      while (true) {
+        const decision = await UserFeedback.showErrorWithActions(`Model API test failed: ${errorMsg}`, ["Show Logs", "Cancel", continueLabel]);
+
+        if (decision === "Show Logs") {
+          logger.show();
+          continue;
+        }
+
+        if (decision !== continueLabel) {
+          UserFeedback.showWarning("Canceled model operation");
+          logger.debug("User canceled after failed API test", {
+            provider: logger.sanitizeProvider(provider),
+            model: logger.sanitizeModel(modelDraft),
+          });
+          return false;
+        }
+        return true;
       }
-      return true;
     }
   }
 
@@ -1076,7 +1085,7 @@ export class CommandHandler {
 
     const maxInputTokensStr = await UserFeedback.showInputBox({
       prompt: "Enter max input tokens",
-      value: ConfigManager.getDefaultMaxInputTokens().toString(),
+      value: TokenFormatter.format(ConfigManager.getDefaultMaxInputTokens()),
       validateInput: InputValidator.validateTokens,
     });
     if (!maxInputTokensStr) {
@@ -1086,7 +1095,7 @@ export class CommandHandler {
 
     const maxOutputTokensStr = await UserFeedback.showInputBox({
       prompt: "Enter max output tokens",
-      value: ConfigManager.getDefaultMaxOutputTokens().toString(),
+      value: TokenFormatter.format(ConfigManager.getDefaultMaxOutputTokens()),
       validateInput: InputValidator.validateTokens,
     });
     if (!maxOutputTokensStr) {
@@ -1215,7 +1224,7 @@ export class CommandHandler {
 
     const maxInputTokensStr = await UserFeedback.showInputBox({
       prompt: "Enter max input tokens",
-      value: model.maxInputTokens.toString(),
+      value: TokenFormatter.format(model.maxInputTokens),
       validateInput: InputValidator.validateTokens,
     });
     if (!maxInputTokensStr) {
@@ -1225,7 +1234,7 @@ export class CommandHandler {
 
     const maxOutputTokensStr = await UserFeedback.showInputBox({
       prompt: "Enter max output tokens",
-      value: model.maxOutputTokens.toString(),
+      value: TokenFormatter.format(model.maxOutputTokens),
       validateInput: InputValidator.validateTokens,
     });
     if (!maxOutputTokensStr) {
@@ -1274,7 +1283,7 @@ export class CommandHandler {
       },
     };
 
-    const proceed = await this.promptModelApiTest(provider, modelDraft, "still update");
+    const proceed = await this.promptModelApiTest(provider, modelDraft, "Still update");
     if (!proceed) {
       logger.warn("editModel aborted after API test", {
         provider: logger.sanitizeProvider(provider),
