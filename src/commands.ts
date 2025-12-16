@@ -1077,11 +1077,28 @@ export class CommandHandler {
       return;
     }
 
-    // family 不再让用户输入，统一使用默认 "addi"。如后续需要多家族扩展，可在设置中开启高级模式再暴露输入。
-    const family = ConfigManager.getDefaultModelFamily().trim() || "addi";
+    const defaultFamily = ConfigManager.getDefaultModelFamily().trim() || "addi";
+    const familyInput = await UserFeedback.showInputBox({
+      prompt: "Enter model family (optional)",
+      value: defaultFamily,
+    });
+    if (familyInput === undefined) {
+      logger.debug("addModel canceled at family input", logger.sanitizeProvider(item.provider));
+      return;
+    }
+    const family = familyInput.trim() || defaultFamily;
 
-    // 版本隐藏，默认 1.0.0
-    const version = ConfigManager.getDefaultModelVersion().trim() || "1.0.0";
+    const defaultVersion = ConfigManager.getDefaultModelVersion().trim() || "1.0.0";
+    const versionInput = await UserFeedback.showInputBox({
+      prompt: "Enter model version (optional)",
+      value: defaultVersion,
+      validateInput: (v) => (v ? InputValidator.validateVersion(v) : null),
+    });
+    if (versionInput === undefined) {
+      logger.debug("addModel canceled at version input", logger.sanitizeProvider(item.provider));
+      return;
+    }
+    const version = versionInput.trim() || defaultVersion;
 
     const maxInputTokensStr = await UserFeedback.showInputBox({
       prompt: "Enter max input tokens",
@@ -1216,11 +1233,28 @@ export class CommandHandler {
       return;
     }
 
-    // 编辑时同样隐藏 family，保持原值；若原值为空则回退 addi
-    const family = (model.family && model.family.trim()) || "addi";
+    const currentFamily = (model.family && model.family.trim()) || "addi";
+    const familyInput = await UserFeedback.showInputBox({
+      prompt: "Edit model family",
+      value: currentFamily,
+    });
+    if (familyInput === undefined) {
+      logger.debug("editModel canceled at family input", logger.sanitizeModel(model));
+      return;
+    }
+    const family = familyInput.trim() || "addi";
 
-    // 编辑时隐藏版本，沿用原值，缺失则设为 1.0.0
-    const version = model.version || "1.0.0";
+    const currentVersion = model.version || "1.0.0";
+    const versionInput = await UserFeedback.showInputBox({
+      prompt: "Edit model version",
+      value: currentVersion,
+      validateInput: (v) => (v ? InputValidator.validateVersion(v) : null),
+    });
+    if (versionInput === undefined) {
+      logger.debug("editModel canceled at version input", logger.sanitizeModel(model));
+      return;
+    }
+    const version = versionInput.trim() || "1.0.0";
 
     const maxInputTokensStr = await UserFeedback.showInputBox({
       prompt: "Enter max input tokens",
