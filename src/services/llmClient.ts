@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 import { Model, Provider } from "../types";
 import { logger } from "../logger";
 import { MessageConverter } from "./messageConverter";
-import { ToolRegistry } from "../toolRegistry";
 
 const TOKEN_LIMIT = 1024 * 1024 * 4;
 
@@ -12,7 +11,7 @@ export class LLMClient {
     model: Model,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
-    toolDefinitions: ReadonlyArray<Record<string, unknown>> | undefined,
+    toolDefinitions: ReadonlyArray<vscode.LanguageModelChatTool> | undefined,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken
   ): Promise<void> {
@@ -73,7 +72,7 @@ export class LLMClient {
     model: Model,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
-    toolDefinitions: ReadonlyArray<Record<string, unknown>> | undefined,
+    toolDefinitions: ReadonlyArray<vscode.LanguageModelChatTool> | undefined,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken,
     toolInvocationToken?: unknown
@@ -163,7 +162,7 @@ export class LLMClient {
     model: Model,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
-    toolDefinitions: ReadonlyArray<Record<string, unknown>> | undefined,
+    toolDefinitions: ReadonlyArray<vscode.LanguageModelChatTool> | undefined,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken,
     toolInvocationToken?: unknown
@@ -260,7 +259,7 @@ export class LLMClient {
     model: Model,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
-    toolDefinitions: ReadonlyArray<Record<string, unknown>> | undefined,
+    toolDefinitions: ReadonlyArray<vscode.LanguageModelChatTool> | undefined,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken
   ): Promise<void> {
@@ -387,11 +386,10 @@ export class LLMClient {
   }
 
   private getNumberOption(options: vscode.ProvideLanguageModelChatResponseOptions | undefined, key: string): number | undefined {
-    if (!options) {
+    if (!options || !options.modelOptions) {
       return undefined;
     }
-    const bag = options as unknown as Record<string, unknown>;
-    const value = bag[key];
+    const value = options.modelOptions[key];
     if (typeof value === "number" && Number.isFinite(value)) {
       return value;
     }
@@ -411,6 +409,8 @@ export class LLMClient {
     }
 
     const sanitized: Record<string, unknown> = {};
+    const modelOptions = options.modelOptions || {};
+
     const numericKeys = ["maxOutputTokens", "responseMaxTokens", "temperature", "topP", "presencePenalty", "frequencyPenalty", "maxInputTokens", "maxPromptTokens"];
     for (const key of numericKeys) {
       const value = this.getNumberOption(options, key);
@@ -419,41 +419,39 @@ export class LLMClient {
       }
     }
 
-    const bag = options as unknown as Record<string, unknown>;
-    if (Array.isArray(bag["stopSequences"])) {
-      sanitized["stopSequenceCount"] = (bag["stopSequences"] as readonly unknown[]).length;
+    if (Array.isArray(modelOptions["stopSequences"])) {
+      sanitized["stopSequenceCount"] = (modelOptions["stopSequences"] as readonly unknown[]).length;
     }
 
-    const responseFormat = bag["responseFormat"];
+    const responseFormat = modelOptions["responseFormat"];
     if (typeof responseFormat === "string") {
       sanitized["responseFormat"] = responseFormat;
     } else if (responseFormat && typeof responseFormat === "object") {
       sanitized["responseFormatKeys"] = Object.keys(responseFormat as Record<string, unknown>);
     }
 
-    if (Array.isArray(bag["tools"])) {
-      const toolEntries = (bag["tools"] as ReadonlyArray<Record<string, unknown>>).map((tool) => ({
-        id: typeof tool["id"] === "string" ? tool["id"] : undefined,
-        name: typeof tool["name"] === "string" ? tool["name"] : undefined,
-        hasParameters: tool["parameters"] !== undefined,
+    if (options.tools && options.tools.length > 0) {
+      const toolEntries = options.tools.map((tool) => ({
+        name: tool.name,
+        hasParameters: true, // LanguageModelChatTool always has parameters/inputSchema
       }));
       sanitized["tools"] = { count: toolEntries.length, definitions: toolEntries };
     }
 
-    if (bag["toolInvocationToken"] !== undefined) {
+    if (modelOptions["toolInvocationToken"] !== undefined) {
       sanitized["hasToolInvocationToken"] = true;
     }
 
     const booleanKeys = ["stream", "jsonMode", "toolChoiceRequired", "silent"];
     for (const key of booleanKeys) {
-      const value = bag[key];
+      const value = modelOptions[key];
       if (typeof value === "boolean") {
         sanitized[key] = value;
       }
     }
 
     const excludedKeys = new Set<string>([...numericKeys, "stopSequences", "responseFormat", "tools", "toolInvocationToken", ...booleanKeys]);
-    const otherKeys = Object.keys(bag).filter((key) => !excludedKeys.has(key));
+    const otherKeys = Object.keys(modelOptions).filter((key) => !excludedKeys.has(key));
     if (otherKeys.length > 0) {
       sanitized["otherOptionKeys"] = otherKeys.sort();
     }
@@ -461,7 +459,7 @@ export class LLMClient {
     return Object.keys(sanitized).length > 0 ? sanitized : undefined;
   }
 
-  private convertToFunctionTools(toolDefinitions: ReadonlyArray<Record<string, unknown>> | undefined):
+  private convertToFunctionTools(toolDefinitions: ReadonlyArray<vscode.LanguageModelChatTool> | undefined):
     | Array<{
         type: "function";
         function: { name: string; description?: string; parameters: Record<string, unknown> };
@@ -472,42 +470,23 @@ export class LLMClient {
     }
     const seen = new Set<string>();
     const converted: Array<{ type: "function"; function: { name: string; description?: string; parameters: Record<string, unknown> } }> = [];
-    for (const definition of toolDefinitions) {
-      if (!definition || typeof definition !== "object") {
-        continue;
-      }
-      const record = definition as Record<string, unknown>;
-      const identifier = this.getToolIdentifierFromDefinition(record);
+    for (const tool of toolDefinitions) {
+      const identifier = tool.name;
       if (!identifier || seen.has(identifier)) {
         continue;
       }
       seen.add(identifier);
-      const metadata = ToolRegistry.findTool(identifier);
-      const descriptionCandidate =
-        metadata?.description ??
-        (typeof record["description"] === "string" ? (record["description"] as string) : typeof record["detail"] === "string" ? (record["detail"] as string) : undefined);
-      const parametersCandidate = metadata?.parameters ?? this.normalizeToolParameters(record["parameters"] ?? record["inputSchema"] ?? record["schema"]);
+      
       converted.push({
         type: "function",
         function: {
           name: identifier,
-          description: descriptionCandidate ?? "",
-          parameters: parametersCandidate,
+          description: tool.description,
+          parameters: this.normalizeToolParameters(tool.inputSchema),
         },
       });
     }
     return converted.length > 0 ? converted : undefined;
-  }
-
-  private getToolIdentifierFromDefinition(record: Record<string, unknown>): string | undefined {
-    const keys = ["id", "identifier", "name"];
-    for (const key of keys) {
-      const value = record[key];
-      if (typeof value === "string" && value.trim().length > 0) {
-        return value.trim();
-      }
-    }
-    return undefined;
   }
 
   private normalizeToolParameters(value: unknown): Record<string, unknown> {

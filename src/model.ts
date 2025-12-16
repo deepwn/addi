@@ -128,13 +128,13 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
 
       if (this.isAnthropicEndpoint(provider.apiEndpoint)) {
         logger.debug("Dispatching request to Anthropic endpoint", logger.sanitizeProvider(provider));
-        await this.llmClient.callAnthropicApi(provider, storedModel, messages, options, toolDefinitions, progress, token, (options as any)?.toolInvocationToken);
+        await this.llmClient.callAnthropicApi(provider, storedModel, messages, options, toolDefinitions, progress, token, options?.modelOptions?.["toolInvocationToken"]);
         return;
       }
 
       if (this.isGoogleEndpoint(provider.apiEndpoint)) {
         logger.debug("Dispatching request to Google endpoint", logger.sanitizeProvider(provider));
-        await this.llmClient.callGoogleApi(provider, storedModel, messages, options, toolDefinitions, progress, token, (options as any)?.toolInvocationToken);
+        await this.llmClient.callGoogleApi(provider, storedModel, messages, options, toolDefinitions, progress, token, options?.modelOptions?.["toolInvocationToken"]);
         return;
       }
 
@@ -182,9 +182,8 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     return endpoint.includes("googleapis.com");
   }
 
-  private resolveToolDefinitions(options: vscode.ProvideLanguageModelChatResponseOptions | undefined): ReadonlyArray<Record<string, unknown>> | undefined {
-    const bag = options as unknown as Record<string, unknown> | undefined;
-    const provided = Array.isArray(bag?.["tools"]) ? (bag!["tools"] as ReadonlyArray<Record<string, unknown>>) : undefined;
+  private resolveToolDefinitions(options: vscode.ProvideLanguageModelChatResponseOptions | undefined): ReadonlyArray<vscode.LanguageModelChatTool> | undefined {
+    const provided = options?.tools;
     if (provided && provided.length > 0) {
       ToolRegistry.captureHostTools(provided);
       return provided;

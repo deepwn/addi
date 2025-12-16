@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ModelDraft, Provider } from "./types";
-import { MessageConverter, CustomImagePart } from "./services/messageConverter";
+import { MessageConverter } from "./services/messageConverter";
 
 export interface TestResult {
     success: boolean;
@@ -130,11 +130,10 @@ export class ModelTester {
       
       let messages: any[];
       if (payload.type === 'vision') {
-          const imagePart: CustomImagePart = {
-              type: "image",
-              mimeType: "image/gif",
-              base64Data: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
-          };
+          const imagePart = new vscode.LanguageModelDataPart(
+              Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64"),
+              "image/gif"
+          );
           const mockMsg = {
               role: vscode.LanguageModelChatMessageRole.User,
               content: [
@@ -181,11 +180,10 @@ export class ModelTester {
       
       let messages: any[];
       if (payload.type === 'vision') {
-          const imagePart: CustomImagePart = {
-              type: "image",
-              mimeType: "image/gif",
-              base64Data: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
-          };
+          const imagePart = new vscode.LanguageModelDataPart(
+              Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64"),
+              "image/gif"
+          );
           const mockMsg = {
               role: vscode.LanguageModelChatMessageRole.User,
               content: [
@@ -229,11 +227,10 @@ export class ModelTester {
 
       let contents: any[];
       if (payload.type === 'vision') {
-          const imagePart: CustomImagePart = {
-              type: "image",
-              mimeType: "image/gif",
-              base64Data: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
-          };
+          const imagePart = new vscode.LanguageModelDataPart(
+              Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64"),
+              "image/gif"
+          );
           const mockMsg = {
               role: vscode.LanguageModelChatMessageRole.User,
               content: [

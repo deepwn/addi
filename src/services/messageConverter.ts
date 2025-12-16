@@ -1,30 +1,8 @@
 import * as vscode from "vscode";
 
-export interface CustomImagePart {
-  type: "image";
-  mimeType: string;
-  base64Data: string;
-}
-
 export class MessageConverter {
-  static mapChatRole(role: unknown): string {
-    if (role === vscode.LanguageModelChatMessageRole.Assistant) {
-      return "assistant";
-    }
-    if (role === vscode.LanguageModelChatMessageRole.User) {
-      return "user";
-    }
-    const value = typeof role === "string" ? role.toLowerCase() : undefined;
-    switch (value) {
-      case "assistant":
-        return "assistant";
-      case "tool":
-        return "tool";
-      case "system":
-        return "system";
-      default:
-        return "user";
-    }
+  static mapChatRole(role: vscode.LanguageModelChatMessageRole): string {
+    return role === vscode.LanguageModelChatMessageRole.User ? "user" : "assistant";
   }
 
   static extractTextFromMessageParts(parts: readonly unknown[]): string {
@@ -51,18 +29,19 @@ export class MessageConverter {
     return textParts.join("");
   }
 
-  static isImagePart(part: unknown): part is CustomImagePart {
-    return (
-      typeof part === "object" &&
-      part !== null &&
-      (part as any).type === "image" &&
-      typeof (part as any).base64Data === "string" &&
-      typeof (part as any).mimeType === "string"
-    );
+  static isImagePart(part: unknown): part is vscode.LanguageModelDataPart {
+    return part instanceof vscode.LanguageModelDataPart && part.mimeType.startsWith("image/");
+  }
+
+  static uint8ArrayToBase64(array: Uint8Array): string {
+    return Buffer.from(array).toString('base64');
   }
 
   static extractToolCallFromParts(parts: readonly unknown[]): { name: string; arguments: string; id?: string } | undefined {
     for (const part of parts) {
+      if (part instanceof vscode.LanguageModelToolCallPart) {
+        return { name: part.name, arguments: JSON.stringify(part.input), id: part.callId };
+      }
       if (!part || typeof part !== "object") {
         continue;
       }
@@ -88,6 +67,13 @@ export class MessageConverter {
 
   static extractToolResultFromParts(parts: readonly unknown[]): { id?: string; content: string } | undefined {
     for (const part of parts) {
+      if (part instanceof vscode.LanguageModelToolResultPart) {
+        const content = part.content.map(p => {
+            if (p instanceof vscode.LanguageModelTextPart) { return p.value; }
+            return "";
+        }).join("");
+        return { id: part.callId, content };
+      }
       if (!part || typeof part !== "object") {
         continue;
       }
@@ -123,7 +109,7 @@ export class MessageConverter {
         if (this.isImagePart(part)) {
           contentParts.push({
             type: "image_url",
-            image_url: { url: `data:${part.mimeType};base64,${part.base64Data}` },
+            image_url: { url: `data:${part.mimeType};base64,${this.uint8ArrayToBase64(part.data)}` },
           });
         } else {
           const text = this.extractTextFromMessageParts([part]);
@@ -203,7 +189,7 @@ export class MessageConverter {
       if (msg.name === "system") {
         continue;
       }
-      const role = msg.role === vscode.LanguageModelChatMessageRole.User ? "user" : "assistant";
+      const role = this.mapChatRole(msg.role);
       
       const parts = Array.isArray(msg.content) ? (msg.content as readonly unknown[]) : [msg.content];
       const contentParts: any[] = [];
@@ -215,7 +201,7 @@ export class MessageConverter {
             source: {
               type: "base64",
               media_type: part.mimeType,
-              data: part.base64Data,
+              data: this.uint8ArrayToBase64(part.data),
             },
           });
         } else {
@@ -254,7 +240,7 @@ export class MessageConverter {
           msgParts.push({
             inline_data: {
               mime_type: part.mimeType,
-              data: part.base64Data,
+              data: this.uint8ArrayToBase64(part.data),
             },
           });
         } else {

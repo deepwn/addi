@@ -16,7 +16,7 @@ export class ToolRegistry {
   private static hostTools = new Map<string, ToolMetadata>();
   private static fallbackTools: Map<string, ToolMetadata> | null = null;
 
-  static captureHostTools(tools: ReadonlyArray<Record<string, unknown>> | undefined): void {
+  static captureHostTools(tools: ReadonlyArray<vscode.LanguageModelChatTool> | undefined): void {
     this.hostTools.clear();
     if (!tools || tools.length === 0) {
       return;
@@ -29,9 +29,9 @@ export class ToolRegistry {
     }
   }
 
-  static getFallbackToolDefinitions(): Array<Record<string, unknown>> {
+  static getFallbackToolDefinitions(): Array<vscode.LanguageModelChatTool> {
     const map = this.ensureFallbackTools();
-    const definitions: Array<Record<string, unknown>> = [];
+    const definitions: Array<vscode.LanguageModelChatTool> = [];
     for (const tool of map.values()) {
       definitions.push(this.toDefinition(tool));
     }
@@ -73,14 +73,11 @@ export class ToolRegistry {
     }
     const map = new Map<string, ToolMetadata>();
     try {
-      const lm = (vscode as any)?.lm;
-      const rawTools = lm?.tools;
-      if (Array.isArray(rawTools)) {
-        for (const raw of rawTools as readonly unknown[]) {
-          const metadata = this.normalizeTool(raw as Record<string, unknown>, "fallback");
-          if (metadata) {
-            map.set(metadata.id, metadata);
-          }
+      const rawTools = vscode.lm.tools;
+      for (const raw of rawTools) {
+        const metadata = this.normalizeTool(raw, "fallback");
+        if (metadata) {
+          map.set(metadata.id, metadata);
         }
       }
     } catch (error) {
@@ -101,21 +98,38 @@ export class ToolRegistry {
     return undefined;
   }
 
-  private static normalizeTool(raw: Record<string, unknown> | undefined, source: BuiltinToolSource): ToolMetadata | undefined {
+  private static normalizeTool(raw: vscode.LanguageModelChatTool | Record<string, unknown> | undefined, source: BuiltinToolSource): ToolMetadata | undefined {
     if (!raw || typeof raw !== "object") {
       return undefined;
     }
-    const id = this.extractIdentifier(raw);
-    if (!id) {
-      return undefined;
+    
+    let id: string | undefined;
+    let name: string;
+    let description: string | undefined;
+    let parameters: Record<string, unknown>;
+    let tags: string[] | undefined;
+
+    if ('inputSchema' in raw) {
+        // It's likely a LanguageModelChatTool
+        const tool = raw as vscode.LanguageModelChatTool;
+        name = tool.name;
+        id = tool.name; // Use name as ID for LanguageModelChatTool
+        description = tool.description;
+        parameters = this.normalizeParameters(tool.inputSchema);
+    } else {
+        // Legacy record
+        const record = raw as Record<string, unknown>;
+        id = this.extractIdentifier(record);
+        if (!id) { return undefined; }
+        const rawName = record["name"];
+        name = typeof rawName === "string" && rawName.trim().length > 0 ? rawName.trim() : id;
+        const descValue = record["description"] ?? record["detail"] ?? record["summary"];
+        description = typeof descValue === "string" ? descValue : undefined;
+        parameters = this.normalizeParameters(record["parameters"] ?? record["inputSchema"] ?? record["schema"]);
+        const rawTags = record["tags"];
+        tags = Array.isArray(rawTags) ? rawTags.filter((tag): tag is string => typeof tag === "string") : undefined;
     }
-    const rawName = raw["name"];
-    const name = typeof rawName === "string" && rawName.trim().length > 0 ? rawName.trim() : id;
-    const descValue = raw["description"] ?? raw["detail"] ?? raw["summary"];
-    const description = typeof descValue === "string" ? descValue : undefined;
-    const parameters = this.normalizeParameters(raw["parameters"] ?? raw["inputSchema"] ?? raw["schema"]);
-    const rawTags = raw["tags"];
-    const tags = Array.isArray(rawTags) ? rawTags.filter((tag): tag is string => typeof tag === "string") : undefined;
+
     const metadata: ToolMetadata = {
       id,
       name,
@@ -153,18 +167,11 @@ export class ToolRegistry {
     };
   }
 
-  private static toDefinition(tool: ToolMetadata): Record<string, unknown> {
-    const definition: Record<string, unknown> = {
-      id: tool.id,
+  private static toDefinition(tool: ToolMetadata): vscode.LanguageModelChatTool {
+    return {
       name: tool.name,
-      parameters: tool.parameters,
+      description: tool.description ?? "",
+      inputSchema: tool.parameters,
     };
-    if (tool.description) {
-      definition["description"] = tool.description;
-    }
-    if (tool.tags && tool.tags.length > 0) {
-      definition["tags"] = tool.tags;
-    }
-    return definition;
   }
 }
