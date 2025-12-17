@@ -906,6 +906,10 @@ export class CommandHandler {
             throw new Error("Configuration format is invalid");
           }
 
+          if ("providerType" in provider && typeof provider.providerType !== "string") {
+            throw new Error("Configuration providerType must be a string");
+          }
+
           for (const model of provider.models) {
             if (!model || typeof model !== "object") {
               throw new Error("Configuration format is invalid");

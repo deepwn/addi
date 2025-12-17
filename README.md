@@ -90,7 +90,7 @@ Addi 让你在 VS Code 中为 GitHub Copilot 添加自定义 / 第三方 / 自�
 ### 本地 VSIX
 
 ```powershell
-yarn install; yarn vsix
+npm install; npm run package
 code --install-extension addi.vsix
 # 或在 VS Code 文件列表中右键安装
 ```
@@ -120,6 +120,19 @@ Activity Bar 中的 Addi 图标 → 展开树：
 2. 填写：id / 名称(可选) / maxInputTokens / maxOutputTokens / 视觉支持 / 工具支持
 3. 保存后挂载在对应 Provider 下
 
+### 模型验证 Model Verification
+
+在添加或编辑模型时，点击底部的 **"Verify"** 按钮可以自动测试：
+
+- **连通性**：检查 API Key 和 Endpoint 是否有效
+- **视觉能力**：自动检测模型是否支持图片输入
+- **工具调用**：自动检测模型是否支持 Function Calling
+- **Token 限制**：自动探测并填充 Max Input / Output Tokens (使用二分查找与参数估算，不消耗真实 Token)
+
+> [!Tip]
+> 如果不确定模型的 Token 限制，可以将 `Max Input Tokens` 和 `Max Output Tokens` 留空（或设为`?`），点击 Verify 后 Addi 会自动探测并填入建议值。
+> 所有附属能力（视觉 / 工具调用）也会在验证过程中自动测试并更新勾选（不适配则会自动去除勾选）。
+
 ### 快速编辑 Edit API Key
 
 Provider 节点右侧钥匙图标 → 输入密钥 → 保存。
@@ -130,13 +143,13 @@ Copilot 侧边栏 → 模型下拉 → 管理模型 → 选择 Addi → 勾选�
 
 ## 命令 Commands
 
-| Command ID          | 标题                 | 用途         |
-| ------------------- | -------------------- | ------------ |
-| `addi.manage`       | Management           | 打开管理视图 |
-| `addi.exportConfig` | Export Configuration | 导出配置     |
-| `addi.importConfig` | Import Configuration | 导入配置     |
+| Command ID          | 标题                 | 用途               |
+| ------------------- | -------------------- | ------------------ |
+| `addi.manage`       | Management           | 打开管理视图       |
+| `addi.exportConfig` | Export Configuration | 导出配置           |
+| `addi.importConfig` | Import Configuration | 导入配置           |
 | `addi.showLogs`     | Show Logs            | 打开 Addi 日志输出 |
-| `addi.setLogLevel`  | Set Log Level        | 快速调整日志级别 |
+| `addi.setLogLevel`  | Set Log Level        | 快速调整日志级别   |
 
 `Show Logs` 将在 VS Code 的 **输出 (Output)** 面板中定位 “Addi” 通道，可随时查看调试信息。通过 `Set Log Level` 或在设置中修改 `addi.logLevel`，即可在 `off / error / warn / info / debug` 之间切换输出详细程度。
 日志内容会自动脱敏，并额外记录模型解析、请求选项等关键上下文，便于排查问题。
@@ -165,6 +178,7 @@ Copilot 侧边栏 → 模型下拉 → 管理模型 → 选择 Addi → 勾选�
   {
     "id": "provider-id",
     "name": "OpenAI",
+    "providerType": "openai",
     "description": "提供 GPT 系列模型",
     "website": "https://openai.com",
     "apiEndpoint": "https://api.openai.com/v1",
@@ -220,12 +234,12 @@ A: 扩展对供应商和模型数量没有硬性限制，但建议根据您的�
 
 ## 故障排除 Troubleshooting
 
-| 问题         | 排查步骤                                        |
-| ------------ | ----------------------------------------------- |
-| 无法切换模型 | 重启 VS Code / 确认 Provider Key / 重新勾选模型 |
+| 问题         | 排查步骤                                              |
+| ------------ | ----------------------------------------------------- |
+| 无法切换模型 | 重启 VS Code / 确认 Provider Key / 重新勾选模型       |
 | 请求失败     | 查看 Addi 输出日志 & 控制台 / 校验 API Endpoint & Key |
-| 流式不工作   | Provider 是否支持 SSE；禁用流后重试             |
-| 配置未同步   | 检查 `addi.saveConfigToSettingsSync` 设置       |
+| 流式不工作   | Provider 是否支持 SSE；禁用流后重试                   |
+| 配置未同步   | 检查 `addi.saveConfigToSettingsSync` 设置             |
 
 ## 许可证 License
 

@@ -4,6 +4,21 @@ All notable changes to the "addi" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.0.5] - 2025-12-17
+
+### Added
+- **Token Limit Detection**: Implemented binary search for more efficient and accurate input/output token limit detection.
+- **Cost Optimization**: Token limit testing now uses parameter estimation to avoid consuming user tokens.
+- **Vision Testing**: Unified vision capability testing with a standardized 1x1 GIF image.
+- **Auto-Verification**: The "Verify" button now automatically tests for capabilities (vision, tools) and detects token limits.
+
+### Changed
+- **Type Safety**: Increased usage of `@types/vscode` built-in types and classes.
+- **Logging**: Enhanced logging with more detailed execution information for debugging.
+
+### Fixed
+- **Message Converter**: Resolved issues with image attachment handling in `messageConverter`.
+
 ## [0.0.4] - 2025-12-15
 
 ### Fixed
