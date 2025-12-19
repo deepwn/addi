@@ -12,6 +12,7 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
   private _currentItem?: ProviderTreeItem | ModelTreeItem | undefined;
   private _currentProvider: Provider | undefined;
   private _lastVerifiedData: string | undefined;
+  private _detectedSpeed: number | undefined;
   private _viewState: { mode: 'edit' | 'create'; type: 'provider' | 'model'; parentId?: string } = { mode: 'edit', type: 'provider' };
 
   constructor(private readonly _extensionUri: vscode.Uri, private readonly _manager: ProviderModelManager, private readonly _refreshTree: () => void) {
@@ -118,6 +119,7 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
 
   public update(item: ProviderTreeItem | ModelTreeItem | undefined) {
     this._lastVerifiedData = undefined;
+    this._detectedSpeed = undefined;
     if (item) {
         vscode.commands.executeCommand('setContext', 'addi:showDetails', true);
     } else {
@@ -256,14 +258,20 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
                 detectInput,
                 detectOutput,
                 checkVision: data.imageInput,
-                checkTools: data.toolCalling
+                checkTools: data.toolCalling,
+                checkSpeed: true
             }, controller.signal, (msg) => {
                 progress.report({ message: msg });
             });
 
             if (result.success) {
                 this._lastVerifiedData = JSON.stringify(data);
+                this._detectedSpeed = result.speed;
                 let msg = `Verification successful for ${data.name || data.id}!`;
+                
+                if (result.speed) {
+                    msg += ` Speed: ${result.speed.toFixed(1)} t/s`;
+                }
                 
                 // Update UI if values detected or capabilities changed
                 const updates: any = {};
@@ -330,6 +338,11 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
       }
     };
 
+    if (this._detectedSpeed) {
+        (modelData as any).averageSpeed = this._detectedSpeed;
+        (modelData as any).speedHistory = [this._detectedSpeed];
+    }
+
     if (this._currentProvider) {
         let verified = false;
         
@@ -352,7 +365,8 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
                          detectInput: false,
                          detectOutput: false,
                          checkVision: data.imageInput,
-                         checkTools: data.toolCalling
+                         checkTools: data.toolCalling,
+                         checkSpeed: false
                      }, controller.signal, (msg) => {
                          progress.report({ message: msg });
                      });

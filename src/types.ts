@@ -12,6 +12,8 @@ export type ModelDraft = {
   maxOutputTokens: number;
   capabilities: ModelCapabilities;
   sid?: string;
+  speedHistory?: number[];
+  averageSpeed?: number;
 };
 
 export interface Model extends Omit<ModelDraft, "sid"> {
