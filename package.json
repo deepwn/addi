@@ -3,7 +3,7 @@
   "icon": "resources/icon-bg.min.png",
   "displayName": "Addi",
   "description": "add more custom AI providers and models for your copilot",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "deepwn",
   "repository": {
     "type": "git",
@@ -122,6 +122,11 @@
           "command": "addi.exportConfig",
           "when": "view == addiProviders",
           "group": "navigation@3"
+        },
+        {
+          "command": "addi.openSettings",
+          "when": "view == addiProviders",
+          "group": "navigation@4"
         }
       ],
       "panel/title": [
@@ -256,6 +261,27 @@
           ],
           "default": "warn",
           "description": "Minimum log level written to the Addi output channel"
+        },
+        "addi.sortRule": {
+          "type": "string",
+          "enum": [
+            "none",
+            "alphabet",
+            "input tokens",
+            "output tokens"
+          ],
+          "default": "none",
+          "description": "Sort rule for providers and models"
+        },
+        "addi.sortTarget": {
+          "type": "string",
+          "enum": [
+            "providers",
+            "models",
+            "both"
+          ],
+          "default": "both",
+          "description": "Target to apply the sort rule"
         }
       }
     },
@@ -356,6 +382,13 @@
         "title": "Set Log Level",
         "shortTitle": "Log Level",
         "icon": "$(debug-breakpoint-log)",
+        "category": "Addi"
+      },
+      {
+        "command": "addi.openSettings",
+        "title": "Open Settings",
+        "shortTitle": "Settings",
+        "icon": "$(settings-gear)",
         "category": "Addi"
       }
     ],

@@ -4,6 +4,13 @@ All notable changes to the "addi" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.0.6] - 2025-12-19
+
+### Added
+- **Settings Access**: Added a settings button to the Addi panel title bar for quick access to extension configuration.
+- **Sorting Options**: Introduced `addi.sortRule` to sort providers and models by alphabet, input tokens, or output tokens.
+- **Sort Targeting**: Added `addi.sortTarget` to control whether sorting applies to providers, models, or both.
+
 ## [0.0.5] - 2025-12-17
 
 ### Added

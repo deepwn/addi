@@ -357,12 +357,39 @@ export class AddiTreeDataProvider implements vscode.TreeDataProvider<vscode.Tree
   }
 
   getChildren(element?: vscode.TreeItem): vscode.ProviderResult<vscode.TreeItem[]> {
+    const config = vscode.workspace.getConfiguration("addi");
+    const sortRule = config.get<string>("sortRule", "none");
+    const sortTarget = config.get<string>("sortTarget", "both");
+
     if (!element) {
-      const providers = this.manager.getProviders();
+      let providers = this.manager.getProviders();
+      // Sort providers only if target includes providers
+      if (sortRule !== "none" && (sortTarget === "providers" || sortTarget === "both")) {
+        if (sortRule === "alphabet") {
+          providers = [...providers].sort((a, b) => a.name.localeCompare(b.name));
+        }
+      }
       return providers.map((p) => new ProviderTreeItem(p));
     }
     if (element instanceof ProviderTreeItem) {
-      return element.provider.models.map((m) => new ModelTreeItem(m));
+      let models = [...element.provider.models];
+      // Sort models only if target includes models
+      if (sortRule !== "none" && (sortTarget === "models" || sortTarget === "both")) {
+        models.sort((a, b) => {
+          if (sortRule === "alphabet") {
+            return a.name.localeCompare(b.name);
+          }
+          // Numeric sort for tokens (more to less)
+          if (sortRule === "input tokens") {
+            return (b.maxInputTokens || 0) - (a.maxInputTokens || 0);
+          }
+          if (sortRule === "output tokens") {
+            return (b.maxOutputTokens || 0) - (a.maxOutputTokens || 0);
+          }
+          return 0;
+        });
+      }
+      return models.map((m) => new ModelTreeItem(m));
     }
     return [];
   }

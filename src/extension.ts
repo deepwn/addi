@@ -41,6 +41,9 @@ export function activate(context: vscode.ExtensionContext) {
         const nextLevel = readLogLevel();
         logger.setLevel(nextLevel);
       }
+      if (event.affectsConfiguration("addi.sortRule") || event.affectsConfiguration("addi.sortTarget")) {
+        treeDataProvider.refresh();
+      }
     })
   );
 
@@ -113,12 +116,15 @@ export function activate(context: vscode.ExtensionContext) {
         void vscode.window.showErrorMessage("Model not found");
         return;
       }
-      // 直接打开 playground
+      // open playground
       void commandHandler.openPlayground(result.provider, result.model);
     })
   );
   context.subscriptions.push(vscode.commands.registerCommand("addi.exportConfig", () => commandHandler.exportConfig()));
   context.subscriptions.push(vscode.commands.registerCommand("addi.importConfig", () => commandHandler.importConfig()));
+  context.subscriptions.push(vscode.commands.registerCommand("addi.openSettings", () => {
+      vscode.commands.executeCommand('workbench.action.openSettings', '@ext:deepwn.addi');
+  }));
 
   const detailsProvider = new DetailsViewProvider(context.extensionUri, manager, () => treeDataProvider.refresh());
   commandHandler.setDetailsViewProvider(detailsProvider);
