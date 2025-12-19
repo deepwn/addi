@@ -36,6 +36,10 @@ export class ConfigManager {
   static getDefaultModelVersion(): string {
     return this.getConfiguration().get<string>("defaultModelVersion", "1.0.0");
   }
+
+  static getConfirmDelete(): boolean {
+    return this.getConfiguration().get<boolean>("confirmDelete", true);
+  }
 }
 
 export class TokenFormatter {
@@ -182,8 +186,8 @@ export class UserFeedback {
     );
   }
 
-  static async showConfirmDialog(message: string, severity: "info" | "warning" | "error" = "warning"): Promise<boolean> {
-    const choice = await this.showMessage(severity, message, ["Confirm", "Cancel"]);
+  static async showConfirmDialog(message: string, severity: "info" | "warning" | "error" = "warning", modal = false): Promise<boolean> {
+    const choice = await this.showMessage(severity, message, ["Confirm", "Cancel"], modal);
     return choice === "Confirm";
   }
 }

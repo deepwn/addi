@@ -245,6 +245,11 @@
           "default": "1.0.0",
           "description": "Default model version to use for AI providers"
         },
+        "addi.confirmDelete": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to require confirmation before deleting providers or models"
+        },
         "addi.saveConfigToSettingsSync": {
           "type": "boolean",
           "default": true,

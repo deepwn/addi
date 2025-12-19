@@ -357,11 +357,18 @@ export class CommandHandler {
 
   async deleteProvider(item: ProviderTreeItem): Promise<void> {
     logger.info("Command deleteProvider invoked", logger.sanitizeProvider(item.provider));
-    const confirm = await UserFeedback.showConfirmDialog(`Are you sure you want to delete provider "${item.provider.name}"? This will also delete all of its models.`);
+    
+    if (ConfigManager.getConfirmDelete()) {
+      const confirm = await UserFeedback.showConfirmDialog(
+        `Are you sure you want to delete provider "${item.provider.name}"? This will also delete all of its models.`,
+        "warning",
+        true
+      );
 
-    if (!confirm) {
-      logger.debug("deleteProvider canceled by user", logger.sanitizeProvider(item.provider));
-      return;
+      if (!confirm) {
+        logger.debug("deleteProvider canceled by user", logger.sanitizeProvider(item.provider));
+        return;
+      }
     }
 
     try {
@@ -623,11 +630,18 @@ export class CommandHandler {
 
   async deleteModel(item: ModelTreeItem): Promise<void> {
     logger.info("Command deleteModel invoked", logger.sanitizeModel(item.model));
-    const confirm = await UserFeedback.showConfirmDialog(`Are you sure you want to delete the model "${item.model.name}"?`);
+    
+    if (ConfigManager.getConfirmDelete()) {
+      const confirm = await UserFeedback.showConfirmDialog(
+        `Are you sure you want to delete the model "${item.model.name}"?`,
+        "warning",
+        true
+      );
 
-    if (!confirm) {
-      logger.debug("deleteModel canceled by user", logger.sanitizeModel(item.model));
-      return;
+      if (!confirm) {
+        logger.debug("deleteModel canceled by user", logger.sanitizeModel(item.model));
+        return;
+      }
     }
 
     try {
