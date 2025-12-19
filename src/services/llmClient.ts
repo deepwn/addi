@@ -188,14 +188,17 @@ export class LLMClient {
         void toolInvocationToken;
         const obj = data as Record<string, unknown> | undefined;
         if (!obj) {
-          return;
+          return 0;
         }
         if (obj["type"] === "content_block_delta") {
           const delta = obj["delta"] as Record<string, unknown> | undefined;
           if (delta && typeof delta["text"] === "string") {
-            progress.report(new vscode.LanguageModelTextPart(delta["text"] as string));
+            const text = delta["text"] as string;
+            progress.report(new vscode.LanguageModelTextPart(text));
+            return Math.max(1, Math.ceil(text.length / 4));
           }
         }
+        return 0;
       },
       onStats
     );
@@ -300,12 +303,13 @@ export class LLMClient {
         void toolInvocationToken;
         const obj = data as Record<string, unknown> | undefined;
         if (!obj) {
-          return;
+          return 0;
         }
         const candidates = obj["candidates"];
         if (!Array.isArray(candidates)) {
-          return;
+          return 0;
         }
+        let count = 0;
         for (const candidate of candidates) {
           const cand = candidate as Record<string, unknown> | undefined;
           const content = cand?.["content"] as Record<string, unknown> | undefined;
@@ -316,10 +320,13 @@ export class LLMClient {
           for (const part of parts as unknown[]) {
             const p = part as Record<string, unknown> | undefined;
             if (p && typeof p["text"] === "string") {
-              progress.report(new vscode.LanguageModelTextPart(p["text"] as string));
+              const text = p["text"] as string;
+              progress.report(new vscode.LanguageModelTextPart(text));
+              count += Math.max(1, Math.ceil(text.length / 4));
             }
           }
         }
+        return count;
       },
       onStats
     );
@@ -740,7 +747,7 @@ export class LLMClient {
             }
 
             const reasoning = delta?.reasoning_content ?? data?.choices?.[0]?.message?.reasoning_content;
-            if (typeof reasoning === "string") {
+            if (typeof reasoning === "string" && reasoning.length > 0) {
               if (firstTokenTime === 0) {
                 firstTokenTime = Date.now();
               }
@@ -749,7 +756,7 @@ export class LLMClient {
             }
 
             const content = delta?.content ?? data?.choices?.[0]?.message?.content;
-            if (typeof content === "string") {
+            if (typeof content === "string" && content.length > 0) {
               if (firstTokenTime === 0) {
                 firstTokenTime = Date.now();
               }
@@ -914,7 +921,7 @@ export class LLMClient {
   private async streamSseResponse(
     response: Response,
     token: vscode.CancellationToken,
-    onData: (data: unknown) => void,
+    onData: (data: unknown) => number, // Return token count increment
     onStats?: (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => void
   ): Promise<void> {
     if (!response.body) {
@@ -949,24 +956,13 @@ export class LLMClient {
         if (line.startsWith("data: ") && line !== "data: [DONE]") {
           try {
             const data = JSON.parse(line.slice(6));
-            if (firstTokenTime === 0) {
-              firstTokenTime = Date.now();
+            const increment = onData(data);
+            if (increment > 0) {
+              if (firstTokenTime === 0) {
+                firstTokenTime = Date.now();
+              }
+              tokenCount += increment;
             }
-            // Estimate token count based on data size?
-            // For Anthropic, data is a JSON object.
-            // We can't easily know the token count here without inspecting data.
-            // So we rely on onData to update tokenCount?
-            // Or we just count chunks.
-            // Let's count chunks for now, or let onData return token count increment.
-            // But onData is void.
-            // Let's just increment tokenCount by 1 for each data event as a rough proxy,
-            // or better, inspect data if possible.
-            // But streamSseResponse is generic.
-            // Let's assume 1 chunk = 1 token roughly, or update onData to return count.
-            // Updating onData signature is invasive.
-            // Let's just increment tokenCount.
-            tokenCount++;
-            onData(data);
           } catch (error) {
             logger.warn("Failed to parse SSE data", { error: error instanceof Error ? error.message : String(error) });
           }
@@ -984,7 +980,7 @@ export class LLMClient {
   private async streamLineDelimitedJson(
     response: Response,
     token: vscode.CancellationToken,
-    onData: (data: unknown) => void,
+    onData: (data: unknown) => number, // Return token count increment
     onStats?: (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => void
   ): Promise<void> {
     if (!response.body) {
@@ -1022,11 +1018,13 @@ export class LLMClient {
         }
         try {
           const data = JSON.parse(trimmed);
-          if (firstTokenTime === 0) {
-            firstTokenTime = Date.now();
+          const increment = onData(data);
+          if (increment > 0) {
+            if (firstTokenTime === 0) {
+              firstTokenTime = Date.now();
+            }
+            tokenCount += increment;
           }
-          tokenCount++;
-          onData(data);
         } catch (error) {
           logger.warn("Failed to parse line-delimited JSON", { error: error instanceof Error ? error.message : String(error) });
         }
