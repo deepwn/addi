@@ -7,7 +7,7 @@ import { logger } from "./logger";
 export class ProviderModelManager {
   // Key used to persist providers in globalState and optionally sync via Settings Sync
   public static readonly STORAGE_KEY = "addi.providers";
-  private syncEnabled = false;
+  private syncEnabled?: boolean;
 
   constructor(private context: vscode.ExtensionContext) {}
 
@@ -26,7 +26,7 @@ export class ProviderModelManager {
   }
 
   isSettingsSyncEnabled(): boolean {
-    return this.syncEnabled;
+    return this.syncEnabled ?? false;
   }
 
   getProviders(): Provider[] {

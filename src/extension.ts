@@ -93,6 +93,15 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(treeView);
 
+  // Refresh the tree view when the window gains focus to reflect any changes from settings sync
+  context.subscriptions.push(
+    vscode.window.onDidChangeWindowState((e) => {
+      if (e.focused) {
+        treeDataProvider.refresh();
+      }
+    })
+  );
+
   const commandHandler = new CommandHandler(manager, treeDataProvider, context);
 
   context.subscriptions.push(
