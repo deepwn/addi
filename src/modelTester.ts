@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
-import { ModelDraft, Provider } from "./types";
+import { ModelDraft, Provider, Model } from "./types";
 import { MessageConverter } from "./services/messageConverter";
+import { LLMClient } from "./services/llmClient";
 
 export interface TestResult {
   success: boolean;
@@ -9,6 +10,7 @@ export interface TestResult {
   detectedMaxOutputTokens?: number;
   visionSupported?: boolean;
   toolCallingSupported?: boolean;
+  speed?: number;
 }
 
 export interface TestOptions {
@@ -16,6 +18,7 @@ export interface TestOptions {
   detectOutput: boolean;
   checkVision: boolean;
   checkTools: boolean;
+  checkSpeed: boolean;
 }
 
 export type ProgressCallback = (message: string) => void;
@@ -68,6 +71,12 @@ export class ModelTester {
         onProgress?.("Detecting input token limits...");
         result.detectedMaxInputTokens = await this.detectLimit(provider, modelDraft, "input", token, onProgress);
       }
+
+      // 5. Speed Test
+      if (options.checkSpeed) {
+        onProgress?.("Measuring response speed...");
+        result.speed = await this.measureSpeed(provider, modelDraft, token);
+      }
     } catch (e) {
       result.success = false;
       result.error = e instanceof Error ? e.message : String(e);
@@ -76,9 +85,57 @@ export class ModelTester {
     return result;
   }
 
+  private static async measureSpeed(provider: Provider, modelDraft: ModelDraft, token: AbortSignal): Promise<number> {
+    const client = new LLMClient();
+    const model: Model = { ...modelDraft, sid: "temp" };
+    const messages = [vscode.LanguageModelChatMessage.User("Count from 1 to 50. e.g. 1, 2, 3...")];
+
+    let firstTokenTime = 0;
+    let endTime = 0;
+    let tokenCount = 0;
+
+    const progressReporter: vscode.Progress<vscode.LanguageModelResponsePart> = {
+      report: () => {
+        // no-op
+      },
+    };
+
+    const cancellationToken: vscode.CancellationToken = {
+      isCancellationRequested: token.aborted,
+      onCancellationRequested: (listener) => {
+        token.addEventListener("abort", listener);
+        return { dispose: () => token.removeEventListener("abort", listener) };
+      },
+    };
+
+    const onStats = (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => {
+      firstTokenTime = stats.firstTokenTime;
+      endTime = stats.endTime;
+      tokenCount = stats.tokenCount;
+    };
+
+    try {
+      if (provider.providerType === "openai" || provider.providerType === "generic") {
+        await client.callOpenAiApi(provider, model, messages, undefined, undefined, progressReporter, cancellationToken, onStats);
+      } else if (provider.providerType === "anthropic") {
+        await client.callAnthropicApi(provider, model, messages, undefined, undefined, progressReporter, cancellationToken, undefined, onStats);
+      } else if (provider.providerType === "google") {
+        await client.callGoogleApi(provider, model, messages, undefined, undefined, progressReporter, cancellationToken, undefined, onStats);
+      }
+    } catch (e) {
+      return 0;
+    }
+
+    if (firstTokenTime > 0 && tokenCount > 0) {
+      const duration = Math.max((endTime - firstTokenTime) / 1000, 0.001);
+      return tokenCount / duration;
+    }
+    return 0;
+  }
+
   private static async detectLimit(provider: Provider, modelDraft: ModelDraft, mode: "input" | "output", token: AbortSignal, onProgress?: ProgressCallback): Promise<number> {
     // Coarse search (Reverse)
-    const coarsePoints = [262144, 196608, 131072, 65536, 1024]; // 256k, 192k, 128k, 64k, 1k
+    const coarsePoints = [524288, 262144, 196608, 131072, 65536, 1024]; // 512k, 256k, 192k, 128k, 64k, 1k
     let high = 0;
     let low = 0;
 

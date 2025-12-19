@@ -208,12 +208,12 @@
         {
           "command": "addi.editModel",
           "when": "view == addiProviders && viewItem == model",
-          "group": "modify"
+          "group": "modify@1"
         },
         {
           "command": "addi.deleteModel",
           "when": "view == addiProviders && viewItem == model",
-          "group": "modify"
+          "group": "modify@2"
         },
         {
           "command": "addi.useModel",

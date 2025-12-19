@@ -23,14 +23,22 @@ export class ModelTreeItem extends vscode.TreeItem {
     const inputTokensDetail = TokenFormatter.formatDetailed(model.maxInputTokens);
     const outputTokensDetail = TokenFormatter.formatDetailed(model.maxOutputTokens);
     let tooltip = `name: ${model.name}\nremoteId: ${model.id}\nfamily: ${model.family}\nversion: ${model.version}\ninput: ${inputTokensDetail}\noutput: ${outputTokensDetail}`;
+    if (model.averageSpeed) {
+      tooltip += `\nspeed: ${model.averageSpeed.toFixed(1)} t/s`;
+    } else {
+      tooltip += `\nspeed: ?/s`;
+    }
     if (capabilityHints.length > 0) {
       tooltip += `\ncapabilities: ${capabilityHints.join(", ")}`;
     }
     this.tooltip = tooltip;
     const inputSummary = TokenFormatter.format(model.maxInputTokens);
     const outputSummary = TokenFormatter.format(model.maxOutputTokens);
-    const tokenSuffix = inputSummary && outputSummary ? ` · ${inputSummary}↑/${outputSummary}↓` : "";
-    this.description = `${tokenSuffix}`;
+    let desc = inputSummary && outputSummary ? ` · ${inputSummary}↑/${outputSummary}↓` : "";
+    if (model.averageSpeed) {
+      desc += ` · ${model.averageSpeed.toFixed(0)}/s`;
+    }
+    this.description = desc;
   }
 }
 
@@ -122,19 +130,34 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     }
 
     const startTime = Date.now();
+    const onStats = (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => {
+      logger.debug("onStats called", stats);
+      if (stats.tokenCount > 0) {
+        const duration = Math.max((stats.endTime - stats.firstTokenTime) / 1000, 0.001); // Ensure at least 1ms duration
+        const speed = stats.tokenCount / duration;
+        logger.info("Calculated speed", { speed, duration, tokenCount: stats.tokenCount });
+        // Update speed
+        if ("updateModelSpeed" in this.repository) {
+          (this.repository as any).updateModelSpeed(provider.id, storedModel.sid, speed);
+        } else {
+          logger.warn("Repository does not support updateModelSpeed");
+        }
+      }
+    };
+
     try {
       if (this.isOpenAiEndpoint(provider.apiEndpoint)) {
         logger.debug("Dispatching request to OpenAI endpoint", logger.sanitizeProvider(provider));
-        await this.llmClient.callOpenAiApi(provider, storedModel, messages, options, toolDefinitions, progress, token);
+        await this.llmClient.callOpenAiApi(provider, storedModel, messages, options, toolDefinitions, progress, token, onStats);
       } else if (this.isAnthropicEndpoint(provider.apiEndpoint)) {
         logger.debug("Dispatching request to Anthropic endpoint", logger.sanitizeProvider(provider));
-        await this.llmClient.callAnthropicApi(provider, storedModel, messages, options, toolDefinitions, progress, token, options?.modelOptions?.["toolInvocationToken"]);
+        await this.llmClient.callAnthropicApi(provider, storedModel, messages, options, toolDefinitions, progress, token, options?.modelOptions?.["toolInvocationToken"], onStats);
       } else if (this.isGoogleEndpoint(provider.apiEndpoint)) {
         logger.debug("Dispatching request to Google endpoint", logger.sanitizeProvider(provider));
-        await this.llmClient.callGoogleApi(provider, storedModel, messages, options, toolDefinitions, progress, token, options?.modelOptions?.["toolInvocationToken"]);
+        await this.llmClient.callGoogleApi(provider, storedModel, messages, options, toolDefinitions, progress, token, options?.modelOptions?.["toolInvocationToken"], onStats);
       } else {
         logger.debug("Dispatching request to generic OpenAI-compatible endpoint", logger.sanitizeProvider(provider));
-        await this.llmClient.callGenericOpenAiCompatibleApi(provider, storedModel, messages, options, toolDefinitions, progress, token);
+        await this.llmClient.callGenericOpenAiCompatibleApi(provider, storedModel, messages, options, toolDefinitions, progress, token, onStats);
       }
     } catch (error) {
       logger.error("Model query error", {

@@ -13,7 +13,8 @@ export class LLMClient {
     options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
     toolDefinitions: ReadonlyArray<vscode.LanguageModelChatTool> | undefined,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
+    onStats?: (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => void
   ): Promise<void> {
     const url = this.resolveChatCompletionsUrl(provider.apiEndpoint ?? "", "https://api.openai.com/v1");
     const modelIdentifier = this.resolveModelIdentifier(model);
@@ -78,7 +79,8 @@ export class LLMClient {
       },
       progress,
       token,
-      true
+      true,
+      onStats
     );
     logger.debug("callOpenAiApi completed", {
       provider: logger.sanitizeProvider(provider),
@@ -94,7 +96,8 @@ export class LLMClient {
     toolDefinitions: ReadonlyArray<vscode.LanguageModelChatTool> | undefined,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken,
-    toolInvocationToken?: unknown
+    toolInvocationToken?: unknown,
+    onStats?: (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => void
   ): Promise<void> {
     void toolDefinitions;
     const baseUrl = this.normalizeBaseUrl(provider.apiEndpoint ?? "", "https://api.anthropic.com");
@@ -178,19 +181,27 @@ export class LLMClient {
       throw new Error(`Anthropic API Error: ${response.status} ${response.statusText}`);
     }
 
-    await this.streamSseResponse(response, token, (data) => {
-      void toolInvocationToken;
-      const obj = data as Record<string, unknown> | undefined;
-      if (!obj) {
-        return;
-      }
-      if (obj["type"] === "content_block_delta") {
-        const delta = obj["delta"] as Record<string, unknown> | undefined;
-        if (delta && typeof delta["text"] === "string") {
-          progress.report(new vscode.LanguageModelTextPart(delta["text"] as string));
+    await this.streamSseResponse(
+      response,
+      token,
+      (data) => {
+        void toolInvocationToken;
+        const obj = data as Record<string, unknown> | undefined;
+        if (!obj) {
+          return 0;
         }
-      }
-    });
+        if (obj["type"] === "content_block_delta") {
+          const delta = obj["delta"] as Record<string, unknown> | undefined;
+          if (delta && typeof delta["text"] === "string") {
+            const text = delta["text"] as string;
+            progress.report(new vscode.LanguageModelTextPart(text));
+            return Math.max(1, Math.ceil(text.length / 4));
+          }
+        }
+        return 0;
+      },
+      onStats
+    );
     logger.debug("callAnthropicApi completed", {
       provider: logger.sanitizeProvider(provider),
       model: logger.sanitizeModel(model),
@@ -205,7 +216,8 @@ export class LLMClient {
     toolDefinitions: ReadonlyArray<vscode.LanguageModelChatTool> | undefined,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken,
-    toolInvocationToken?: unknown
+    toolInvocationToken?: unknown,
+    onStats?: (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => void
   ): Promise<void> {
     void toolDefinitions;
     const baseUrl = this.normalizeBaseUrl(provider.apiEndpoint ?? "", "https://generativelanguage.googleapis.com/v1beta");
@@ -284,31 +296,40 @@ export class LLMClient {
       throw new Error(`Google API Error: ${response.status} ${response.statusText}`);
     }
 
-    await this.streamLineDelimitedJson(response, token, (data) => {
-      void toolInvocationToken;
-      const obj = data as Record<string, unknown> | undefined;
-      if (!obj) {
-        return;
-      }
-      const candidates = obj["candidates"];
-      if (!Array.isArray(candidates)) {
-        return;
-      }
-      for (const candidate of candidates) {
-        const cand = candidate as Record<string, unknown> | undefined;
-        const content = cand?.["content"] as Record<string, unknown> | undefined;
-        const parts = content?.["parts"] as unknown;
-        if (!Array.isArray(parts)) {
-          continue;
+    await this.streamLineDelimitedJson(
+      response,
+      token,
+      (data) => {
+        void toolInvocationToken;
+        const obj = data as Record<string, unknown> | undefined;
+        if (!obj) {
+          return 0;
         }
-        for (const part of parts as unknown[]) {
-          const p = part as Record<string, unknown> | undefined;
-          if (p && typeof p["text"] === "string") {
-            progress.report(new vscode.LanguageModelTextPart(p["text"] as string));
+        const candidates = obj["candidates"];
+        if (!Array.isArray(candidates)) {
+          return 0;
+        }
+        let count = 0;
+        for (const candidate of candidates) {
+          const cand = candidate as Record<string, unknown> | undefined;
+          const content = cand?.["content"] as Record<string, unknown> | undefined;
+          const parts = content?.["parts"] as unknown;
+          if (!Array.isArray(parts)) {
+            continue;
+          }
+          for (const part of parts as unknown[]) {
+            const p = part as Record<string, unknown> | undefined;
+            if (p && typeof p["text"] === "string") {
+              const text = p["text"] as string;
+              progress.report(new vscode.LanguageModelTextPart(text));
+              count += Math.max(1, Math.ceil(text.length / 4));
+            }
           }
         }
-      }
-    });
+        return count;
+      },
+      onStats
+    );
     logger.debug("callGoogleApi completed", {
       provider: logger.sanitizeProvider(provider),
       model: logger.sanitizeModel(model),
@@ -322,7 +343,8 @@ export class LLMClient {
     options: vscode.ProvideLanguageModelChatResponseOptions | undefined,
     toolDefinitions: ReadonlyArray<vscode.LanguageModelChatTool> | undefined,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
+    onStats?: (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => void
   ): Promise<void> {
     const url = this.resolveChatCompletionsUrl(provider.apiEndpoint ?? "", "https://api.openai.com/v1");
     const modelIdentifier = this.resolveModelIdentifier(model);
@@ -387,7 +409,8 @@ export class LLMClient {
       },
       progress,
       token,
-      false
+      false,
+      onStats
     );
     logger.debug("callGenericOpenAiCompatibleApi completed", {
       provider: logger.sanitizeProvider(provider),
@@ -587,7 +610,8 @@ export class LLMClient {
     request: { url: string; headers: Record<string, string>; body: Record<string, unknown> },
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken,
-    strict: boolean
+    strict: boolean,
+    onStats?: (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => void
   ): Promise<void> {
     const response = await fetch(request.url, {
       method: "POST",
@@ -638,6 +662,9 @@ export class LLMClient {
     let pendingFunctionCall: { name?: string; arguments?: string } | null = null;
     // For newer OpenAI-style tool_calls streaming we may receive incremental tool_calls entries
     const pendingToolCalls: Record<number, { id?: string | undefined; name?: string | undefined; arguments?: string | undefined }> = {};
+
+    let firstTokenTime = 0;
+    let tokenCount = 0;
 
     outerLoop: while (true) {
       if (token.isCancellationRequested) {
@@ -720,12 +747,20 @@ export class LLMClient {
             }
 
             const reasoning = delta?.reasoning_content ?? data?.choices?.[0]?.message?.reasoning_content;
-            if (typeof reasoning === "string") {
+            if (typeof reasoning === "string" && reasoning.length > 0) {
+              if (firstTokenTime === 0) {
+                firstTokenTime = Date.now();
+              }
+              tokenCount += Math.max(1, Math.ceil(reasoning.length / 4));
               progress.report(new vscode.LanguageModelTextPart(reasoning));
             }
 
             const content = delta?.content ?? data?.choices?.[0]?.message?.content;
-            if (typeof content === "string") {
+            if (typeof content === "string" && content.length > 0) {
+              if (firstTokenTime === 0) {
+                firstTokenTime = Date.now();
+              }
+              tokenCount += Math.max(1, Math.ceil(content.length / 4));
               progress.report(new vscode.LanguageModelTextPart(content));
             }
             // If the event signals finish and we have pending tool_calls aggregated, emit them
@@ -758,6 +793,9 @@ export class LLMClient {
                   for (const k of Object.keys(pendingToolCalls)) {
                     delete pendingToolCalls[Number(k)];
                   }
+                  if (onStats && firstTokenTime > 0) {
+                    onStats({ firstTokenTime, endTime: Date.now(), tokenCount });
+                  }
                   return;
                 }
 
@@ -787,6 +825,9 @@ export class LLMClient {
                 for (const k of Object.keys(pendingToolCalls)) {
                   delete pendingToolCalls[Number(k)];
                 }
+                if (onStats && firstTokenTime > 0) {
+                  onStats({ firstTokenTime, endTime: Date.now(), tokenCount });
+                }
                 return;
               } catch (err) {
                 // If parsing/reporting fails, continue streaming and surface text
@@ -803,6 +844,9 @@ export class LLMClient {
                 const inputObj = pendingFunctionCall.arguments ? JSON.parse(pendingFunctionCall.arguments) : {};
                 progress.report(new vscode.LanguageModelToolCallPart(callId, pendingFunctionCall.name ?? "", inputObj));
                 pendingFunctionCall = null;
+                if (onStats && firstTokenTime > 0) {
+                  onStats({ firstTokenTime, endTime: Date.now(), tokenCount });
+                }
                 return;
               } catch (err) {
                 progress.report(new vscode.LanguageModelTextPart(pendingFunctionCall?.arguments ?? ""));
@@ -833,6 +877,12 @@ export class LLMClient {
         break;
       }
     }
+
+    if (onStats && firstTokenTime > 0) {
+      onStats({ firstTokenTime, endTime: Date.now(), tokenCount });
+    }
+
+    // Emit any pending tool calls that weren't flushed by a finish_reason event
 
     // Emit any pending tool calls that weren't flushed by a finish_reason event
     const indexes = Object.keys(pendingToolCalls)
@@ -868,7 +918,12 @@ export class LLMClient {
     }
   }
 
-  private async streamSseResponse(response: Response, token: vscode.CancellationToken, onData: (data: unknown) => void): Promise<void> {
+  private async streamSseResponse(
+    response: Response,
+    token: vscode.CancellationToken,
+    onData: (data: unknown) => number, // Return token count increment
+    onStats?: (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => void
+  ): Promise<void> {
     if (!response.body) {
       throw new Error("Response body is empty");
     }
@@ -876,6 +931,8 @@ export class LLMClient {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let firstTokenTime = 0;
+    let tokenCount = 0;
 
     while (true) {
       if (token.isCancellationRequested) {
@@ -899,7 +956,13 @@ export class LLMClient {
         if (line.startsWith("data: ") && line !== "data: [DONE]") {
           try {
             const data = JSON.parse(line.slice(6));
-            onData(data);
+            const increment = onData(data);
+            if (increment > 0) {
+              if (firstTokenTime === 0) {
+                firstTokenTime = Date.now();
+              }
+              tokenCount += increment;
+            }
           } catch (error) {
             logger.warn("Failed to parse SSE data", { error: error instanceof Error ? error.message : String(error) });
           }
@@ -909,9 +972,17 @@ export class LLMClient {
         break;
       }
     }
+    if (onStats && firstTokenTime > 0) {
+      onStats({ firstTokenTime, endTime: Date.now(), tokenCount });
+    }
   }
 
-  private async streamLineDelimitedJson(response: Response, token: vscode.CancellationToken, onData: (data: unknown) => void): Promise<void> {
+  private async streamLineDelimitedJson(
+    response: Response,
+    token: vscode.CancellationToken,
+    onData: (data: unknown) => number, // Return token count increment
+    onStats?: (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => void
+  ): Promise<void> {
     if (!response.body) {
       throw new Error("Response body is empty");
     }
@@ -919,6 +990,8 @@ export class LLMClient {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let firstTokenTime = 0;
+    let tokenCount = 0;
 
     while (true) {
       if (token.isCancellationRequested) {
@@ -945,7 +1018,13 @@ export class LLMClient {
         }
         try {
           const data = JSON.parse(trimmed);
-          onData(data);
+          const increment = onData(data);
+          if (increment > 0) {
+            if (firstTokenTime === 0) {
+              firstTokenTime = Date.now();
+            }
+            tokenCount += increment;
+          }
         } catch (error) {
           logger.warn("Failed to parse line-delimited JSON", { error: error instanceof Error ? error.message : String(error) });
         }
@@ -953,6 +1032,9 @@ export class LLMClient {
       if (done) {
         break;
       }
+    }
+    if (onStats && firstTokenTime > 0) {
+      onStats({ firstTokenTime, endTime: Date.now(), tokenCount });
     }
   }
 }

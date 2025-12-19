@@ -85,6 +85,7 @@ export function activate(context: vscode.ExtensionContext) {
   vscode.lm.registerLanguageModelChatProvider("addi-provider", new AddiChatProvider(manager));
 
   const treeDataProvider = new AddiTreeDataProvider(manager);
+  context.subscriptions.push(manager.onDidUpdate(() => treeDataProvider.refresh()));
   vscode.window.registerTreeDataProvider("addiProviders", treeDataProvider);
 
   const treeView = vscode.window.createTreeView("addiProviders", {

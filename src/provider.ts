@@ -7,7 +7,9 @@ import { logger } from "./logger";
 export class ProviderModelManager {
   // Key used to persist providers in globalState and optionally sync via Settings Sync
   public static readonly STORAGE_KEY = "addi.providers";
-  private syncEnabled?: boolean;
+  private syncEnabled = false;
+  private readonly _onDidUpdate = new vscode.EventEmitter<void>();
+  public readonly onDidUpdate = this._onDidUpdate.event;
 
   constructor(private context: vscode.ExtensionContext) {}
 
@@ -43,6 +45,7 @@ export class ProviderModelManager {
   async saveProviders(providers: Provider[]): Promise<void> {
     this.normalizeProvidersInPlace(providers as Array<Provider & Record<string, unknown>>);
     await this.context.globalState.update(ProviderModelManager.STORAGE_KEY, providers);
+    this._onDidUpdate.fire();
     logger.info("Saved providers", { providerCount: providers.length });
   }
 
@@ -122,6 +125,16 @@ export class ProviderModelManager {
 
         if (mutableModel["detail"] !== undefined && typeof mutableModel["detail"] !== "string") {
           delete mutableModel["detail"];
+          changed = true;
+        }
+
+        // Ensure speed fields are preserved/initialized
+        if (mutableModel["speedHistory"] !== undefined && !Array.isArray(mutableModel["speedHistory"])) {
+          mutableModel["speedHistory"] = [];
+          changed = true;
+        }
+        if (mutableModel["averageSpeed"] !== undefined && typeof mutableModel["averageSpeed"] !== "number") {
+          delete mutableModel["averageSpeed"];
           changed = true;
         }
 
@@ -267,6 +280,8 @@ export class ProviderModelManager {
           maxInputTokens: modelData.maxInputTokens ?? existingModel.maxInputTokens,
           maxOutputTokens: modelData.maxOutputTokens ?? existingModel.maxOutputTokens,
           capabilities: this.normalizeCapabilities(modelData.capabilities, existingModel.capabilities),
+          ...((modelData.speedHistory ?? existingModel.speedHistory) ? { speedHistory: modelData.speedHistory ?? existingModel.speedHistory } : {}),
+          ...((modelData.averageSpeed ?? existingModel.averageSpeed) !== undefined ? { averageSpeed: modelData.averageSpeed ?? existingModel.averageSpeed } : {}),
         };
         providers[providerIndex]!.models[modelIndex] = updatedModel;
         await this.saveProviders(providers);
@@ -279,6 +294,36 @@ export class ProviderModelManager {
     }
     logger.warn("Attempted to update missing model", { providerId, modelSid });
     return false;
+  }
+
+  async updateModelSpeed(providerId: string, modelSid: string, speed: number): Promise<void> {
+    logger.debug("updateModelSpeed called", { providerId, modelSid, speed });
+    const providers = this.getProviders();
+    const providerIndex = providers.findIndex((p) => p.id === providerId);
+    if (providerIndex >= 0) {
+      const modelIndex = providers[providerIndex]!.models.findIndex((m) => m.sid === modelSid);
+      if (modelIndex >= 0) {
+        const model = providers[providerIndex]!.models[modelIndex]!;
+        const history = model.speedHistory ? [...model.speedHistory] : [];
+        history.push(speed);
+        if (history.length > 5) {
+          history.shift();
+        }
+        const average = history.reduce((a, b) => a + b, 0) / history.length;
+
+        providers[providerIndex]!.models[modelIndex] = {
+          ...model,
+          speedHistory: history,
+          averageSpeed: average,
+        };
+        await this.saveProviders(providers);
+        logger.debug("Model speed updated", { modelSid, speed, average });
+      } else {
+        logger.warn("Model not found for speed update", { modelSid });
+      }
+    } else {
+      logger.warn("Provider not found for speed update", { providerId });
+    }
   }
 
   async deleteModel(modelSid: string): Promise<boolean> {
