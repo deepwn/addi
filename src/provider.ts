@@ -366,7 +366,19 @@ export class AddiTreeDataProvider implements vscode.TreeDataProvider<vscode.Tree
       // Sort providers only if target includes providers
       if (sortRule !== "none" && (sortTarget === "providers" || sortTarget === "both")) {
         if (sortRule === "alphabet") {
-          providers = [...providers].sort((a, b) => a.name.localeCompare(b.name));
+          providers = [...providers].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+        } else if (sortRule === "input tokens") {
+          providers = [...providers].sort((a, b) => {
+            const maxA = Math.max(...a.models.map((m) => m.maxInputTokens || 0), 0);
+            const maxB = Math.max(...b.models.map((m) => m.maxInputTokens || 0), 0);
+            return maxB - maxA;
+          });
+        } else if (sortRule === "output tokens") {
+          providers = [...providers].sort((a, b) => {
+            const maxA = Math.max(...a.models.map((m) => m.maxOutputTokens || 0), 0);
+            const maxB = Math.max(...b.models.map((m) => m.maxOutputTokens || 0), 0);
+            return maxB - maxA;
+          });
         }
       }
       return providers.map((p) => new ProviderTreeItem(p));
@@ -377,7 +389,7 @@ export class AddiTreeDataProvider implements vscode.TreeDataProvider<vscode.Tree
       if (sortRule !== "none" && (sortTarget === "models" || sortTarget === "both")) {
         models.sort((a, b) => {
           if (sortRule === "alphabet") {
-            return a.name.localeCompare(b.name);
+            return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
           }
           // Numeric sort for tokens (more to less)
           if (sortRule === "input tokens") {
