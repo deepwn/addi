@@ -10,8 +10,36 @@ export class ProviderModelManager {
   private syncEnabled = false;
   private readonly _onDidUpdate = new vscode.EventEmitter<void>();
   public readonly onDidUpdate = this._onDidUpdate.event;
+  private pollInterval: NodeJS.Timeout | undefined;
+  private lastKnownState: string = "";
 
-  constructor(private context: vscode.ExtensionContext) {}
+  constructor(private context: vscode.ExtensionContext) {
+    this.startPolling();
+  }
+
+  dispose() {
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = undefined;
+    }
+  }
+
+  private startPolling() {
+    // Initial state
+    const stored = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
+    this.lastKnownState = JSON.stringify(stored);
+
+    // Poll for changes in globalState (synced from other machines)
+    this.pollInterval = setInterval(() => {
+      const current = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
+      const currentStr = JSON.stringify(current);
+      if (currentStr !== this.lastKnownState) {
+        logger.info("Detected external change in providers, refreshing...");
+        this.lastKnownState = currentStr;
+        this._onDidUpdate.fire();
+      }
+    }, 2000); // Check every 2 seconds
+  }
 
   setSettingsSync(enabled: boolean): void {
     if (this.syncEnabled === enabled) {
@@ -31,6 +59,10 @@ export class ProviderModelManager {
     return this.syncEnabled ?? false;
   }
 
+  refresh(): void {
+    this._onDidUpdate.fire();
+  }
+
   getProviders(): Provider[] {
     const stored = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
     const mutated = this.normalizeProvidersInPlace(stored as Array<Provider & Record<string, unknown>>);
@@ -45,6 +77,10 @@ export class ProviderModelManager {
   async saveProviders(providers: Provider[]): Promise<void> {
     this.normalizeProvidersInPlace(providers as Array<Provider & Record<string, unknown>>);
     await this.context.globalState.update(ProviderModelManager.STORAGE_KEY, providers);
+    
+    // Update local state hash to prevent self-triggering
+    this.lastKnownState = JSON.stringify(providers);
+
     this._onDidUpdate.fire();
     logger.info("Saved providers", { providerCount: providers.length });
   }

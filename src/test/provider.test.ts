@@ -55,6 +55,10 @@ suite("ProviderModelManager Test Suite", () => {
     manager = new ProviderModelManager(context as unknown as vscode.ExtensionContext);
   });
 
+  teardown(() => {
+    manager.dispose();
+  });
+
   test("should add provider", async () => {
     const provider = await manager.addProvider({
       name: "Test Provider",
@@ -274,5 +278,13 @@ suite("ProviderModelManager Test Suite", () => {
     assert.strictEqual(model.capabilities?.toolCalling, 1); // Legacy value preserved
     assert.strictEqual((model as any).imageInput, undefined);
     assert.strictEqual((model as any).toolCalling, undefined);
+  });
+
+  test("should fire onDidUpdate when refresh is called", (done) => {
+    const disposable = manager.onDidUpdate(() => {
+      disposable.dispose();
+      done();
+    });
+    manager.refresh();
   });
 });

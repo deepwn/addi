@@ -23,6 +23,8 @@ export function activate(context: vscode.ExtensionContext) {
   logger.info(`Extension activation start (v${version})`);
 
   const manager = new ProviderModelManager(context);
+  context.subscriptions.push(new vscode.Disposable(() => manager.dispose()));
+  
   const applySettingsSyncPreference = () => {
     const config = vscode.workspace.getConfiguration("addi");
     const enableSync = config.get<boolean>("saveConfigToSettingsSync", true);
@@ -108,6 +110,13 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("addi.manage", async () => {
       await vscode.commands.executeCommand("addiProviders.focus");
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("addi.refresh", () => {
+      treeDataProvider.refresh();
+      logger.info("Manual refresh triggered");
     })
   );
 

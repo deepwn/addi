@@ -127,6 +127,11 @@
           "command": "addi.openSettings",
           "when": "view == addiProviders",
           "group": "navigation@4"
+        },
+        {
+          "command": "addi.refresh",
+          "when": "view == addiProviders",
+          "group": "navigation@0"
         }
       ],
       "panel/title": [
@@ -394,6 +399,13 @@
         "title": "Open Settings",
         "shortTitle": "Settings",
         "icon": "$(settings-gear)",
+        "category": "Addi"
+      },
+      {
+        "command": "addi.refresh",
+        "title": "Refresh Providers",
+        "shortTitle": "Refresh",
+        "icon": "$(refresh)",
         "category": "Addi"
       }
     ],
