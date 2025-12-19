@@ -347,7 +347,7 @@ export class CommandHandler {
   async editProvider(item: ProviderTreeItem): Promise<void> {
     logger.info("Command editProvider invoked", logger.sanitizeProvider(item.provider));
     if (this.detailsViewProvider) {
-      this.detailsViewProvider.update(item);
+      this.detailsViewProvider.update(item, 'edit');
       // Focus the details view
       vscode.commands.executeCommand("addiDetails.focus");
     } else {
@@ -631,7 +631,7 @@ export class CommandHandler {
       model: logger.sanitizeModel(item.model),
     });
     if (this.detailsViewProvider) {
-      this.detailsViewProvider.update(item);
+      this.detailsViewProvider.update(item, 'edit');
       // Focus the details view
       vscode.commands.executeCommand("addiDetails.focus");
     } else {

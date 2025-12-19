@@ -66,6 +66,13 @@
           "fontPath": "resources/bootstrap-icons.woff",
           "fontCharacter": "\\F268"
         }
+      },
+      "magic-icon": {
+        "description": "Magic Icon",
+        "default": {
+          "fontPath": "resources/bootstrap-icons.woff",
+          "fontCharacter": "\\F675"
+        }
       }
     },
     "viewsContainers": {
@@ -101,8 +108,7 @@
           "type": "webview",
           "id": "addiDetails",
           "name": "Details",
-          "icon": "$(info)",
-          "when": "addi:showDetails"
+          "icon": "$(info)"
         }
       ]
     },
@@ -132,6 +138,26 @@
           "command": "addi.refresh",
           "when": "view == addiProviders",
           "group": "navigation@0"
+        },
+        {
+          "command": "addi.triggerEditDetails",
+          "when": "view == addiDetails && addi:hasDetailsItem && !addi:isEditingDetails",
+          "group": "navigation"
+        },
+        {
+          "command": "addi.saveDetails",
+          "when": "view == addiDetails && addi:isEditingDetails",
+          "group": "navigation@2"
+        },
+        {
+          "command": "addi.verifyDetails",
+          "when": "view == addiDetails && addi:isEditingDetails && addi:detailsType == model",
+          "group": "navigation@1"
+        },
+        {
+          "command": "addi.cancelDetails",
+          "when": "view == addiDetails && addi:isEditingDetails",
+          "group": "navigation@3"
         }
       ],
       "panel/title": [
@@ -363,7 +389,7 @@
         "command": "addi.pullProviderModels",
         "title": "Pull Models List",
         "shortTitle": "Pull Models",
-        "icon": "$(sync)",
+        "icon": "$(pull)",
         "category": "Addi"
       },
       {
@@ -406,6 +432,31 @@
         "title": "Refresh Providers",
         "shortTitle": "Refresh",
         "icon": "$(refresh)",
+        "category": "Addi"
+      },
+      {
+        "command": "addi.triggerEditDetails",
+        "title": "Edit Details",
+        "shortTitle": "Edit",
+        "icon": "$(edit)",
+        "category": "Addi"
+      },
+      {
+        "command": "addi.saveDetails",
+        "title": "Save",
+        "icon": "$(save)",
+        "category": "Addi"
+      },
+      {
+        "command": "addi.cancelDetails",
+        "title": "Cancel",
+        "icon": "$(close)",
+        "category": "Addi"
+      },
+      {
+        "command": "addi.verifyDetails",
+        "title": "Auto-Detect Parameters",
+        "icon": "$(magic-icon)",
         "category": "Addi"
       }
     ],

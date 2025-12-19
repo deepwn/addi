@@ -145,17 +145,37 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.commands.executeCommand('workbench.action.openSettings', '@ext:deepwn.addi');
   }));
 
+  context.subscriptions.push(vscode.commands.registerCommand("addi.triggerEditDetails", () => {
+      detailsProvider.triggerEdit();
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand("addi.saveDetails", () => {
+      detailsProvider.triggerSave();
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand("addi.cancelDetails", () => {
+      detailsProvider.triggerCancel();
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand("addi.verifyDetails", () => {
+      detailsProvider.triggerVerify();
+  }));
+
   const detailsProvider = new DetailsViewProvider(context.extensionUri, manager, () => treeDataProvider.refresh());
   commandHandler.setDetailsViewProvider(detailsProvider);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(DetailsViewProvider.viewType, detailsProvider)
   );
 
-  treeView.onDidChangeSelection((_e) => {
-    // Clicking an item should not open the details view (edit mode).
-    // Instead, it should clear the details view (collapse/discard changes).
-    // Editing is triggered explicitly via the "Edit" context menu command.
-    // detailsProvider.update(undefined); // Removed to keep details view open
+  treeView.onDidChangeSelection((e) => {
+    if (e.selection.length > 0) {
+      const item = e.selection[0];
+      if (item instanceof ProviderTreeItem || item instanceof ModelTreeItem) {
+        detailsProvider.update(item);
+      }
+    } else {
+      detailsProvider.update(undefined);
+    }
   });
 }
 

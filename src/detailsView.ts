@@ -13,7 +13,7 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
   private _currentProvider: Provider | undefined;
   private _lastVerifiedData: string | undefined;
   private _detectedSpeed: number | undefined;
-  private _viewState: { mode: 'edit' | 'create'; type: 'provider' | 'model'; parentId?: string } = { mode: 'edit', type: 'provider' };
+  private _viewState: { mode: 'edit' | 'create' | 'view'; type: 'provider' | 'model'; parentId?: string } = { mode: 'view', type: 'provider' };
 
   constructor(private readonly _extensionUri: vscode.Uri, private readonly _manager: ProviderModelManager, private readonly _refreshTree: () => void) {
     // Initialize context to false (hidden)
@@ -47,6 +47,11 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
         case "cancel":
           this.cancelEdit();
           break;
+        case "requestEdit":
+          if (this._currentItem) {
+            this.update(this._currentItem, 'edit');
+          }
+          break;
       }
     });
 
@@ -64,6 +69,8 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
   public cancelEdit() {
       this._lastVerifiedData = undefined;
       vscode.commands.executeCommand('setContext', 'addi:showDetails', false);
+      vscode.commands.executeCommand('setContext', 'addi:hasDetailsItem', false);
+      vscode.commands.executeCommand('setContext', 'addi:isEditingDetails', false);
       this._currentItem = undefined;
       if (this._view) {
           this._view.webview.postMessage({
@@ -77,6 +84,10 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
   public showAddProvider() {
       this._lastVerifiedData = undefined;
       vscode.commands.executeCommand('setContext', 'addi:showDetails', true);
+      vscode.commands.executeCommand('setContext', 'addi:hasDetailsItem', true); // Treat creating as having item for context purposes
+      vscode.commands.executeCommand('setContext', 'addi:isEditingDetails', true);
+      vscode.commands.executeCommand('setContext', 'addi:detailsType', 'provider');
+      
       this._currentItem = undefined;
       this._viewState = { mode: 'create', type: 'provider' };
       if (this._view) {
@@ -94,6 +105,10 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
   public showAddModel(providerId: string) {
       this._lastVerifiedData = undefined;
       vscode.commands.executeCommand('setContext', 'addi:showDetails', true);
+      vscode.commands.executeCommand('setContext', 'addi:hasDetailsItem', true);
+      vscode.commands.executeCommand('setContext', 'addi:isEditingDetails', true);
+      vscode.commands.executeCommand('setContext', 'addi:detailsType', 'model');
+
       this._currentItem = undefined;
       this._currentProvider = this._manager.getProviders().find(p => p.id === providerId);
       this._viewState = { mode: 'create', type: 'model', parentId: providerId };
@@ -117,13 +132,34 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
       }
   }
 
-  public update(item: ProviderTreeItem | ModelTreeItem | undefined) {
+  public triggerEdit() {
+      if (this._currentItem) {
+          this.update(this._currentItem, 'edit');
+      }
+  }
+
+  public triggerSave() {
+      this._view?.webview.postMessage({ type: 'submit' });
+  }
+
+  public triggerCancel() {
+      this.cancelEdit();
+  }
+
+  public triggerVerify() {
+      this._view?.webview.postMessage({ type: 'verify' });
+  }
+
+  public update(item: ProviderTreeItem | ModelTreeItem | undefined, mode: 'view' | 'edit' = 'view') {
     this._lastVerifiedData = undefined;
     this._detectedSpeed = undefined;
+    // Always show details view context since we removed the "when" clause, but we can keep this for other uses if any
     if (item) {
         vscode.commands.executeCommand('setContext', 'addi:showDetails', true);
+        vscode.commands.executeCommand('setContext', 'addi:hasDetailsItem', true);
     } else {
         vscode.commands.executeCommand('setContext', 'addi:showDetails', false);
+        vscode.commands.executeCommand('setContext', 'addi:hasDetailsItem', false);
     }
     this._currentItem = item;
     if (item instanceof ProviderTreeItem) {
@@ -134,7 +170,13 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
     } else {
         this._currentProvider = undefined;
     }
-    this._viewState = { mode: 'edit', type: item instanceof ProviderTreeItem ? 'provider' : 'model' };
+    
+    const type = item instanceof ProviderTreeItem ? 'provider' : 'model';
+    this._viewState = { mode: mode, type: type };
+    
+    vscode.commands.executeCommand('setContext', 'addi:isEditingDetails', mode === 'edit');
+    vscode.commands.executeCommand('setContext', 'addi:detailsType', type);
+
     if (this._view) {
       if (item) {
         try {
@@ -145,7 +187,7 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
       }
       this._view.webview.postMessage({
         type: "update",
-        mode: 'edit',
+        mode: mode,
         item: item
           ? {
               type: item instanceof ProviderTreeItem ? "provider" : "model",
@@ -181,9 +223,11 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
         if (!providerData.website) { delete providerData.website; }
 
         try {
-            await this._manager.addProvider(providerData);
+            const newProvider = await this._manager.addProvider(providerData);
             vscode.window.showInformationMessage(`Provider "${data.name}" added.`);
             this._refreshTree();
+            
+            this._currentItem = new ProviderTreeItem(newProvider);
             this.cancelEdit();
         } catch (e) {
             vscode.window.showErrorMessage(`Failed to add provider: ${e instanceof Error ? e.message : String(e)}`);
@@ -213,6 +257,11 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
     if (success) {
       vscode.window.showInformationMessage(`Provider "${data.name}" updated.`);
       this._refreshTree();
+      
+      const updatedProvider = this._manager.getProviders().find(p => p.id === provider.id);
+      if (updatedProvider) {
+          this._currentItem = new ProviderTreeItem(updatedProvider);
+      }
       this.cancelEdit();
     } else {
       vscode.window.showErrorMessage("Failed to update provider.");
@@ -243,7 +292,7 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
 
     await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
-        title: `Verifying connection to ${data.name || data.id}...`,
+        title: `Detecting parameters for ${data.name || data.id}...`,
         cancellable: true
     }, async (progress, token) => {
         const controller = new AbortController();
@@ -251,15 +300,13 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
             controller.abort();
         });
         try {
-            const detectInput = data.maxInputTokens === '?' || data.maxInputTokens === '';
-            const detectOutput = data.maxOutputTokens === '?' || data.maxOutputTokens === '';
-            
+            // Force full detection regardless of current values
             const result = await ModelTester.testModelApi(this._currentProvider!, modelDraft, {
-                detectInput,
-                detectOutput,
-                checkVision: data.imageInput,
-                checkTools: data.toolCalling,
-                checkSpeed: true
+                detectInput: true,
+                detectOutput: true,
+                checkVision: true,
+                checkTools: true,
+                checkSpeed: true // Retain statistics but don't fail on speed
             }, controller.signal, (msg) => {
                 progress.report({ message: msg });
             });
@@ -267,7 +314,7 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
             if (result.success) {
                 this._lastVerifiedData = JSON.stringify(data);
                 this._detectedSpeed = result.speed;
-                let msg = `Verification successful for ${data.name || data.id}!`;
+                let msg = `Detection successful for ${data.name || data.id}!`;
                 
                 if (result.speed) {
                     msg += ` Speed: ${result.speed.toFixed(1)} t/s`;
@@ -279,22 +326,24 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
 
                 if (result.detectedMaxInputTokens) {
                     updates.maxInputTokens = result.detectedMaxInputTokens;
-                    msg += ` Detected Input: ${result.detectedMaxInputTokens}`;
+                    msg += ` Input: ${result.detectedMaxInputTokens}`;
                     hasUpdates = true;
                 }
                 if (result.detectedMaxOutputTokens) {
                     updates.maxOutputTokens = result.detectedMaxOutputTokens;
-                    msg += ` Detected Output: ${result.detectedMaxOutputTokens}`;
+                    msg += ` Output: ${result.detectedMaxOutputTokens}`;
                     hasUpdates = true;
                 }
-                if (data.imageInput && result.visionSupported === false) {
-                    updates.imageInput = false;
-                    msg += ` (Vision capability removed)`;
+                
+                if (result.visionSupported !== undefined && result.visionSupported !== data.imageInput) {
+                    updates.imageInput = result.visionSupported;
+                    msg += result.visionSupported ? " (Vision detected)" : " (Vision removed)";
                     hasUpdates = true;
                 }
-                if (data.toolCalling && result.toolCallingSupported === false) {
-                    updates.toolCalling = false;
-                    msg += ` (Tool capability removed)`;
+                
+                if (result.toolCallingSupported !== undefined && result.toolCallingSupported !== data.toolCalling) {
+                    updates.toolCalling = result.toolCallingSupported;
+                    msg += result.toolCallingSupported ? " (Tools detected)" : " (Tools removed)";
                     hasUpdates = true;
                 }
 
@@ -359,13 +408,13 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
                  const controller = new AbortController();
                  token.onCancellationRequested(() => controller.abort());
                  try {
-                     // For auto-verify on save, we only check basic connectivity and capabilities if checked.
-                     // We do NOT auto-detect tokens here as it might be slow and user didn't ask for it explicitly via '?'
+                     // For auto-verify on save, we only check basic connectivity.
+                     // We do NOT auto-detect tokens or check capabilities here to keep it fast.
                      const result = await ModelTester.testModelApi(this._currentProvider!, modelData as any, {
                          detectInput: false,
                          detectOutput: false,
-                         checkVision: data.imageInput,
-                         checkTools: data.toolCalling,
+                         checkVision: false,
+                         checkTools: false,
                          checkSpeed: false
                      }, controller.signal, (msg) => {
                          progress.report({ message: msg });
@@ -402,10 +451,16 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
             return;
         }
         try {
-            await this._manager.addModel(this._viewState.parentId, modelData as any); // Type cast as ModelDraft needs more fields but Partial is ok for now if we ensure required
-            vscode.window.showInformationMessage(`Model "${data.name}" added.`);
-            this._refreshTree();
-            this.cancelEdit();
+            const newModel = await this._manager.addModel(this._viewState.parentId, modelData as any);
+            if (newModel) {
+                vscode.window.showInformationMessage(`Model "${data.name}" added.`);
+                this._refreshTree();
+                
+                this._currentItem = new ModelTreeItem(newModel);
+                this.cancelEdit();
+            } else {
+                vscode.window.showErrorMessage("Failed to add model.");
+            }
         } catch (e) {
             vscode.window.showErrorMessage(`Failed to add model: ${e instanceof Error ? e.message : String(e)}`);
         }
@@ -429,6 +484,12 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
     if (success) {
       vscode.window.showInformationMessage(`Model "${data.name}" updated.`);
       this._refreshTree();
+      
+      const updatedProvider = this._manager.getProviders().find(p => p.id === parentId);
+      const updatedModel = updatedProvider?.models.find(m => m.sid === model.sid);
+      if (updatedModel) {
+          this._currentItem = new ModelTreeItem(updatedModel);
+      }
       this.cancelEdit();
     } else {
       vscode.window.showErrorMessage("Failed to update model.");
@@ -474,86 +535,88 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
                     .button-row { display: flex; gap: 10px; margin-top: 10px; }
                     .secondary-btn { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
                     .secondary-btn:hover { background: var(--vscode-button-secondaryHoverBackground); }
+                    
+                    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid var(--vscode-widget-border); padding-bottom: 5px; }
+                    
+                    .view-mode input[type="password"] {
+                        display: none; /* Hide API key in view mode */
+                    }
+                    .view-mode .api-key-container { display: none; } /* Hide API key container in view mode */
+                    
+                    .view-mode .info-text { display: none; }
                 </style>
 			</head>
 			<body>
 				<div id="placeholder">Select a provider or model to view details.</div>
                 
-                <div id="provider-form" class="hidden">
-                    <div class="form-group">
-                        <label>Name</label>
-                        <input type="text" id="p-name">
+                <div id="content-container" class="hidden">
+                    <div id="provider-form" class="hidden">
+                        <div class="form-group">
+                            <label>Name</label>
+                            <input type="text" id="p-name">
+                        </div>
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select id="p-type">
+                                <option value="openai">OpenAI</option>
+                                <option value="anthropic">Anthropic</option>
+                                <option value="google">Google</option>
+                                <option value="generic">Generic</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>API Endpoint</label>
+                            <input type="text" id="p-endpoint">
+                        </div>
+                        <div class="form-group api-key-container">
+                            <label>API Key</label>
+                            <input type="password" id="p-apikey" placeholder="Leave empty to keep unchanged">
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <input type="text" id="p-description">
+                        </div>
+                        <div class="form-group">
+                            <label>Website</label>
+                            <input type="text" id="p-website">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Type</label>
-                        <select id="p-type">
-                            <option value="openai">OpenAI</option>
-                            <option value="anthropic">Anthropic</option>
-                            <option value="google">Google</option>
-                            <option value="generic">Generic</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>API Endpoint</label>
-                        <input type="text" id="p-endpoint">
-                    </div>
-                    <div class="form-group">
-                        <label>API Key</label>
-                        <input type="password" id="p-apikey" placeholder="Leave empty to keep unchanged">
-                    </div>
-                    <div class="form-group">
-                        <label>Description</label>
-                        <input type="text" id="p-description">
-                    </div>
-                    <div class="form-group">
-                        <label>Website</label>
-                        <input type="text" id="p-website">
-                    </div>
-                    <div class="button-row">
-                        <button id="p-save">Save Provider</button>
-                        <button id="p-cancel" class="secondary-btn">Cancel</button>
-                    </div>
-                </div>
 
-                <div id="model-form" class="hidden">
-                    <div class="form-group">
-                        <label>Name</label>
-                        <input type="text" id="m-name">
-                    </div>
-                    <div class="form-group">
-                        <label>Model ID (Remote)</label>
-                        <input type="text" id="m-id">
-                    </div>
-                    <div class="form-group">
-                        <label>Family</label>
-                        <input type="text" id="m-family">
-                    </div>
-                    <div class="form-group">
-                        <label>Version</label>
-                        <input type="text" id="m-version">
-                    </div>
-                    <div class="form-group">
-                        <label>Max Input Tokens</label>
-                        <input type="text" id="m-input-tokens">
-                        <div class="info-text">Supports 'k' suffix (e.g. 128k)</div>
-                    </div>
-                    <div class="form-group">
-                        <label>Max Output Tokens</label>
-                        <input type="text" id="m-output-tokens">
-                        <div class="info-text">Supports 'k' suffix (e.g. 4k)</div>
-                    </div>
-                    <div class="form-group checkbox-group">
-                        <input type="checkbox" id="m-vision">
-                        <label for="m-vision">Vision (Image Input)</label>
-                    </div>
-                    <div class="form-group checkbox-group">
-                        <input type="checkbox" id="m-tools">
-                        <label for="m-tools">Tool Calling</label>
-                    </div>
-                    <button id="m-verify" class="secondary-btn" style="width: 100%; margin-bottom: 10px;">Verify Connection</button>
-                    <div class="button-row">
-                        <button id="m-save">Save Model</button>
-                        <button id="m-cancel" class="secondary-btn">Cancel</button>
+                    <div id="model-form" class="hidden">
+                        <div class="form-group">
+                            <label>Name</label>
+                            <input type="text" id="m-name">
+                        </div>
+                        <div class="form-group">
+                            <label>Model ID (Remote)</label>
+                            <input type="text" id="m-id">
+                        </div>
+                        <div class="form-group">
+                            <label>Family</label>
+                            <input type="text" id="m-family">
+                        </div>
+                        <div class="form-group">
+                            <label>Version</label>
+                            <input type="text" id="m-version">
+                        </div>
+                        <div class="form-group">
+                            <label>Max Input Tokens</label>
+                            <input type="text" id="m-input-tokens">
+                            <div class="info-text">Supports 'k' suffix (e.g. 128k)</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Max Output Tokens</label>
+                            <input type="text" id="m-output-tokens">
+                            <div class="info-text">Supports 'k' suffix (e.g. 4k)</div>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="m-vision">
+                            <label for="m-vision">Vision (Image Input)</label>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="m-tools">
+                            <label for="m-tools">Tool Calling</label>
+                        </div>
                     </div>
                 </div>
 
@@ -561,6 +624,7 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
                     const vscode = acquireVsCodeApi();
                     
                     const placeholder = document.getElementById('placeholder');
+                    const contentContainer = document.getElementById('content-container');
                     const providerForm = document.getElementById('provider-form');
                     const modelForm = document.getElementById('model-form');
 
@@ -571,8 +635,6 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
                     const pApiKey = document.getElementById('p-apikey');
                     const pDesc = document.getElementById('p-description');
                     const pWeb = document.getElementById('p-website');
-                    const pSave = document.getElementById('p-save');
-                    const pCancel = document.getElementById('p-cancel');
 
                     // Model inputs
                     const mName = document.getElementById('m-name');
@@ -583,29 +645,12 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
                     const mOutput = document.getElementById('m-output-tokens');
                     const mVision = document.getElementById('m-vision');
                     const mTools = document.getElementById('m-tools');
-                    const mVerify = document.getElementById('m-verify');
-                    const mSave = document.getElementById('m-save');
-                    const mCancel = document.getElementById('m-cancel');
 
                     // Token formatter logic (simplified for JS)
                     function formatToken(val) {
                         if (!val) return '';
                         if (val >= 1024) return (val / 1024) + 'k';
                         return val.toString();
-                    }
-
-                    function updateContent(item) {
-                        if (!item) {
-                            show(placeholder);
-                            hide(providerForm);
-                            hide(modelForm);
-                            return;
-                        }
-
-                        // Check mode from message if available, otherwise infer from item structure
-                        // Actually the message structure is { type: 'update', mode: 'create'|'edit', item: ... }
-                        // But here we are inside updateContent(item), so we need to know the mode.
-                        // Let's update the event listener to pass mode.
                     }
 
                     window.addEventListener('message', event => {
@@ -621,22 +666,47 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
                                 if (updates.imageInput !== undefined) mVision.checked = updates.imageInput;
                                 if (updates.toolCalling !== undefined) mTools.checked = updates.toolCalling;
                                 break;
+                            case 'submit':
+                                submitForm();
+                                break;
+                            case 'verify':
+                                verifyForm();
+                                break;
                         }
                     });
+
+                    function setInputsDisabled(disabled) {
+                        const inputs = document.querySelectorAll('input, select');
+                        inputs.forEach(input => {
+                            input.disabled = disabled;
+                        });
+                    }
 
                     function updateContent(item, mode) {
                         if (!item) {
                             show(placeholder);
-                            hide(providerForm);
-                            hide(modelForm);
+                            hide(contentContainer);
                             return;
                         }
 
+                        hide(placeholder);
+                        show(contentContainer);
+
                         const isCreate = mode === 'create';
+                        const isEdit = mode === 'edit';
+                        const isView = mode === 'view';
+
+                        // Update container class for view mode styles
+                        if (isView) {
+                            contentContainer.classList.add('view-mode');
+                            setInputsDisabled(true);
+                        } else {
+                            contentContainer.classList.remove('view-mode');
+                            setInputsDisabled(false);
+                        }
 
                         if (item.type === 'provider') {
                             show(providerForm);
-                            hide(placeholder);
                             hide(modelForm);
                             
                             const data = item.data;
@@ -647,11 +717,8 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
                             pApiKey.placeholder = isCreate ? 'Required' : 'Leave empty to keep unchanged';
                             pDesc.value = data.description || '';
                             pWeb.value = data.website || '';
-                            
-                            pSave.textContent = isCreate ? 'Add Provider' : 'Save Provider';
                         } else if (item.type === 'model') {
                             show(modelForm);
-                            hide(placeholder);
                             hide(providerForm);
 
                             const data = item.data;
@@ -664,67 +731,59 @@ export class DetailsViewProvider implements vscode.WebviewViewProvider {
                             
                             mVision.checked = !!(data.capabilities && data.capabilities.imageInput);
                             mTools.checked = !!(data.capabilities && (data.capabilities.toolCalling === true || typeof data.capabilities.toolCalling === 'number'));
-                            
-                            mSave.textContent = isCreate ? 'Add Model' : 'Save Model';
                         }
                     }
 
                     function show(el) { el.classList.remove('hidden'); }
                     function hide(el) { el.classList.add('hidden'); }
 
-                    pSave.addEventListener('click', () => {
-                        vscode.postMessage({
-                            type: 'saveProvider',
-                            payload: {
-                                name: pName.value,
-                                providerType: pType.value,
-                                apiEndpoint: pEndpoint.value,
-                                apiKey: pApiKey.value,
-                                description: pDesc.value,
-                                website: pWeb.value
-                            }
-                        });
-                    });
+                    function submitForm() {
+                        if (!providerForm.classList.contains('hidden')) {
+                            vscode.postMessage({
+                                type: 'saveProvider',
+                                payload: {
+                                    name: pName.value,
+                                    providerType: pType.value,
+                                    apiEndpoint: pEndpoint.value,
+                                    apiKey: pApiKey.value,
+                                    description: pDesc.value,
+                                    website: pWeb.value
+                                }
+                            });
+                        } else if (!modelForm.classList.contains('hidden')) {
+                            vscode.postMessage({
+                                type: 'saveModel',
+                                payload: {
+                                    name: mName.value,
+                                    id: mId.value,
+                                    family: mFamily.value,
+                                    version: mVersion.value,
+                                    maxInputTokens: mInput.value,
+                                    maxOutputTokens: mOutput.value,
+                                    imageInput: mVision.checked,
+                                    toolCalling: mTools.checked
+                                }
+                            });
+                        }
+                    }
 
-                    mVerify.addEventListener('click', () => {
-                        vscode.postMessage({
-                            type: 'verifyModel',
-                            payload: {
-                                name: mName.value,
-                                id: mId.value,
-                                family: mFamily.value,
-                                version: mVersion.value,
-                                maxInputTokens: mInput.value,
-                                maxOutputTokens: mOutput.value,
-                                imageInput: mVision.checked,
-                                toolCalling: mTools.checked
-                            }
-                        });
-                    });
-
-                    mSave.addEventListener('click', () => {
-                        vscode.postMessage({
-                            type: 'saveModel',
-                            payload: {
-                                name: mName.value,
-                                id: mId.value,
-                                family: mFamily.value,
-                                version: mVersion.value,
-                                maxInputTokens: mInput.value,
-                                maxOutputTokens: mOutput.value,
-                                imageInput: mVision.checked,
-                                toolCalling: mTools.checked
-                            }
-                        });
-                    });
-
-                    pCancel.addEventListener('click', () => {
-                        vscode.postMessage({ type: 'cancel' });
-                    });
-
-                    mCancel.addEventListener('click', () => {
-                        vscode.postMessage({ type: 'cancel' });
-                    });
+                    function verifyForm() {
+                        if (!modelForm.classList.contains('hidden')) {
+                            vscode.postMessage({
+                                type: 'verifyModel',
+                                payload: {
+                                    name: mName.value,
+                                    id: mId.value,
+                                    family: mFamily.value,
+                                    version: mVersion.value,
+                                    maxInputTokens: mInput.value,
+                                    maxOutputTokens: mOutput.value,
+                                    imageInput: mVision.checked,
+                                    toolCalling: mTools.checked
+                                }
+                            });
+                        }
+                    }
 				</script>
 			</body>
 			</html>`;
