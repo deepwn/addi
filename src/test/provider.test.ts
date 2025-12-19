@@ -287,4 +287,64 @@ suite("ProviderModelManager Test Suite", () => {
     });
     manager.refresh();
   });
+
+  test("should validate provider name", async () => {
+    await assert.rejects(async () => {
+      await manager.addProvider({
+        name: "",
+        providerType: "generic",
+        apiEndpoint: "https://example.com",
+      });
+    }, /Provider name is required/);
+  });
+
+  test("should validate generic provider endpoint", async () => {
+    await assert.rejects(async () => {
+      await manager.addProvider({
+        name: "Test",
+        providerType: "generic",
+        apiEndpoint: "",
+      });
+    }, /API Endpoint is required/);
+  });
+
+  test("should validate model name", async () => {
+    const provider = await manager.addProvider({
+      name: "Test Provider",
+      providerType: "generic",
+      apiEndpoint: "https://example.com",
+    });
+
+    await assert.rejects(async () => {
+      await manager.addModel(provider.id, {
+        name: "",
+        id: "test-model",
+        family: "test",
+        version: "1.0",
+        maxInputTokens: 100,
+        maxOutputTokens: 100,
+        capabilities: {},
+      });
+    }, /Model name is required/);
+  });
+
+  test("should validate model id", async () => {
+    const provider = await manager.addProvider({
+      name: "Test Provider",
+      providerType: "generic",
+      apiEndpoint: "https://example.com",
+    });
+
+    await assert.rejects(async () => {
+      await manager.addModel(provider.id, {
+        name: "Test Model",
+        id: "",
+        family: "test",
+        version: "1.0",
+        maxInputTokens: 100,
+        maxOutputTokens: 100,
+        capabilities: {},
+      });
+    }, /Model ID is required/);
+  });
 });

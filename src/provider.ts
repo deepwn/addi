@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { Model, Provider, ModelDraft } from "./types";
-import { ConfigManager, IdGenerator } from "./utils";
+import { ConfigManager, IdGenerator, InputValidator } from "./utils";
 import { ModelTreeItem } from "./model";
 import { logger } from "./logger";
 
@@ -225,6 +225,10 @@ export class ProviderModelManager {
   }
 
   async addProvider(providerData: Omit<Provider, "id" | "models">): Promise<Provider> {
+    if (InputValidator.validateName(providerData.name)) {
+      throw new Error("Provider name is required");
+    }
+
     const providers = this.getProviders();
     const newProvider: Provider = {
       ...providerData,
@@ -235,6 +239,11 @@ export class ProviderModelManager {
     if (!newProvider.providerType) {
       newProvider.providerType = "generic";
     }
+
+    if (newProvider.providerType === "generic" && (!newProvider.apiEndpoint || !newProvider.apiEndpoint.trim())) {
+      throw new Error("API Endpoint is required for Generic provider");
+    }
+
     providers.push(newProvider);
     await this.saveProviders(providers);
     logger.info("Provider added", logger.sanitizeProvider(newProvider));
@@ -245,13 +254,24 @@ export class ProviderModelManager {
     const providers = this.getProviders();
     const index = providers.findIndex((p) => p.id === id);
     if (index >= 0 && providers[index]) {
-      providers[index] = {
+      const updatedProvider = {
         ...providers[index]!,
         ...providerData,
       };
-      if (!providers[index]!.providerType) {
-        providers[index]!.providerType = "generic";
+
+      if (InputValidator.validateName(updatedProvider.name)) {
+        throw new Error("Provider name cannot be empty");
       }
+
+      if (!updatedProvider.providerType) {
+        updatedProvider.providerType = "generic";
+      }
+
+      if (updatedProvider.providerType === "generic" && (!updatedProvider.apiEndpoint || !updatedProvider.apiEndpoint.trim())) {
+        throw new Error("API Endpoint is required for Generic provider");
+      }
+
+      providers[index] = updatedProvider;
       await this.saveProviders(providers);
       logger.info("Provider updated", logger.sanitizeProvider(providers[index]!));
       return true;
@@ -273,11 +293,20 @@ export class ProviderModelManager {
   }
 
   async addModel(providerId: string, modelData: ModelDraft): Promise<Model | null> {
+    if (InputValidator.validateName(modelData.name)) {
+      throw new Error("Model name is required");
+    }
+
     const providers = this.getProviders();
     const providerIndex = providers.findIndex((p) => p.id === providerId);
     if (providerIndex >= 0) {
       const sid = modelData.sid?.trim() || IdGenerator.generate();
-      const remoteId = modelData.id?.trim() || sid;
+      
+      if (!modelData.id || !modelData.id.trim()) {
+        throw new Error("Model ID is required");
+      }
+      const remoteId = modelData.id.trim();
+
       const newModel: Model = {
         sid,
         id: remoteId,
@@ -307,6 +336,14 @@ export class ProviderModelManager {
       const modelIndex = providers[providerIndex]!.models.findIndex((m) => m.sid === modelSid);
       if (modelIndex >= 0) {
         const existingModel = providers[providerIndex]!.models[modelIndex]!;
+
+        if (modelData.name !== undefined && InputValidator.validateName(modelData.name)) {
+          throw new Error("Model name cannot be empty");
+        }
+        if (modelData.id !== undefined && (!modelData.id || !modelData.id.trim())) {
+          throw new Error("Model ID cannot be empty");
+        }
+
         const updatedModel: Model = {
           sid: existingModel.sid,
           id: (modelData.id ?? existingModel.id)?.trim() || existingModel.id,
