@@ -359,13 +359,24 @@ export class CommandHandler {
     logger.info("Command deleteProvider invoked", logger.sanitizeProvider(item.provider));
     
     if (ConfigManager.getConfirmDelete()) {
-      const confirm = await UserFeedback.showConfirmDialog(
+      const deleteOption: vscode.MessageItem = { title: "Delete" };
+      const deleteDontAskOption: vscode.MessageItem = { title: "Delete and don't ask again" };
+      const cancelOption: vscode.MessageItem = { title: "Cancel", isCloseAffordance: true };
+
+      const selection = await vscode.window.showWarningMessage(
         `Are you sure you want to delete provider "${item.provider.name}"? This will also delete all of its models.`,
-        "warning",
-        true
+        { modal: true },
+        deleteOption,
+        deleteDontAskOption,
+        cancelOption
       );
 
-      if (!confirm) {
+      if (selection === deleteDontAskOption) {
+        await vscode.workspace.getConfiguration("addi").update("confirmDelete", false, vscode.ConfigurationTarget.Global);
+        void vscode.window.showInformationMessage("Delete confirmation disabled. You can re-enable it in settings.");
+      }
+
+      if (selection !== deleteOption && selection !== deleteDontAskOption) {
         logger.debug("deleteProvider canceled by user", logger.sanitizeProvider(item.provider));
         return;
       }
@@ -632,13 +643,24 @@ export class CommandHandler {
     logger.info("Command deleteModel invoked", logger.sanitizeModel(item.model));
     
     if (ConfigManager.getConfirmDelete()) {
-      const confirm = await UserFeedback.showConfirmDialog(
+      const deleteOption: vscode.MessageItem = { title: "Delete" };
+      const deleteDontAskOption: vscode.MessageItem = { title: "Delete and don't ask again" };
+      const cancelOption: vscode.MessageItem = { title: "Cancel", isCloseAffordance: true };
+
+      const selection = await vscode.window.showWarningMessage(
         `Are you sure you want to delete the model "${item.model.name}"?`,
-        "warning",
-        true
+        { modal: true },
+        deleteOption,
+        deleteDontAskOption,
+        cancelOption
       );
 
-      if (!confirm) {
+      if (selection === deleteDontAskOption) {
+        await vscode.workspace.getConfiguration("addi").update("confirmDelete", false, vscode.ConfigurationTarget.Global);
+        void vscode.window.showInformationMessage("Delete confirmation disabled. You can re-enable it in settings.");
+      }
+
+      if (selection !== deleteOption && selection !== deleteDontAskOption) {
         logger.debug("deleteModel canceled by user", logger.sanitizeModel(item.model));
         return;
       }
