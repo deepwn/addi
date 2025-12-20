@@ -4,6 +4,22 @@ All notable changes to the "addi" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.0.8] - 2025-12-20
+
+### Added
+- **Enhanced Model Verification**: Improved model verification UI with better progress indicators and error handling
+- **Auto-Detection**: Automatic detection of model capabilities (vision, tool calling) during verification process
+- **Token Limit Optimization**: More efficient token limit detection using binary search with parameter estimation to avoid consuming user tokens
+
+### Improved
+- **Vision Testing**: Unified vision capability testing with standardized 1x1 GIF image for consistent verification across models
+- **Error Messages**: More descriptive error messages for failed verifications with actionable feedback
+- **Sorting Performance**: Fixed case sensitivity issue in alphabetical sorting of providers and models
+
+### Changed
+- **UI Feedback**: Enhanced verification progress indicators with real-time status updates
+- **Configuration**: Better handling of model configuration during verification with rollback options on failure
+
 ## [0.0.7] - 2025-12-19
 
 Fix: Upper and lower case alphabetical sorting bug.
