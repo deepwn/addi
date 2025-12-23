@@ -4,6 +4,16 @@ All notable changes to the "addi" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.0.10] - 2025-12-23
+
+### Added
+- **Copy Feature**: Added "Copy" context menu option for Providers and Models to quickly duplicate configurations
+- **Preview Enhancements**: Added support for Vision and Tool Calling examples in the Request Preview
+
+### Changed
+- **UI Improvements**: Increased the height of the Request Preview area in the editor view for better visibility
+- **Cleanup**: Removed `responseOverwrite` feature to simplify the codebase and improve stability
+
 ## [0.0.9] - 2025-12-23
 
 ### Added

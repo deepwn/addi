@@ -57,13 +57,13 @@ Addi 让你在 VS Code 中为 GitHub Copilot 添加自定义 / 第三方 / 自�
 
 | 类别            | 说明                                                          |
 | --------------- | ------------------------------------------------------------- |
-| Provider 管理   | 添加 / 编辑 / 删除 / 快速编辑 API Key                         |
+| Provider 管理   | 添加 / 编辑 / 复制 / 删除 / 快速编辑 API Key                  |
 | 模型管理        | 绑定于 Provider 的模型定义与特性标记（视觉 / 工具调用支持等） |
-| 智能模型验证    | 自动检测连通性、视觉能力、工具调用支持和Token限制              |
+| 智能模型验证    | 自动检测连通性、视觉能力、工具调用支持和 Token 限制           |
 | 模型切换        | 在 Copilot 模型选择器中勾选后即可切换自定义模型               |
 | 配置导入导出    | JSON 结构备份 / 迁移到其他机器                                |
 | 可配置默认参数  | 默认 family / version / token 限制                            |
-| 排序选项        | 支持按字母、输入/输出Token数排序供应商和模型                  |
+| 排序选项        | 支持按字母、输入/输出 Token 数排序供应商和模型                |
 | UI / 树视图     | 直观的 ActivityBar 侧边栏管理界面                             |
 | 右键上下文操作  | 针对 Provider / Model 的快捷操作                              |
 | Playground 调试 | 发送消息、调节参数、实时查看日志                              |
@@ -124,7 +124,7 @@ Activity Bar 中的 Addi 图标 → 展开树：
 
 ### 模型验证 Model Verification
 
-在添加或编辑模型时，点击底部的 **"Verify"** 按钮可以自动测试：
+在添加或编辑模型时，点击底部的 **"Verify & Detect"** 按钮可以自动测试：
 
 - **连通性**：检查 API Key 和 Endpoint 是否有效
 - **视觉能力**：自动检测模型是否支持图片输入
@@ -132,12 +132,16 @@ Activity Bar 中的 Addi 图标 → 展开树：
 - **Token 限制**：自动探测并填充 Max Input / Output Tokens (使用二分查找与参数估算，不消耗真实 Token)
 
 > [!Tip]
-> 如果不确定模型的 Token 限制，可以将 `Max Input Tokens` 和 `Max Output Tokens` 留空（或设为`?`），点击 Verify 后 Addi 会自动探测并填入建议值。
+> 如果不确定模型的 Token 限制，可以将 `Max Input Tokens` 和 `Max Output Tokens` 留空（或设为`?`），点击 Verify & Detect 后 Addi 会自动探测并填入建议值。
 > 所有附属能力（视觉 / 工具调用）也会在验证过程中自动测试并更新勾选（不适配则会自动去除勾选）。
 
 ### 快速编辑 Edit API Key
 
 Provider 节点右侧钥匙图标 → 输入密钥 → 保存。
+
+### 复制 Copy
+
+在 Provider 或 Model 节点上右键点击 **"Copy"**，可以快速复制一份配置（名称会自动添加 "Copy" 后缀），便于快速创建相似配置。
 
 ### 切换模型 Switch Model
 
@@ -160,14 +164,16 @@ Copilot 侧边栏 → 模型下拉 → 管理模型 → 选择 Addi → 勾选�
 
 ## 配置项 Settings Items
 
-| Setting                         | 默认    | 说明                                 |
-| ------------------------------- | ------- | ------------------------------------ |
-| `addi.defaultMaxInputTokens`    | 4096    | 默认最大输入 tokens                  |
-| `addi.defaultMaxOutputTokens`   | 1024    | 默认最大输出 tokens                  |
-| `addi.defaultModelFamily`       | "Addi"  | 默认模型 family                      |
-| `addi.defaultModelVersion`      | "1.0.0" | 默认模型 version                     |
-| `addi.saveConfigToSettingsSync` | true    | 是否保存到 VSCode Settings Sync 云端 |
-| `addi.logLevel`                 | warn    | 控制 Addi 输出通道的最低日志级别     |
+| Setting                         | 默认    | 说明                                                |
+| ------------------------------- | ------- | --------------------------------------------------- |
+| `addi.defaultMaxInputTokens`    | 4096    | 默认最大输入 tokens                                 |
+| `addi.defaultMaxOutputTokens`   | 1024    | 默认最大输出 tokens                                 |
+| `addi.defaultModelFamily`       | "Addi"  | 默认模型 family                                     |
+| `addi.defaultModelVersion`      | "1.0.0" | 默认模型 version                                    |
+| `addi.saveConfigToSettingsSync` | true    | 是否保存到 VSCode Settings Sync 云端                |
+| `addi.logLevel`                 | warn    | 控制 Addi 输出通道的最低日志级别                    |
+| `addi.sortRule`                 | "none"  | 排序规则 (none/alphabet/input tokens/output tokens) |
+| `addi.sortTarget`               | "both"  | 排序目标 (providers/models/both)                    |
 
 更改方法：VS Code 设置搜索 “addi” 或在视图标题中点击 Settings。
 
