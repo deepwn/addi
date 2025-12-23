@@ -255,6 +255,7 @@ export class LLMClient {
   ): Promise<void> {
     void toolDefinitions;
     const baseUrl = this.normalizeBaseUrl(provider.apiEndpoint ?? "", "https://generativelanguage.googleapis.com/v1beta");
+    const systemMessage = MessageConverter.extractSystemMessage(messages);
     const contents = MessageConverter.toGoogleMessages(messages);
     const modelIdentifier = this.resolveModelIdentifier(model);
     const generation = this.extractGenerationParameters(options, model);
@@ -263,11 +264,12 @@ export class LLMClient {
       provider: logger.sanitizeProvider(provider),
       model: logger.sanitizeModel(model),
       generation,
+      hasSystemMessage: Boolean(systemMessage),
       messageCount: contents.length,
       options: optionsSanitized,
     });
 
-    const body = {
+    const body: Record<string, unknown> = {
       contents,
       generationConfig: {
         maxOutputTokens: generation.maxTokens,
@@ -277,6 +279,10 @@ export class LLMClient {
         frequencyPenalty: generation.frequencyPenalty,
       },
     };
+
+    if (systemMessage) {
+      body["system_instruction"] = { parts: [{ text: systemMessage }] };
+    }
 
     if (model.requestAdditional) {
       try {

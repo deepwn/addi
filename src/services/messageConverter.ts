@@ -99,6 +99,9 @@ export class MessageConverter {
   static toOpenAiMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): Array<Record<string, unknown>> {
     return messages.map((msg) => {
       let role = this.mapChatRole(msg.role);
+      if (msg.name === "system") {
+        role = "system";
+      }
       const parts = Array.isArray(msg.content) ? (msg.content as readonly unknown[]) : [msg.content];
       const toolCall = this.extractToolCallFromParts(parts);
       const toolResult = this.extractToolResultFromParts(parts);
@@ -230,6 +233,9 @@ export class MessageConverter {
     let currentParts: Array<Record<string, unknown>> = [];
 
     messages.forEach((msg) => {
+      if (msg.name === "system") {
+        return;
+      }
       const role = msg.role === vscode.LanguageModelChatMessageRole.User ? "user" : "model";
       
       const parts = Array.isArray(msg.content) ? (msg.content as readonly unknown[]) : [msg.content];
