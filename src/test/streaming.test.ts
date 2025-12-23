@@ -79,6 +79,52 @@ suite("Streaming / SSE Parsing", () => {
     assert.strictEqual(done?.fullText, "Hello World");
   });
 
+  test("streamChatCompletion merges model.requestAdditional into request body", async () => {
+    let capturedBody: unknown = undefined;
+
+    globalThis.fetch = (async (_input: any, init?: any) => {
+      capturedBody = init?.body;
+      return {
+        ok: true,
+        body: new MockReadableStream(["data: [DONE]\n"]) as unknown as ReadableStream<Uint8Array>,
+        headers: new Headers(),
+        status: 200,
+        statusText: "OK",
+        type: "basic",
+        url: "https://api.openai.com/v1/chat/completions",
+        redirected: false,
+        clone() {
+          return this as unknown as Response;
+        },
+        arrayBuffer: async () => new ArrayBuffer(0),
+        blob: async () => new Blob([]),
+        formData: async () => new FormData(),
+        json: async () => ({}),
+        text: async () => "",
+      };
+    }) as unknown as typeof fetch;
+
+    const provider = { id: "p1", name: "p1", apiEndpoint: "https://api.openai.com/v1", apiKey: "sk-test", providerType: "openai", models: [] } as any;
+    const model = {
+      id: "gpt-4o-mini",
+      name: "gpt-4o-mini",
+      family: "gpt-4o-mini",
+      maxOutputTokens: 128,
+      requestAdditional: JSON.stringify({ thinking: { enabled: true }, extra_flag: 1 }),
+    } as any;
+
+    const chunks: ChatStreamChunk[] = [];
+    for await (const c of streamChatCompletion(provider, model, { prompt: "Hi" })) {
+      chunks.push(c);
+    }
+
+    assert.ok(chunks.some((c) => c.type === "done"));
+    assert.strictEqual(typeof capturedBody, "string");
+    const parsed = JSON.parse(capturedBody as string) as any;
+    assert.deepStrictEqual(parsed.thinking, { enabled: true });
+    assert.strictEqual(parsed.extra_flag, 1);
+  });
+
   test("streamChatCompletion handles non-stream provider (anthropic) as error", async () => {
     globalThis.fetch = (async () => ({
       ok: true,

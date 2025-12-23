@@ -136,6 +136,15 @@ export class LLMClient {
       top_p: generation.topP,
     };
 
+    if (model.requestAdditional) {
+      try {
+        const additional = JSON.parse(model.requestAdditional);
+        Object.assign(body, additional);
+      } catch (e) {
+        logger.warn("Failed to parse requestAdditional", { error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
     const sanitizedBody = { ...body };
     if (Array.isArray(sanitizedBody["messages"])) {
       sanitizedBody["messages"] = (sanitizedBody["messages"] as any[]).map((msg) => {
@@ -155,14 +164,28 @@ export class LLMClient {
     }
     logger.debug("callAnthropicApi request body", { body: sanitizedBody });
 
+    const headers = {
+      "Content-Type": "application/json",
+      "x-api-key": provider.apiKey!,
+      "anthropic-version": "2023-06-01",
+    };
+
+    logger.debug("Sending Anthropic API request", {
+      url: this.buildUrl(baseUrl, "/v1/messages"),
+      headers: this.sanitizeHeaders(headers),
+      body: body
+    });
+
     const response = await fetch(this.buildUrl(baseUrl, "/v1/messages"), {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": provider.apiKey!,
-        "anthropic-version": "2023-06-01",
-      },
+      headers,
       body: JSON.stringify(body),
+    });
+
+    logger.debug("Received Anthropic API response", {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries())
     });
 
     if (!response.ok) {
@@ -255,6 +278,15 @@ export class LLMClient {
       },
     };
 
+    if (model.requestAdditional) {
+      try {
+        const additional = JSON.parse(model.requestAdditional);
+        Object.assign(body, additional);
+      } catch (e) {
+        logger.warn("Failed to parse requestAdditional", { error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
     const sanitizedBody = { ...body };
     if (Array.isArray(sanitizedBody["contents"])) {
       sanitizedBody["contents"] = (sanitizedBody["contents"] as any[]).map((msg) => {
@@ -274,12 +306,27 @@ export class LLMClient {
     }
     logger.debug("callGoogleApi request body", { body: sanitizedBody });
 
-    const response = await fetch(`${baseUrl}/models/${modelIdentifier}:streamGenerateContent?key=${provider.apiKey}`, {
+    const url = `${baseUrl}/models/${modelIdentifier}:streamGenerateContent?key=${provider.apiKey}`;
+    const maskedUrl = url.replace(/key=([^&]+)/, "key=***");
+
+    logger.debug("Sending Google API request", {
+      url: maskedUrl,
+      headers: { "Content-Type": "application/json" },
+      body: body
+    });
+
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+    });
+
+    logger.debug("Received Google API response", {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries())
     });
 
     if (!response.ok) {
@@ -388,6 +435,15 @@ export class LLMClient {
     }
     if (tools && tools.length > 0) {
       bodyGeneric["tools"] = tools;
+    }
+
+    if (model.requestAdditional) {
+      try {
+        const additional = JSON.parse(model.requestAdditional);
+        Object.assign(bodyGeneric, additional);
+      } catch (e) {
+        logger.warn("Failed to parse requestAdditional", { error: e instanceof Error ? e.message : String(e) });
+      }
     }
 
     const sanitizedBody = { ...bodyGeneric };
@@ -684,6 +740,18 @@ export class LLMClient {
     };
   }
 
+  private sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
+    const sanitized: Record<string, string> = {};
+    for (const [key, value] of Object.entries(headers)) {
+      if (key.toLowerCase() === "authorization" || key.toLowerCase() === "x-api-key" || key.toLowerCase().includes("key") || key.toLowerCase().includes("token")) {
+        sanitized[key] = "***";
+      } else {
+        sanitized[key] = value;
+      }
+    }
+    return sanitized;
+  }
+
   private async streamOpenAiCompatibleResponse(
     request: { url: string; headers: Record<string, string>; body: Record<string, unknown> },
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
@@ -692,10 +760,23 @@ export class LLMClient {
     onStats?: (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => void,
     responseOverwrite?: string
   ): Promise<void> {
+    logger.debug("Sending API request", {
+      url: request.url,
+      headers: this.sanitizeHeaders(request.headers),
+      body: request.body
+    });
+
     const response = await fetch(request.url, {
       method: "POST",
       headers: request.headers,
       body: JSON.stringify(request.body),
+    });
+
+    logger.debug("Received API response", {
+      url: request.url,
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries())
     });
 
     if (!response.ok) {

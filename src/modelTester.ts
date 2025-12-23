@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { ModelDraft, Provider, Model } from "./types";
 import { MessageConverter } from "./services/messageConverter";
 import { LLMClient } from "./services/llmClient";
+import { logger } from "./logger";
 
 export interface TestResult {
   success: boolean;
@@ -464,8 +465,47 @@ export class ModelTester {
     return JSON.stringify(data);
   }
 
+  private static sanitizeHeaders(headers: any): Record<string, string> {
+    if (!headers) {
+      return {};
+    }
+    const safeHeaders: Record<string, string> = {};
+    
+    let entries: [string, any][] = [];
+    
+    if (typeof headers.entries === 'function') {
+        entries = Array.from(headers.entries());
+    } else if (Array.isArray(headers)) {
+        entries = headers as [string, any][];
+    } else {
+        entries = Object.entries(headers);
+    }
+
+    for (const [key, value] of entries) {
+      if (key.toLowerCase() === "authorization" || key.toLowerCase() === "x-api-key") {
+        safeHeaders[key] = "***";
+      } else {
+        safeHeaders[key] = String(value);
+      }
+    }
+    return safeHeaders;
+  }
+
   private static async doFetch(url: string, init: RequestInit, providerName: string): Promise<any> {
+    logger.debug(`Sending ${providerName} API request (Tester)`, {
+      url,
+      headers: this.sanitizeHeaders(init.headers),
+      body: typeof init.body === "string" ? JSON.parse(init.body) : init.body
+    });
+
     const response = await fetch(url, init);
+
+    logger.debug(`Received ${providerName} API response (Tester)`, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+
     if (!response.ok) {
       throw new Error(await this.readResponseError(response));
     }

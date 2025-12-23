@@ -38,6 +38,37 @@ export interface ChatStreamChunk {
 
 const MAX_TOKEN_LIMIT = 1024 * 1024 * 4;
 
+function sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
+  const sanitized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === "authorization" || key.toLowerCase() === "x-api-key" || key.toLowerCase().includes("key") || key.toLowerCase().includes("token")) {
+      sanitized[key] = "***";
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
+function parseRequestAdditional(requestAdditional: string | undefined): Record<string, unknown> | undefined {
+  const raw = requestAdditional?.trim();
+  if (!raw) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    logger.warn("requestAdditional must be a JSON object", {
+      valueType: Array.isArray(parsed) ? "array" : typeof parsed,
+    });
+  } catch (e) {
+    logger.warn("Failed to parse requestAdditional", { error: e instanceof Error ? e.message : String(e) });
+  }
+  return undefined;
+}
+
 /**
  * 将 OpenAI / 兼容 SSE 行解析成 json 对象（忽略空行与以 : 开头的注释）
  */
@@ -118,9 +149,23 @@ export async function* streamChatCompletion(provider: Provider, model: Model, op
     payload["frequency_penalty"] = Math.min(Math.max(options.frequencyPenalty, -2), 2);
   }
 
+  const requestAdditional = parseRequestAdditional(model.requestAdditional);
+  if (requestAdditional) {
+    Object.assign(payload, requestAdditional);
+  }
+
   // startedAt 可在后续需要 latency 时启用
   let full = "";
   try {
+    logger.debug("Sending streamChatCompletion request", {
+      url,
+      headers: sanitizeHeaders({
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      }),
+      body: payload,
+    });
+
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -130,6 +175,13 @@ export async function* streamChatCompletion(provider: Provider, model: Model, op
       body: JSON.stringify(payload),
       signal: options.signal ?? null,
     });
+
+    logger.debug("Received streamChatCompletion response", {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+    });
+
     if (!response.ok || !response.body) {
       const errText = !response.ok ? await readResponseError(response) : "Readable stream not supported";
       yield { type: "error", error: errText };
@@ -244,20 +296,21 @@ export async function invokeChatCompletion(provider: Provider, model: Model, opt
   const modelIdentifier = resolveModelIdentifier(model);
   const temperature = typeof options.temperature === "number" ? options.temperature : undefined;
   const signal = options.signal;
+  const requestAdditional = parseRequestAdditional(model.requestAdditional);
 
   if (isOpenAiEndpoint(apiEndpoint)) {
     logger.debug("invokeChatCompletion routing to OpenAI", logger.sanitizeProvider(provider));
-    return await callOpenAi(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, options.presencePenalty, options.frequencyPenalty, signal);
+    return await callOpenAi(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, options.presencePenalty, options.frequencyPenalty, signal, requestAdditional);
   }
 
   if (isAnthropicEndpoint(apiEndpoint)) {
     logger.debug("invokeChatCompletion routing to Anthropic", logger.sanitizeProvider(provider));
-    return await callAnthropic(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, signal);
+    return await callAnthropic(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, signal, requestAdditional);
   }
 
   if (isGoogleEndpoint(apiEndpoint)) {
     logger.debug("invokeChatCompletion routing to Google", logger.sanitizeProvider(provider));
-    return await callGoogle(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, signal);
+    return await callGoogle(apiEndpoint, apiKey, modelIdentifier, messages, maxOutputTokens, temperature, options.topP, signal, requestAdditional);
   }
 
   logger.debug("invokeChatCompletion routing to generic", logger.sanitizeProvider(provider));
@@ -271,7 +324,8 @@ export async function invokeChatCompletion(provider: Provider, model: Model, opt
     options.topP,
     options.presencePenalty,
     options.frequencyPenalty,
-    signal
+    signal,
+    requestAdditional
   );
 }
 
@@ -407,7 +461,8 @@ async function callOpenAi(
   topP: number | undefined,
   presencePenalty: number | undefined,
   frequencyPenalty: number | undefined,
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
+  requestAdditional?: Record<string, unknown>
 ): Promise<ChatResponse> {
   const url = resolveChatCompletionsUrl(apiEndpoint, "https://api.openai.com/v1");
   const requestPayload: Record<string, unknown> = {
@@ -431,7 +486,21 @@ async function callOpenAi(
     requestPayload["frequency_penalty"] = Math.min(Math.max(frequencyPenalty, -2), 2);
   }
 
+  if (requestAdditional) {
+    Object.assign(requestPayload, requestAdditional);
+  }
+
   const startedAt = Date.now();
+
+  logger.debug("Sending OpenAI API request", {
+    url,
+    headers: sanitizeHeaders({
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    }),
+    body: requestPayload
+  });
+
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -440,6 +509,12 @@ async function callOpenAi(
     },
     body: JSON.stringify(requestPayload),
     signal: signal ?? null,
+  });
+
+  logger.debug("Received OpenAI API response", {
+    status: response.status,
+    statusText: response.statusText,
+    headers: Object.fromEntries(response.headers.entries())
   });
 
   if (!response.ok) {
@@ -472,7 +547,8 @@ async function callGenericCompatible(
   topP: number | undefined,
   presencePenalty: number | undefined,
   frequencyPenalty: number | undefined,
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
+  requestAdditional?: Record<string, unknown>
 ): Promise<ChatResponse> {
   const url = resolveChatCompletionsUrl(apiEndpoint, "https://api.openai.com/v1");
   const requestPayload: Record<string, unknown> = {
@@ -495,7 +571,21 @@ async function callGenericCompatible(
     requestPayload["frequency_penalty"] = Math.min(Math.max(frequencyPenalty, -2), 2);
   }
 
+  if (requestAdditional) {
+    Object.assign(requestPayload, requestAdditional);
+  }
+
   const startedAt = Date.now();
+
+  logger.debug("Sending Generic API request", {
+    url,
+    headers: sanitizeHeaders({
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    }),
+    body: requestPayload
+  });
+
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -504,6 +594,12 @@ async function callGenericCompatible(
     },
     body: JSON.stringify(requestPayload),
     signal: signal ?? null,
+  });
+
+  logger.debug("Received Generic API response", {
+    status: response.status,
+    statusText: response.statusText,
+    headers: Object.fromEntries(response.headers.entries())
   });
 
   if (!response.ok) {
@@ -534,7 +630,8 @@ async function callAnthropic(
   maxOutputTokens: number,
   temperature: number | undefined,
   topP: number | undefined,
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
+  requestAdditional?: Record<string, unknown>
 ): Promise<ChatResponse> {
   const baseUrl = normalizeBaseUrl(apiEndpoint, "https://api.anthropic.com");
   const url = buildUrl(baseUrl, "/v1/messages");
@@ -556,7 +653,22 @@ async function callAnthropic(
     requestPayload["top_p"] = v;
   }
 
+  if (requestAdditional) {
+    Object.assign(requestPayload, requestAdditional);
+  }
+
   const startedAt = Date.now();
+
+  logger.debug("Sending Anthropic API request", {
+    url,
+    headers: sanitizeHeaders({
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    }),
+    body: requestPayload
+  });
+
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -566,6 +678,12 @@ async function callAnthropic(
     },
     body: JSON.stringify(requestPayload),
     signal: signal ?? null,
+  });
+
+  logger.debug("Received Anthropic API response", {
+    status: response.status,
+    statusText: response.statusText,
+    headers: Object.fromEntries(response.headers.entries())
   });
 
   if (!response.ok) {
@@ -602,7 +720,8 @@ async function callGoogle(
   maxOutputTokens: number,
   temperature: number | undefined,
   topP: number | undefined,
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
+  requestAdditional?: Record<string, unknown>
 ): Promise<ChatResponse> {
   const baseUrl = normalizeBaseUrl(apiEndpoint, "https://generativelanguage.googleapis.com/v1beta");
   const url = `${baseUrl}/models/${encodeURIComponent(modelIdentifier)}:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -622,7 +741,20 @@ async function callGoogle(
     generationConfig,
   };
 
+  if (requestAdditional) {
+    Object.assign(requestPayload, requestAdditional);
+  }
+
   const startedAt = Date.now();
+
+  logger.debug("Sending Google API request", {
+    url,
+    headers: sanitizeHeaders({
+      "Content-Type": "application/json",
+    }),
+    body: requestPayload
+  });
+
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -630,6 +762,12 @@ async function callGoogle(
     },
     body: JSON.stringify(requestPayload),
     signal: signal ?? null,
+  });
+
+  logger.debug("Received Google API response", {
+    status: response.status,
+    statusText: response.statusText,
+    headers: Object.fromEntries(response.headers.entries())
   });
 
   if (!response.ok) {

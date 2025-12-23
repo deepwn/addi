@@ -114,17 +114,23 @@ suite("CommandHandler Test Suite", () => {
     };
   };
 
-  const mockShowWarningMessage = (result: string | undefined) => {
+  const mockShowWarningMessage = (choiceTitle: string | undefined) => {
     showWarningMessageCalled = false;
-    vscode.window.showWarningMessage = async (..._args: any[]) => {
+    vscode.window.showWarningMessage = async (...args: any[]) => {
       showWarningMessageCalled = true;
-      return result; // "Confirm" or "Cancel" or undefined
+      if (!choiceTitle) {
+        return undefined;
+      }
+
+      // Signature in usage: (message, { modal: true }, ...items)
+      const items = args.slice(2) as Array<vscode.MessageItem>;
+      return items.find((item) => item?.title === choiceTitle);
     };
   };
 
   test("deleteProvider should ask for confirmation when confirmDelete is true and user confirms", async () => {
     mockConfig(true);
-    mockShowWarningMessage("Confirm");
+    mockShowWarningMessage("Delete");
 
     const provider: Provider = {
       id: "p1",
@@ -160,7 +166,7 @@ suite("CommandHandler Test Suite", () => {
 
   test("deleteProvider should NOT ask for confirmation when confirmDelete is false", async () => {
     mockConfig(false);
-    mockShowWarningMessage("Confirm"); // Should not be called, but set just in case
+    mockShowWarningMessage("Delete"); // Should not be called, but set just in case
 
     const provider: Provider = {
       id: "p1",

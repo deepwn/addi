@@ -37,7 +37,7 @@ function sanitizeParams(input: Params, prev: Params): Params {
   return out;
 }
 
-suite("Playground 参数持久化逻辑", () => {
+suite("Playground sanitizeParams", () => {
   test("sanitizeParams clamps and keeps previous", () => {
     const prev: Params = { temperature: 0.7, topP: 1, maxOutputTokens: 1024, presencePenalty: 0, frequencyPenalty: 0 };
     const next = sanitizeParams({ temperature: 1.2, topP: 1.5, maxOutputTokens: 9000, presencePenalty: 3, frequencyPenalty: -3, systemPrompt: "  " }, prev);
