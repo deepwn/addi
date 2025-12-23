@@ -106,4 +106,88 @@ suite("Streaming / SSE Parsing", () => {
     }
     assert.ok(chunks.some((c) => c.type === "error"));
   });
+
+  test("streamChatCompletion handles bare JSON without newline", async () => {
+    // Provider sends a full JSON object in a single chunk without trailing newline
+    const ssePayload = ['{"choices":[{"delta":{"content":"NoNewline"}}]}', 'data: [DONE]\n'];
+    globalThis.fetch = (async () => ({
+      ok: true,
+      body: new MockReadableStream(ssePayload) as unknown as ReadableStream<Uint8Array>,
+      headers: new Headers(),
+      status: 200,
+      statusText: "OK",
+      type: "basic",
+      url: "https://api.openai.com/v1/chat/completions",
+      redirected: false,
+      clone() {
+        return this as unknown as Response;
+      },
+      arrayBuffer: async () => new ArrayBuffer(0),
+      blob: async () => new Blob([]),
+      formData: async () => new FormData(),
+      json: async () => ({}),
+      text: async () => "",
+    })) as unknown as typeof fetch;
+
+    const provider = { id: "p1", name: "p1", apiEndpoint: "https://api.openai.com/v1", apiKey: "sk-test", providerType: "openai", models: [] } as any;
+    const model = { id: "gpt-4o-mini", name: "gpt-4o-mini", family: "gpt-4o-mini", maxOutputTokens: 128 } as any;
+    const chunks: ChatStreamChunk[] = [];
+    for await (const c of streamChatCompletion(provider, model, { prompt: "Hi" })) {
+      chunks.push(c);
+    }
+
+    const deltaTexts = chunks
+      .filter((c) => c.type === "delta")
+      .map((c) => c.deltaText)
+      .join("");
+    assert.strictEqual(deltaTexts, "NoNewline");
+    const done = chunks.find((c) => c.type === "done");
+    assert.ok(done, "should have done");
+  });
+
+  test("streamChatCompletion handles many small chunks", async () => {
+    // Simulate many small chunks that together form SSE lines
+    const ssePayload = [
+      'data: {"choices":[{"delta":{"content":"H"}}]}\n',
+      'data: {"choices":[{"delta":{"content":"e"}}]}\n',
+      'data: {"choices":[{"delta":{"content":"l"}}]}\n',
+      'data: {"choices":[{"delta":{"content":"l"}}]}\n',
+      'data: {"choices":[{"delta":{"content":"o"}}]}\n',
+      'data: [DONE]\n',
+    ];
+
+    globalThis.fetch = (async () => ({
+      ok: true,
+      body: new MockReadableStream(ssePayload) as unknown as ReadableStream<Uint8Array>,
+      headers: new Headers(),
+      status: 200,
+      statusText: "OK",
+      type: "basic",
+      url: "https://api.openai.com/v1/chat/completions",
+      redirected: false,
+      clone() {
+        return this as unknown as Response;
+      },
+      arrayBuffer: async () => new ArrayBuffer(0),
+      blob: async () => new Blob([]),
+      formData: async () => new FormData(),
+      json: async () => ({}),
+      text: async () => "",
+    })) as unknown as typeof fetch;
+
+    const provider = { id: "p1", name: "p1", apiEndpoint: "https://api.openai.com/v1", apiKey: "sk-test", providerType: "openai", models: [] } as any;
+    const model = { id: "gpt-4o-mini", name: "gpt-4o-mini", family: "gpt-4o-mini", maxOutputTokens: 128 } as any;
+    const chunks: ChatStreamChunk[] = [];
+    for await (const c of streamChatCompletion(provider, model, { prompt: "Hi" })) {
+      chunks.push(c);
+    }
+
+    const deltaTexts = chunks
+      .filter((c) => c.type === "delta")
+      .map((c) => c.deltaText)
+      .join("");
+    assert.strictEqual(deltaTexts, "Hello");
+    const done = chunks.find((c) => c.type === "done");
+    assert.ok(done, "should have done");
+  });
 });

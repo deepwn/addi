@@ -148,6 +148,33 @@ export async function* streamChatCompletion(provider: Provider, model: Model, op
         break;
       }
       buffer += decoder.decode(value, { stream: true });
+      // Heuristic rescue: if no newline yet but buffer looks like a small complete JSON
+      // (some providers may emit a bare JSON chunk without trailing newline), try to
+      // parse and handle it immediately to avoid stutter.
+      if (buffer.indexOf("\n") < 0) {
+        const trimmed = buffer.trim();
+        if (trimmed.startsWith("{") && trimmed.includes('"choices"') && buffer.length <= 8 * 1024) {
+          try {
+            const parsedObj = JSON.parse(trimmed) as any;
+            // Narrow to expected OpenAI-compatible SSE shape
+            type OpenAiSse = { done?: boolean; choices?: Array<{ delta?: { content?: string }; message?: { content?: string } }> };
+            const p = parsedObj as OpenAiSse;
+            if (p.done) {
+              break;
+            }
+            const delta = p.choices?.[0]?.delta?.content ?? p.choices?.[0]?.message?.content;
+            if (typeof delta === "string" && delta.length) {
+              full += delta;
+              yield { type: "delta", deltaText: delta, fullText: full };
+              // consumed buffer
+              buffer = "";
+              continue;
+            }
+          } catch {
+            // ignore and wait for newline
+          }
+        }
+      }
       let idx;
       while ((idx = buffer.indexOf("\n")) >= 0) {
         const line = buffer.slice(0, idx).trim();

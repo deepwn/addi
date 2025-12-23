@@ -8,7 +8,7 @@ import { logger } from "./logger";
 // playground logic moved to src/playground.ts
 import PlaygroundManager from "./playground";
 
-import { DetailsViewProvider } from "./detailsView";
+import { EditorViewManager } from "./editorView";
 
 interface RemoteModelInfo {
   id: string;
@@ -29,7 +29,7 @@ type ModelSyncResult = {
 
 export class CommandHandler {
   private static readonly TOKEN_LIMIT = 1024 * 1024 * 4;
-  private detailsViewProvider?: DetailsViewProvider;
+  private editorViewManager?: EditorViewManager;
 
   constructor(private readonly manager: ProviderModelManager, private readonly treeDataProvider: AddiTreeDataProvider, private readonly context?: vscode.ExtensionContext) {
     logger.debug("CommandHandler initialized", {
@@ -37,8 +37,8 @@ export class CommandHandler {
     });
   }
 
-  public setDetailsViewProvider(provider: DetailsViewProvider) {
-    this.detailsViewProvider = provider;
+  public setEditorViewManager(manager: EditorViewManager) {
+    this.editorViewManager = manager;
   }
 
 
@@ -337,21 +337,19 @@ export class CommandHandler {
 
   async addProvider(): Promise<void> {
     logger.info("Command addProvider invoked");
-    if (this.detailsViewProvider) {
-      this.detailsViewProvider.showAddProvider();
+    if (this.editorViewManager) {
+      this.editorViewManager.openEditor(undefined, 'create');
     } else {
-      UserFeedback.showError("Details view provider not initialized");
+      UserFeedback.showError("Editor view manager not initialized");
     }
   }
 
   async editProvider(item: ProviderTreeItem): Promise<void> {
     logger.info("Command editProvider invoked", logger.sanitizeProvider(item.provider));
-    if (this.detailsViewProvider) {
-      this.detailsViewProvider.update(item, 'edit');
-      // Focus the details view
-      vscode.commands.executeCommand("addiDetails.focus");
+    if (this.editorViewManager) {
+      this.editorViewManager.openEditor(item, 'edit');
     } else {
-      UserFeedback.showError("Details view provider not initialized");
+      UserFeedback.showError("Editor view manager not initialized");
     }
   }
 
@@ -387,9 +385,8 @@ export class CommandHandler {
         const success = await this.manager.deleteProvider(item.provider.id);
         if (success) {
           this.treeDataProvider.refresh();
-          if (this.detailsViewProvider) {
-            this.detailsViewProvider.cancelEdit();
-          }
+          // If we were editing this provider, we might want to close the editor, but for now we just leave it or let the user close it.
+          // Or we could expose a close method on EditorViewManager.
           UserFeedback.showInfo(`Provider "${item.provider.name}" deleted`);
           logger.info("Provider deleted", logger.sanitizeProvider(item.provider));
         } else {
@@ -619,10 +616,10 @@ export class CommandHandler {
 
   async addModel(item: ProviderTreeItem): Promise<void> {
     logger.info("Command addModel invoked", logger.sanitizeProvider(item.provider));
-    if (this.detailsViewProvider) {
-      this.detailsViewProvider.showAddModel(item.provider.id);
+    if (this.editorViewManager) {
+      this.editorViewManager.openEditor(undefined, 'create', item.provider.id);
     } else {
-      UserFeedback.showError("Details view provider not initialized");
+      UserFeedback.showError("Editor view manager not initialized");
     }
   }
 
@@ -630,12 +627,10 @@ export class CommandHandler {
     logger.info("Command editModel invoked", {
       model: logger.sanitizeModel(item.model),
     });
-    if (this.detailsViewProvider) {
-      this.detailsViewProvider.update(item, 'edit');
-      // Focus the details view
-      vscode.commands.executeCommand("addiDetails.focus");
+    if (this.editorViewManager) {
+      this.editorViewManager.openEditor(item, 'edit');
     } else {
-      UserFeedback.showError("Details view provider not initialized");
+      UserFeedback.showError("Editor view manager not initialized");
     }
   }
 
@@ -671,9 +666,7 @@ export class CommandHandler {
         const success = await this.manager.deleteModel(item.model.sid);
         if (success) {
           this.treeDataProvider.refresh();
-          if (this.detailsViewProvider) {
-            this.detailsViewProvider.cancelEdit();
-          }
+          // Editor closing logic omitted for now
           UserFeedback.showInfo(`Model "${item.model.name}" deleted successfully`);
           logger.info("Model deleted", logger.sanitizeModel(item.model));
         } else {

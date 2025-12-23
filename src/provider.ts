@@ -316,6 +316,8 @@ export class ProviderModelManager {
         maxInputTokens: modelData.maxInputTokens,
         maxOutputTokens: modelData.maxOutputTokens,
         capabilities: this.normalizeCapabilities(modelData.capabilities),
+        ...(modelData.requestAdditional ? { requestAdditional: modelData.requestAdditional } : {}),
+        ...(modelData.responseOverwrite ? { responseOverwrite: modelData.responseOverwrite } : {}),
       };
       providers[providerIndex]!.models.push(newModel);
       await this.saveProviders(providers);
@@ -353,6 +355,8 @@ export class ProviderModelManager {
           maxInputTokens: modelData.maxInputTokens ?? existingModel.maxInputTokens,
           maxOutputTokens: modelData.maxOutputTokens ?? existingModel.maxOutputTokens,
           capabilities: this.normalizeCapabilities(modelData.capabilities, existingModel.capabilities),
+          ...((modelData.requestAdditional ?? existingModel.requestAdditional) ? { requestAdditional: modelData.requestAdditional ?? existingModel.requestAdditional } : {}),
+          ...((modelData.responseOverwrite ?? existingModel.responseOverwrite) ? { responseOverwrite: modelData.responseOverwrite ?? existingModel.responseOverwrite } : {}),
           ...((modelData.speedHistory ?? existingModel.speedHistory) ? { speedHistory: modelData.speedHistory ?? existingModel.speedHistory } : {}),
           ...((modelData.averageSpeed ?? existingModel.averageSpeed) !== undefined ? { averageSpeed: modelData.averageSpeed ?? existingModel.averageSpeed } : {}),
         };

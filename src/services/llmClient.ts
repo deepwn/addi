@@ -6,6 +6,7 @@ import { MessageConverter } from "./messageConverter";
 const TOKEN_LIMIT = 1024 * 1024 * 4;
 
 export class LLMClient {
+  private _extractorCache: Map<string, (data: any) => any> = new Map();
   async callOpenAiApi(
     provider: Provider,
     model: Model,
@@ -49,6 +50,15 @@ export class LLMClient {
       body["tools"] = tools;
     }
 
+    if (model.requestAdditional) {
+      try {
+        const additional = JSON.parse(model.requestAdditional);
+        Object.assign(body, additional);
+      } catch (e) {
+        logger.warn("Failed to parse requestAdditional", { error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
     const sanitizedBody = { ...body };
     if (Array.isArray(sanitizedBody["messages"])) {
       sanitizedBody["messages"] = (sanitizedBody["messages"] as any[]).map((msg) => {
@@ -80,7 +90,8 @@ export class LLMClient {
       progress,
       token,
       true,
-      onStats
+      onStats,
+      model.responseOverwrite
     );
     logger.debug("callOpenAiApi completed", {
       provider: logger.sanitizeProvider(provider),
@@ -606,12 +617,80 @@ export class LLMClient {
     };
   }
 
+  private extractValue(data: any, path: string): any {
+    // Use a compiled accessor cached per-path to avoid repeated regex/parsing overhead
+    const cacheKey = path;
+    let fn = this._extractorCache.get(cacheKey);
+    if (!fn) {
+      fn = this.compileExtractor(path);
+      this._extractorCache.set(cacheKey, fn);
+    }
+    try {
+      return fn(data);
+    } catch {
+      return undefined;
+    }
+  }
+
+  private compileExtractor(path: string): (data: any) => any {
+    // Allow users to use "response" as the root object variable
+    if (path.startsWith("response.")) {
+      path = path.substring(9);
+    }
+    const parts = path.split('.');
+    const steps: Array<any> = parts.map((part) => {
+      const selectorMatch = part.match(/^(\w+)\[(.*?)\]$/);
+      if (selectorMatch && selectorMatch[1] && selectorMatch[2]) {
+        const field = selectorMatch[1];
+        const selector = selectorMatch[2];
+        if (/^\d+$/.test(selector)) {
+          return { type: 'index', field, index: parseInt(selector, 10) };
+        }
+        const kvMatch = selector.match(/^(\w+)=['"]?(.*?)['"]?$/);
+        if (kvMatch && kvMatch[1]) {
+          return { type: 'filter', field, key: kvMatch[1], value: kvMatch[2] };
+        }
+        return { type: 'unknown', raw: part };
+      }
+      return { type: 'prop', name: part };
+    });
+
+    return (data: any) => {
+      let current = data;
+      for (const s of steps) {
+        if (current === undefined || current === null) {
+          return undefined;
+        }
+        if (s.type === 'prop') {
+          current = current[s.name];
+        } else if (s.type === 'index') {
+          current = current[s.field];
+          if (!Array.isArray(current)) {
+            return undefined;
+          }
+          current = current[s.index];
+        } else if (s.type === 'filter') {
+          current = current[s.field];
+          if (!Array.isArray(current)) {
+            return undefined;
+          }
+          current = current.find((item: any) => item && item[s.key] === s.value);
+        } else {
+          // Unknown selector, fall back to direct property
+          current = current[s.raw];
+        }
+      }
+      return current;
+    };
+  }
+
   private async streamOpenAiCompatibleResponse(
     request: { url: string; headers: Record<string, string>; body: Record<string, unknown> },
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken,
-    strict: boolean,
-    onStats?: (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => void
+    _strict: boolean,
+    onStats?: (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => void,
+    responseOverwrite?: string
   ): Promise<void> {
     const response = await fetch(request.url, {
       method: "POST",
@@ -658,6 +737,16 @@ export class LLMClient {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+
+    let mapping: Record<string, string> | undefined;
+    if (responseOverwrite) {
+      try {
+        mapping = JSON.parse(responseOverwrite);
+      } catch (e) {
+        logger.warn("Failed to parse responseOverwrite", { error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
     // For OpenAI-style function_call detection we may receive parts indicating a function call
     let pendingFunctionCall: { name?: string; arguments?: string } | null = null;
     // For newer OpenAI-style tool_calls streaming we may receive incremental tool_calls entries
@@ -684,6 +773,38 @@ export class LLMClient {
         buffer = "";
       }
 
+      // Attempt to process the buffer if it looks like a complete message
+      // To avoid CPU overhead and false-positives, only attempt parsing in limited cases:
+      // - exact `data: [DONE]`
+      // - `data: ` prefixed JSON (common SSE case)
+      // - small bare JSON that likely represents a single response chunk (heuristic)
+      // Also limit the buffer size we try parsing to avoid expensive operations on large buffers.
+      if (buffer && !done) {
+        const trimmedBuffer = buffer.trim();
+        const maxProbeSize = 64 * 1024; // only attempt parse for buffers <= 64KB
+        if (trimmedBuffer === "data: [DONE]") {
+          lines.push(buffer);
+          buffer = "";
+        } else if (trimmedBuffer.startsWith("data: ") && buffer.length <= maxProbeSize) {
+          try {
+            JSON.parse(trimmedBuffer.slice(6));
+            lines.push(buffer);
+            buffer = "";
+          } catch {
+            // Incomplete or invalid JSON, wait for more data
+          }
+        } else if (trimmedBuffer.startsWith("{") && buffer.length <= 8 * 1024 && trimmedBuffer.includes('"choices"')) {
+          // Heuristic: small bare JSON most likely a single response object from some providers
+          try {
+            JSON.parse(trimmedBuffer);
+            lines.push(buffer);
+            buffer = "";
+          } catch {
+            // Incomplete JSON, wait for more data
+          }
+        }
+      }
+
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) {
@@ -692,9 +813,24 @@ export class LLMClient {
         if (trimmed === "data: [DONE]") {
           break outerLoop;
         }
+        let data: any;
         if (trimmed.startsWith("data: ")) {
           try {
-            const data = JSON.parse(trimmed.slice(6));
+            data = JSON.parse(trimmed.slice(6));
+          } catch {
+            continue;
+          }
+        } else if (trimmed.startsWith("{")) {
+          try {
+            data = JSON.parse(trimmed);
+          } catch {
+            continue;
+          }
+        } else {
+          continue;
+        }
+
+        if (data) {
             const choice = data?.choices?.[0];
             // delta may contain content chunks, legacy function_call, or new tool_calls
             const delta = choice?.delta ?? {};
@@ -746,7 +882,14 @@ export class LLMClient {
               }
             }
 
-            const reasoning = delta?.reasoning_content ?? data?.choices?.[0]?.message?.reasoning_content;
+            let reasoning: string | undefined;
+            if (mapping && mapping["thinking"]) {
+                reasoning = this.extractValue(data, mapping["thinking"]);
+            }
+            if (!reasoning) {
+                reasoning = delta?.reasoning_content ?? data?.choices?.[0]?.message?.reasoning_content;
+            }
+
             if (typeof reasoning === "string" && reasoning.length > 0) {
               if (firstTokenTime === 0) {
                 firstTokenTime = Date.now();
@@ -755,7 +898,14 @@ export class LLMClient {
               progress.report(new vscode.LanguageModelTextPart(reasoning));
             }
 
-            const content = delta?.content ?? data?.choices?.[0]?.message?.content;
+            let content: string | undefined;
+            if (mapping && mapping["text"]) {
+                content = this.extractValue(data, mapping["text"]);
+            }
+            if (!content) {
+                content = delta?.content ?? data?.choices?.[0]?.message?.content;
+            }
+
             if (typeof content === "string" && content.length > 0) {
               if (firstTokenTime === 0) {
                 firstTokenTime = Date.now();
@@ -861,16 +1011,6 @@ export class LLMClient {
               // If finishReason is "stop" or "length", we break.
               break outerLoop;
             }
-          } catch (error) {
-            // If strict parsing is required we warn, but also report a textual hint so user sees progress
-            if (strict) {
-              logger.warn("Failed to parse OpenAI compatible stream data", {
-                error: error instanceof Error ? error.message : String(error),
-              });
-            }
-            // Optionally surface a non-fatal parse hint
-            // Do not spam progress with every parse error; skip reporting here.
-          }
         }
       }
       if (done) {

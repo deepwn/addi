@@ -103,12 +103,6 @@
               "icon": "$(add)"
             }
           ]
-        },
-        {
-          "type": "webview",
-          "id": "addiDetails",
-          "name": "Details",
-          "icon": "$(info)"
         }
       ]
     },
@@ -138,26 +132,6 @@
           "command": "addi.refresh",
           "when": "view == addiProviders",
           "group": "navigation@0"
-        },
-        {
-          "command": "addi.triggerEditDetails",
-          "when": "view == addiDetails && addi:hasDetailsItem && !addi:isEditingDetails",
-          "group": "navigation"
-        },
-        {
-          "command": "addi.saveDetails",
-          "when": "view == addiDetails && addi:isEditingDetails",
-          "group": "navigation@2"
-        },
-        {
-          "command": "addi.verifyDetails",
-          "when": "view == addiDetails && addi:isEditingDetails && addi:detailsType == model",
-          "group": "navigation@1"
-        },
-        {
-          "command": "addi.cancelDetails",
-          "when": "view == addiDetails && addi:isEditingDetails",
-          "group": "navigation@3"
         }
       ],
       "panel/title": [
@@ -229,12 +203,12 @@
         {
           "command": "addi.editProvider",
           "when": "view == addiProviders && viewItem == provider",
-          "group": "modify"
+          "group": "modify@1"
         },
         {
           "command": "addi.deleteProvider",
           "when": "view == addiProviders && viewItem == provider",
-          "group": "modify"
+          "group": "modify@99"
         },
         {
           "command": "addi.editModel",
@@ -244,7 +218,7 @@
         {
           "command": "addi.deleteModel",
           "when": "view == addiProviders && viewItem == model",
-          "group": "modify@2"
+          "group": "modify@99"
         },
         {
           "command": "addi.useModel",

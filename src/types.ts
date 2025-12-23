@@ -11,6 +11,8 @@ export type ModelDraft = {
   maxInputTokens: number;
   maxOutputTokens: number;
   capabilities: ModelCapabilities;
+  requestAdditional?: string;
+  responseOverwrite?: string;
   sid?: string;
   speedHistory?: number[];
   averageSpeed?: number;

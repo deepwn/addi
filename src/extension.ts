@@ -4,7 +4,7 @@ import { ProviderModelManager, AddiTreeDataProvider, ProviderTreeItem } from "./
 import { CommandHandler } from "./commands";
 import { ModelTreeItem } from "./model";
 import { logger, LogLevel } from "./logger";
-import { DetailsViewProvider } from "./detailsView";
+import { EditorViewManager } from "./editorView";
 
 function readLogLevel(): LogLevel {
   const config = vscode.workspace.getConfiguration("addi");
@@ -145,38 +145,8 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.commands.executeCommand('workbench.action.openSettings', '@ext:deepwn.addi');
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand("addi.triggerEditDetails", () => {
-      detailsProvider.triggerEdit();
-  }));
-
-  context.subscriptions.push(vscode.commands.registerCommand("addi.saveDetails", () => {
-      detailsProvider.triggerSave();
-  }));
-
-  context.subscriptions.push(vscode.commands.registerCommand("addi.cancelDetails", () => {
-      detailsProvider.triggerCancel();
-  }));
-
-  context.subscriptions.push(vscode.commands.registerCommand("addi.verifyDetails", () => {
-      detailsProvider.triggerVerify();
-  }));
-
-  const detailsProvider = new DetailsViewProvider(context.extensionUri, manager, () => treeDataProvider.refresh());
-  commandHandler.setDetailsViewProvider(detailsProvider);
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(DetailsViewProvider.viewType, detailsProvider)
-  );
-
-  treeView.onDidChangeSelection((e) => {
-    if (e.selection.length > 0) {
-      const item = e.selection[0];
-      if (item instanceof ProviderTreeItem || item instanceof ModelTreeItem) {
-        detailsProvider.update(item);
-      }
-    } else {
-      detailsProvider.update(undefined);
-    }
-  });
+  const editorManager = new EditorViewManager(context.extensionUri, manager, () => treeDataProvider.refresh());
+  commandHandler.setEditorViewManager(editorManager);
 }
 
 export function deactivate() {}
