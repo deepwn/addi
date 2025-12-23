@@ -680,6 +680,39 @@ export class CommandHandler {
     }
   }
 
+  async copyProvider(item: ProviderTreeItem): Promise<void> {
+    logger.info("Command copyProvider invoked", logger.sanitizeProvider(item.provider));
+    if (this.editorViewManager) {
+      const prefillData = { ...item.provider, name: `${item.provider.name} Copy` };
+      // Remove ID and models to ensure it's treated as new
+      delete (prefillData as any).id;
+      delete (prefillData as any).models;
+      
+      this.editorViewManager.openEditor(undefined, 'create', undefined, prefillData);
+    } else {
+      UserFeedback.showError("Editor view manager not initialized");
+    }
+  }
+
+  async copyModel(item: ModelTreeItem): Promise<void> {
+    logger.info("Command copyModel invoked", logger.sanitizeModel(item.model));
+    if (this.editorViewManager) {
+      const result = this.manager.findModel(item.model.sid);
+      if (!result) {
+        UserFeedback.showError("Parent provider not found");
+        return;
+      }
+      
+      const prefillData = { ...item.model, name: `${item.model.name} Copy` };
+      // Remove SID to ensure it's treated as new
+      delete (prefillData as any).sid;
+      
+      this.editorViewManager.openEditor(undefined, 'create', result.provider.id, prefillData);
+    } else {
+      UserFeedback.showError("Editor view manager not initialized");
+    }
+  }
+
   private adjustExportUriForEncryption(uri: vscode.Uri, encrypted: boolean): vscode.Uri {
     const lowerPath = uri.path.toLowerCase();
     if (encrypted) {

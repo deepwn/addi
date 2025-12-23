@@ -122,11 +122,13 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(vscode.commands.registerCommand("addi.addProvider", () => commandHandler.addProvider()));
   context.subscriptions.push(vscode.commands.registerCommand("addi.editProvider", (item: ProviderTreeItem) => commandHandler.editProvider(item)));
+  context.subscriptions.push(vscode.commands.registerCommand("addi.copyProvider", (item: ProviderTreeItem) => commandHandler.copyProvider(item)));
   context.subscriptions.push(vscode.commands.registerCommand("addi.deleteProvider", (item: ProviderTreeItem) => commandHandler.deleteProvider(item)));
   context.subscriptions.push(vscode.commands.registerCommand("addi.pullProviderModels", (item: ProviderTreeItem) => commandHandler.pullProviderModels(item)));
   context.subscriptions.push(vscode.commands.registerCommand("addi.addModel", (item: ProviderTreeItem) => commandHandler.addModel(item)));
   context.subscriptions.push(vscode.commands.registerCommand("addi.editApiKey", (item: ProviderTreeItem) => commandHandler.editApiKey(item)));
   context.subscriptions.push(vscode.commands.registerCommand("addi.editModel", (item: ModelTreeItem) => commandHandler.editModel(item)));
+  context.subscriptions.push(vscode.commands.registerCommand("addi.copyModel", (item: ModelTreeItem) => commandHandler.copyModel(item)));
   context.subscriptions.push(vscode.commands.registerCommand("addi.deleteModel", (item: ModelTreeItem) => commandHandler.deleteModel(item)));
   context.subscriptions.push(
     vscode.commands.registerCommand("addi.useModel", (item: ModelTreeItem) => {

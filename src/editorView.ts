@@ -13,11 +13,11 @@ export class EditorViewManager {
   private _currentProvider: Provider | undefined;
   private _lastVerifiedData: string | undefined;
   private _detectedSpeed: number | undefined;
-  private _viewState: { mode: 'edit' | 'create'; type: 'provider' | 'model'; parentId?: string } = { mode: 'edit', type: 'provider' };
+  private _viewState: { mode: 'edit' | 'create'; type: 'provider' | 'model'; parentId?: string; prefillData?: any } = { mode: 'edit', type: 'provider' };
 
   constructor(private readonly _extensionUri: vscode.Uri, private readonly _manager: ProviderModelManager, private readonly _refreshTree: () => void) {}
 
-  public openEditor(item: ProviderTreeItem | ModelTreeItem | undefined, mode: 'edit' | 'create', parentId?: string) {
+  public openEditor(item: ProviderTreeItem | ModelTreeItem | undefined, mode: 'edit' | 'create', parentId?: string, prefillData?: any) {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
       : undefined;
@@ -62,10 +62,10 @@ export class EditorViewManager {
       });
     }
 
-    this._updatePanelContent(item, mode, parentId);
+    this._updatePanelContent(item, mode, parentId, prefillData);
   }
 
-  private _updatePanelContent(item: ProviderTreeItem | ModelTreeItem | undefined, mode: 'edit' | 'create', parentId?: string) {
+  private _updatePanelContent(item: ProviderTreeItem | ModelTreeItem | undefined, mode: 'edit' | 'create', parentId?: string, prefillData?: any) {
     this._currentItem = item;
     this._lastVerifiedData = undefined;
     this._detectedSpeed = undefined;
@@ -82,7 +82,7 @@ export class EditorViewManager {
     }
 
     const type = (item instanceof ProviderTreeItem) || (mode === 'create' && !parentId) ? 'provider' : 'model';
-    this._viewState = { mode, type };
+    this._viewState = { mode, type, prefillData };
     if (parentId) {
         this._viewState.parentId = parentId;
     }
@@ -98,6 +98,22 @@ export class EditorViewManager {
         }
     }
 
+    let dataToSend: any = {};
+    if (mode === 'create') {
+        if (prefillData) {
+            dataToSend = prefillData;
+        } else if (type === 'model') {
+            dataToSend = {
+                family: ConfigManager.getDefaultModelFamily(),
+                version: ConfigManager.getDefaultModelVersion(),
+                maxInputTokens: ConfigManager.getDefaultMaxInputTokens(),
+                maxOutputTokens: ConfigManager.getDefaultMaxOutputTokens()
+            };
+        }
+    } else {
+        dataToSend = (item instanceof ProviderTreeItem ? item.provider : item?.model);
+    }
+
     if (this._panel) {
         this._panel.title = title;
         this._panel.webview.postMessage({
@@ -105,12 +121,7 @@ export class EditorViewManager {
             mode: mode,
             item: {
                 type: type,
-                data: mode === 'create' ? (type === 'model' ? {
-                    family: ConfigManager.getDefaultModelFamily(),
-                    version: ConfigManager.getDefaultModelVersion(),
-                    maxInputTokens: ConfigManager.getDefaultMaxInputTokens(),
-                    maxOutputTokens: ConfigManager.getDefaultMaxOutputTokens()
-                } : {}) : (item instanceof ProviderTreeItem ? item.provider : item?.model),
+                data: dataToSend,
                 parentId: parentId || (item instanceof ModelTreeItem ? this._getParentProviderId(item) : undefined)
             }
         });
@@ -636,8 +647,14 @@ export class EditorViewManager {
                             pName.value = data.name || '';
                             pType.value = data.providerType || 'generic';
                             pEndpoint.value = data.apiEndpoint || '';
-                            pApiKey.value = ''; 
-                            pApiKey.placeholder = isCreate ? 'Required' : 'Leave empty to keep unchanged';
+                            
+                            if (isCreate && data.apiKey) {
+                                pApiKey.value = data.apiKey;
+                            } else {
+                                pApiKey.value = '';
+                            }
+                            pApiKey.placeholder = isCreate && !data.apiKey ? 'Required' : 'Leave empty to keep unchanged';
+                            
                             pDesc.value = data.description || '';
                             pWeb.value = data.website || '';
                         } else if (item.type === 'model') {

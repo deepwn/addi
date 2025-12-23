@@ -189,6 +189,14 @@
         {
           "command": "addi.pullProviderModels",
           "when": "false"
+        },
+        {
+          "command": "addi.copyProvider",
+          "when": "false"
+        },
+        {
+          "command": "addi.copyModel",
+          "when": "false"
         }
       ],
       "view/item/context": [
@@ -213,6 +221,11 @@
           "group": "modify@1"
         },
         {
+          "command": "addi.copyProvider",
+          "when": "view == addiProviders && viewItem == provider",
+          "group": "modify@2"
+        },
+        {
           "command": "addi.deleteProvider",
           "when": "view == addiProviders && viewItem == provider",
           "group": "modify@99"
@@ -221,6 +234,11 @@
           "command": "addi.editModel",
           "when": "view == addiProviders && viewItem == model",
           "group": "modify@1"
+        },
+        {
+          "command": "addi.copyModel",
+          "when": "view == addiProviders && viewItem == model",
+          "group": "modify@2"
         },
         {
           "command": "addi.deleteModel",
@@ -350,6 +368,20 @@
         "title": "Delete Model",
         "shortTitle": "Delete",
         "icon": "$(trash)",
+        "category": "Addi"
+      },
+      {
+        "command": "addi.copyProvider",
+        "title": "Copy Provider",
+        "shortTitle": "Copy",
+        "icon": "$(copy)",
+        "category": "Addi"
+      },
+      {
+        "command": "addi.copyModel",
+        "title": "Copy Model",
+        "shortTitle": "Copy",
+        "icon": "$(copy)",
         "category": "Addi"
       },
       {
