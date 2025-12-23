@@ -73,6 +73,13 @@
           "fontPath": "resources/bootstrap-icons.woff",
           "fontCharacter": "\\F675"
         }
+      },
+      "radar-icon": {
+        "description": "Radar Icon",
+        "default": {
+          "fontPath": "resources/bootstrap-icons.woff",
+          "fontCharacter": "\\F8CF"
+        }
       }
     },
     "viewsContainers": {
@@ -363,7 +370,7 @@
         "command": "addi.pullProviderModels",
         "title": "Pull Models List",
         "shortTitle": "Pull Models",
-        "icon": "$(pull)",
+        "icon": "$(radar-icon)",
         "category": "Addi"
       },
       {

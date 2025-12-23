@@ -236,4 +236,51 @@ suite("Streaming / SSE Parsing", () => {
     const done = chunks.find((c) => c.type === "done");
     assert.ok(done, "should have done");
   });
+
+  test("streamChatCompletion yields reasoning_content", async () => {
+    // Simulated DeepSeek SSE lines (reasoning then content)
+    const ssePayload = [
+      'data: {"choices":[{"delta":{"reasoning_content":"Thinking..."}}]}\n',
+      'data: {"choices":[{"delta":{"content":"Answer"}}]}\n',
+      "\n",
+      "data: [DONE]\n"
+    ];
+
+    // Mock fetch to return our stream
+    globalThis.fetch = (async () => ({
+      ok: true,
+      body: new MockReadableStream(ssePayload) as unknown as ReadableStream<Uint8Array>,
+      headers: new Headers(),
+      status: 200,
+      statusText: "OK",
+      type: "basic",
+      url: "https://api.openai.com/v1/chat/completions",
+      redirected: false,
+      clone() {
+        return this as unknown as Response;
+      },
+      arrayBuffer: async () => new ArrayBuffer(0),
+      blob: async () => new Blob([]),
+      formData: async () => new FormData(),
+      json: async () => ({}),
+      text: async () => "",
+    })) as unknown as typeof fetch;
+
+    const provider = { id: "p1", name: "p1", apiEndpoint: "https://api.openai.com/v1", apiKey: "sk-test", providerType: "openai", models: [] } as any;
+    const model = { id: "deepseek-reasoner", name: "deepseek-reasoner", family: "deepseek", maxOutputTokens: 128 } as any;
+    const chunks: ChatStreamChunk[] = [];
+    for await (const c of streamChatCompletion(provider, model, { prompt: "Hi" })) {
+      chunks.push(c);
+    }
+
+    // Expect reasoning + content
+    const deltaTexts = chunks
+      .filter((c) => c.type === "delta")
+      .map((c) => c.deltaText)
+      .join("");
+    assert.strictEqual(deltaTexts, "Thinking...Answer");
+    const done = chunks.find((c) => c.type === "done");
+    assert.ok(done, "should have done");
+    assert.strictEqual(done?.fullText, "Thinking...Answer");
+  });
 });

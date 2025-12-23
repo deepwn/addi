@@ -209,15 +209,18 @@ export async function* streamChatCompletion(provider: Provider, model: Model, op
           try {
             const parsedObj = JSON.parse(trimmed) as any;
             // Narrow to expected OpenAI-compatible SSE shape
-            type OpenAiSse = { done?: boolean; choices?: Array<{ delta?: { content?: string }; message?: { content?: string } }> };
+            type OpenAiSse = { done?: boolean; choices?: Array<{ delta?: { content?: string; reasoning_content?: string }; message?: { content?: string; reasoning_content?: string } }> };
             const p = parsedObj as OpenAiSse;
             if (p.done) {
               break;
             }
             const delta = p.choices?.[0]?.delta?.content ?? p.choices?.[0]?.message?.content;
-            if (typeof delta === "string" && delta.length) {
-              full += delta;
-              yield { type: "delta", deltaText: delta, fullText: full };
+            const reasoning = p.choices?.[0]?.delta?.reasoning_content ?? p.choices?.[0]?.message?.reasoning_content;
+            
+            if ((typeof delta === "string" && delta.length) || (typeof reasoning === "string" && reasoning.length)) {
+              const text = (reasoning || "") + (delta || "");
+              full += text;
+              yield { type: "delta", deltaText: text, fullText: full };
               // consumed buffer
               buffer = "";
               continue;
@@ -236,15 +239,18 @@ export async function* streamChatCompletion(provider: Provider, model: Model, op
           continue;
         }
         // Narrow to expected OpenAI-compatible SSE shape
-        type OpenAiSse = { done?: boolean; choices?: Array<{ delta?: { content?: string }; message?: { content?: string } }> };
+        type OpenAiSse = { done?: boolean; choices?: Array<{ delta?: { content?: string; reasoning_content?: string }; message?: { content?: string; reasoning_content?: string } }> };
         const p = parsed as OpenAiSse;
         if (p.done) {
           break;
         }
         const delta = p.choices?.[0]?.delta?.content ?? p.choices?.[0]?.message?.content;
-        if (typeof delta === "string" && delta.length) {
-          full += delta;
-          yield { type: "delta", deltaText: delta, fullText: full };
+        const reasoning = p.choices?.[0]?.delta?.reasoning_content ?? p.choices?.[0]?.message?.reasoning_content;
+
+        if ((typeof delta === "string" && delta.length) || (typeof reasoning === "string" && reasoning.length)) {
+          const text = (reasoning || "") + (delta || "");
+          full += text;
+          yield { type: "delta", deltaText: text, fullText: full };
         }
       }
     }
