@@ -304,7 +304,6 @@ export class EditorViewManager {
       maxInputTokens: maxInputTokens,
       maxOutputTokens: maxOutputTokens,
       requestAdditional: data.requestAdditional,
-      responseOverwrite: data.responseOverwrite,
       capabilities: {
           imageInput: data.imageInput,
           toolCalling: data.toolCalling
@@ -411,7 +410,7 @@ export class EditorViewManager {
                         font-size: 0.9em;
                         white-space: pre-wrap;
                         overflow-x: auto;
-                        max-height: 300px;
+                        max-height: 800px;
                         overflow-y: auto;
                     }
                 </style>
@@ -494,12 +493,6 @@ export class EditorViewManager {
                                 <textarea id="m-req-additional" placeholder='{"key": "value"}'></textarea>
                                 <div class="info-text">Additional JSON properties to merge into the request body.</div>
                             </div>
-                            
-                            <div class="form-group">
-                                <label>Response Overwrite / Mapping (JSON)</label>
-                                <textarea id="m-res-overwrite" placeholder='{"thinking": "choices[0].message.content.thinking"}'></textarea>
-                                <div class="info-text">Define how to map or overwrite response fields.</div>
-                            </div>
                         </div>
 
                         <div class="button-row">
@@ -513,10 +506,6 @@ export class EditorViewManager {
                         <h3>Request Preview</h3>
                         <div class="info-text" style="margin-bottom: 5px;">Simulated request body sent to provider:</div>
                         <div id="req-preview" class="preview-box"></div>
-                        
-                        <h3>Response Mapping</h3>
-                        <div class="info-text" style="margin-bottom: 5px;">Current response mapping configuration:</div>
-                        <div id="res-preview" class="preview-box"></div>
                     </div>
                 </div>
 
@@ -546,11 +535,9 @@ export class EditorViewManager {
                     const mVision = document.getElementById('m-vision');
                     const mTools = document.getElementById('m-tools');
                     const mReqAdd = document.getElementById('m-req-additional');
-                    const mResOver = document.getElementById('m-res-overwrite');
                     
                     // Preview elements
                     const reqPreview = document.getElementById('req-preview');
-                    const resPreview = document.getElementById('res-preview');
 
                     // Buttons
                     const btnSave = document.getElementById('btn-save');
@@ -580,6 +567,46 @@ export class EditorViewManager {
                         let req = { ...mockRequestBase };
                         req.model = mId.value || "model-id";
                         
+                        // Handle Vision
+                        if (mVision.checked) {
+                            req.messages = [
+                                { role: "system", content: "You are a helpful assistant." },
+                                { 
+                                    role: "user", 
+                                    content: [
+                                        { type: "text", text: "What is in this image?" },
+                                        { type: "image_url", image_url: { url: "data:image/jpeg;base64,..." } }
+                                    ]
+                                }
+                            ];
+                        } else {
+                            req.messages = [
+                                { role: "system", content: "You are a helpful assistant." },
+                                { role: "user", content: "Hello" }
+                            ];
+                        }
+
+                        // Handle Tools
+                        if (mTools.checked) {
+                            req.tools = [
+                                {
+                                    type: "function",
+                                    function: {
+                                        name: "get_weather",
+                                        description: "Get current weather",
+                                        parameters: {
+                                            type: "object",
+                                            properties: {
+                                                location: { type: "string" }
+                                            },
+                                            required: ["location"]
+                                        }
+                                    }
+                                }
+                            ];
+                            req.tool_choice = "auto";
+                        }
+
                         try {
                             const additional = mReqAdd.value ? JSON.parse(mReqAdd.value) : {};
                             req = { ...req, ...additional };
@@ -589,27 +616,13 @@ export class EditorViewManager {
                             reqPreview.textContent = "Invalid JSON in Request Additional Data";
                             reqPreview.style.color = 'var(--vscode-errorForeground)';
                         }
-                        
-                        // Response Preview
-                        try {
-                            const mapping = mResOver.value ? JSON.parse(mResOver.value) : null;
-                            if (mapping) {
-                                resPreview.textContent = JSON.stringify(mapping, null, 2);
-                                resPreview.style.color = 'var(--vscode-foreground)';
-                            } else {
-                                resPreview.textContent = "Standard OpenAI response structure expected (no mapping).";
-                                resPreview.style.color = 'var(--vscode-descriptionForeground)';
-                            }
-                        } catch (e) {
-                            resPreview.textContent = "Invalid JSON in Response Overwrite";
-                            resPreview.style.color = 'var(--vscode-errorForeground)';
-                        }
                     }
                     
                     // Add listeners for live preview
                     mId.addEventListener('input', updatePreviews);
                     mReqAdd.addEventListener('input', updatePreviews);
-                    mResOver.addEventListener('input', updatePreviews);
+                    mVision.addEventListener('change', updatePreviews);
+                    mTools.addEventListener('change', updatePreviews);
 
                     window.addEventListener('message', event => {
                         const message = event.data;
@@ -623,6 +636,7 @@ export class EditorViewManager {
                                 if (updates.maxOutputTokens) mOutput.value = updates.maxOutputTokens;
                                 if (updates.imageInput !== undefined) mVision.checked = updates.imageInput;
                                 if (updates.toolCalling !== undefined) mTools.checked = updates.toolCalling;
+                                updatePreviews();
                                 break;
                         }
                     });
@@ -675,7 +689,6 @@ export class EditorViewManager {
                             mTools.checked = !!(data.capabilities && (data.capabilities.toolCalling === true || typeof data.capabilities.toolCalling === 'number'));
                             
                             mReqAdd.value = data.requestAdditional || '';
-                            mResOver.value = data.responseOverwrite || '';
                             
                             updatePreviews();
                         }
@@ -709,8 +722,7 @@ export class EditorViewManager {
                                     maxOutputTokens: mOutput.value,
                                     imageInput: mVision.checked,
                                     toolCalling: mTools.checked,
-                                    requestAdditional: mReqAdd.value,
-                                    responseOverwrite: mResOver.value
+                                    requestAdditional: mReqAdd.value
                                 }
                             });
                         }
@@ -724,14 +736,7 @@ export class EditorViewManager {
                         vscode.postMessage({
                             type: 'verifyModel',
                             payload: {
-                                name: mName.value,
-                                id: mId.value,
-                                family: mFamily.value,
-                                version: mVersion.value,
-                                maxInputTokens: mInput.value,
-                                maxOutputTokens: mOutput.value,
-                                imageInput: mVision.checked,
-                                toolCalling: mTools.checked
+                                id: mId.value
                             }
                         });
                     });

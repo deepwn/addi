@@ -6,7 +6,6 @@ import { MessageConverter } from "./messageConverter";
 const TOKEN_LIMIT = 1024 * 1024 * 4;
 
 export class LLMClient {
-  private _extractorCache: Map<string, (data: any) => any> = new Map();
   async callOpenAiApi(
     provider: Provider,
     model: Model,
@@ -90,8 +89,7 @@ export class LLMClient {
       progress,
       token,
       true,
-      onStats,
-      model.responseOverwrite
+      onStats
     );
     logger.debug("callOpenAiApi completed", {
       provider: logger.sanitizeProvider(provider),
@@ -679,73 +677,6 @@ export class LLMClient {
     };
   }
 
-  private extractValue(data: any, path: string): any {
-    // Use a compiled accessor cached per-path to avoid repeated regex/parsing overhead
-    const cacheKey = path;
-    let fn = this._extractorCache.get(cacheKey);
-    if (!fn) {
-      fn = this.compileExtractor(path);
-      this._extractorCache.set(cacheKey, fn);
-    }
-    try {
-      return fn(data);
-    } catch {
-      return undefined;
-    }
-  }
-
-  private compileExtractor(path: string): (data: any) => any {
-    // Allow users to use "response" as the root object variable
-    if (path.startsWith("response.")) {
-      path = path.substring(9);
-    }
-    const parts = path.split('.');
-    const steps: Array<any> = parts.map((part) => {
-      const selectorMatch = part.match(/^(\w+)\[(.*?)\]$/);
-      if (selectorMatch && selectorMatch[1] && selectorMatch[2]) {
-        const field = selectorMatch[1];
-        const selector = selectorMatch[2];
-        if (/^\d+$/.test(selector)) {
-          return { type: 'index', field, index: parseInt(selector, 10) };
-        }
-        const kvMatch = selector.match(/^(\w+)=['"]?(.*?)['"]?$/);
-        if (kvMatch && kvMatch[1]) {
-          return { type: 'filter', field, key: kvMatch[1], value: kvMatch[2] };
-        }
-        return { type: 'unknown', raw: part };
-      }
-      return { type: 'prop', name: part };
-    });
-
-    return (data: any) => {
-      let current = data;
-      for (const s of steps) {
-        if (current === undefined || current === null) {
-          return undefined;
-        }
-        if (s.type === 'prop') {
-          current = current[s.name];
-        } else if (s.type === 'index') {
-          current = current[s.field];
-          if (!Array.isArray(current)) {
-            return undefined;
-          }
-          current = current[s.index];
-        } else if (s.type === 'filter') {
-          current = current[s.field];
-          if (!Array.isArray(current)) {
-            return undefined;
-          }
-          current = current.find((item: any) => item && item[s.key] === s.value);
-        } else {
-          // Unknown selector, fall back to direct property
-          current = current[s.raw];
-        }
-      }
-      return current;
-    };
-  }
-
   private sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
     const sanitized: Record<string, string> = {};
     for (const [key, value] of Object.entries(headers)) {
@@ -763,8 +694,7 @@ export class LLMClient {
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken,
     _strict: boolean,
-    onStats?: (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => void,
-    responseOverwrite?: string
+    onStats?: (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => void
   ): Promise<void> {
     logger.debug("Sending API request", {
       url: request.url,
@@ -824,15 +754,6 @@ export class LLMClient {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
-
-    let mapping: Record<string, string> | undefined;
-    if (responseOverwrite) {
-      try {
-        mapping = JSON.parse(responseOverwrite);
-      } catch (e) {
-        logger.warn("Failed to parse responseOverwrite", { error: e instanceof Error ? e.message : String(e) });
-      }
-    }
 
     // For OpenAI-style function_call detection we may receive parts indicating a function call
     let pendingFunctionCall: { name?: string; arguments?: string } | null = null;
@@ -970,9 +891,6 @@ export class LLMClient {
             }
 
             let reasoning: string | undefined;
-            if (mapping && mapping["thinking"]) {
-                reasoning = this.extractValue(data, mapping["thinking"]);
-            }
             if (!reasoning) {
                 reasoning = delta?.reasoning_content ?? data?.choices?.[0]?.message?.reasoning_content;
             }
@@ -986,9 +904,6 @@ export class LLMClient {
             }
 
             let content: string | undefined;
-            if (mapping && mapping["text"]) {
-                content = this.extractValue(data, mapping["text"]);
-            }
             if (!content) {
                 content = delta?.content ?? data?.choices?.[0]?.message?.content;
             }
