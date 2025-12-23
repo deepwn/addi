@@ -4,6 +4,22 @@ All notable changes to the "addi" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.0.9] - 2025-12-23
+
+### Added
+- **Request/Response Customization**: Added `requestAdditional` and `responseOverwrite` properties to ModelDraft for advanced request and response customization
+- **Header Sanitization**: Implemented header sanitization for API calls across all provider types to ensure security and compatibility
+- **Streaming Tests**: Enhanced test coverage for bare JSON responses and multiple small chunk handling in streaming scenarios
+
+### Improved
+- **Editor View**: Replaced DetailsView with a more powerful EditorViewManager that supports editing, saving, and verifying providers and models
+- **SSE Payload Handling**: Enhanced `streamChatCompletion` to correctly process various SSE (Server-Sent Events) payload formats
+- **API Client**: Improved `requestAdditional` handling to support additional parameters in API requests for all provider types
+
+### Changed
+- **Architecture**: Major refactoring of the view system - migrated from `detailsView.ts` to `editorView.ts` with enhanced functionality
+- **Test Coverage**: Expanded streaming test suite with 300+ new test cases to ensure robust streaming behavior
+
 ## [0.0.8] - 2025-12-20
 
 ### Added
