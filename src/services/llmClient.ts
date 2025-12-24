@@ -6,6 +6,45 @@ import { MessageConverter } from "./messageConverter";
 const TOKEN_LIMIT = 1024 * 1024 * 4;
 
 export class LLMClient {
+  private requiresReasoningContentForToolCalls(model: Model): boolean {
+    const id = (model.id ?? "").toLowerCase();
+    const name = (model.name ?? "").toLowerCase();
+    const family = (model.family ?? "").toLowerCase();
+    const isDeepSeek = id.includes("deepseek") || name.includes("deepseek") || family.includes("deepseek");
+    if (!isDeepSeek) {
+      return false;
+    }
+
+    // DeepSeek Reasoner models require reasoning_content in assistant messages when tools are involved.
+    if (id.includes("reasoner") || name.includes("reasoner")) {
+      return true;
+    }
+
+    // If requestAdditional enables thinking, treat it as DeepSeek thinking-mode.
+    try {
+      const additional = JSON.parse(model.requestAdditional ?? "{}");
+      const thinking = (additional as any)?.thinking;
+      if (thinking && typeof thinking === "object" && (thinking as any).enabled === true) {
+        return true;
+      }
+    } catch {
+      // ignore invalid JSON
+    }
+    return false;
+  }
+
+  private ensureReasoningContentForToolCallMessages(openAiMessages: Array<Record<string, unknown>>): void {
+    for (const msg of openAiMessages) {
+      if (!msg || typeof msg !== "object") {
+        continue;
+      }
+      if (msg["role"] === "assistant" && msg["tool_calls"] !== undefined && msg["reasoning_content"] === undefined) {
+        // DeepSeek expects this field to exist (can be empty) when assistant emits tool_calls.
+        msg["reasoning_content"] = "";
+      }
+    }
+  }
+
   async callOpenAiApi(
     provider: Provider,
     model: Model,
@@ -27,9 +66,14 @@ export class LLMClient {
       options: optionsSanitized,
     });
     const tools = this.convertToFunctionTools(toolDefinitions);
+    const openAiMessages = MessageConverter.toOpenAiMessages(messages);
+    if (this.requiresReasoningContentForToolCalls(model)) {
+      this.ensureReasoningContentForToolCallMessages(openAiMessages);
+    }
+
     const body: Record<string, unknown> = {
       model: modelIdentifier,
-      messages: MessageConverter.toOpenAiMessages(messages),
+      messages: openAiMessages,
       max_tokens: generation.maxTokens,
       stream: true,
     };
@@ -419,9 +463,14 @@ export class LLMClient {
       options: optionsSanitized,
     });
     const tools = this.convertToFunctionTools(toolDefinitions);
+    const openAiMessages = MessageConverter.toOpenAiMessages(messages);
+    if (this.requiresReasoningContentForToolCalls(model)) {
+      this.ensureReasoningContentForToolCallMessages(openAiMessages);
+    }
+
     const bodyGeneric: Record<string, unknown> = {
       model: modelIdentifier,
-      messages: MessageConverter.toOpenAiMessages(messages),
+      messages: openAiMessages,
       max_tokens: generation.maxTokens,
       stream: true,
     };
