@@ -4,6 +4,11 @@ All notable changes to the "addi" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.0.11] - 2025-12-25
+
+### Changed
+- **Fixes**: Addressed several minor bugs and improved overall stability based on user feedback. (deepseek `reasoning_content` missing at next request with tool calling in thinking chain)
+
 ## [0.0.10] - 2025-12-23
 
 ### Added
