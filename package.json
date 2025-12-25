@@ -3,7 +3,7 @@
   "icon": "resources/icon-bg.min.png",
   "displayName": "Addi",
   "description": "add more custom AI providers and models for your copilot",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "publisher": "deepwn",
   "repository": {
     "type": "git",
@@ -283,12 +283,12 @@
       "properties": {
         "addi.defaultMaxInputTokens": {
           "type": "number",
-          "default": 4096,
+          "default": 65536,
           "description": "Max input tokens"
         },
         "addi.defaultMaxOutputTokens": {
           "type": "number",
-          "default": 1024,
+          "default": 65536,
           "description": "Max output tokens"
         },
         "addi.defaultModelFamily": {

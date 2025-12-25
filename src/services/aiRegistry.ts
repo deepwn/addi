@@ -1,12 +1,12 @@
-import { LanguageModel } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { LanguageModel } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createDeepSeek } from '@ai-sdk/deepseek';
-import { Provider } from '../types';
-import { logger } from '../logger';
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createDeepSeek } from "@ai-sdk/deepseek";
+import { Provider } from "../types";
+import { logger } from "../logger";
 
 // AI SDK 的 Provider 实例通常是一个函数，接受 modelId 返回 LanguageModelV1
 // 我们定义一个通用的类型别名
@@ -33,126 +33,138 @@ export class AIProviderRegistry {
 
   static getAvailableTypes() {
     this.ensureInitialized();
-    return Object.values(this.factories).map(f => ({ label: f.label, value: f.id }));
+    return Object.values(this.factories).map((f) => ({ label: f.label, value: f.id }));
   }
 
   static ensureInitialized() {
     if (this.initialized) {
       return;
     }
-    
+
     // OpenAI
     const openAIFactory: ProviderFactory = {
-      id: 'openai',
-      label: 'OpenAI',
+      id: "openai",
+      label: "OpenAI",
       create: (p) => {
         const settings: any = {};
-        if (p.apiEndpoint) { 
-            // Clean up baseURL: remove /chat/completions if present
-            let baseURL = p.apiEndpoint.replace(/\/chat\/completions\/?$/, '');
-            settings.baseURL = baseURL; 
+        if (p.apiEndpoint) {
+          // Clean up baseURL: remove /chat/completions if present
+          let baseURL = p.apiEndpoint.replace(/\/chat\/completions\/?$/, "");
+          settings.baseURL = baseURL;
         }
-        if (p.apiKey) { settings.apiKey = p.apiKey; }
-        
+        if (p.apiKey) {
+          settings.apiKey = p.apiKey;
+        }
+
         return createOpenAI(settings);
-      }
+      },
     };
     this.register(openAIFactory);
 
     // DeepSeek
     this.register({
-      id: 'deepseek',
-      label: 'DeepSeek',
+      id: "deepseek",
+      label: "DeepSeek",
       create: (p) => {
         const settings: any = {};
-        if (p.apiKey) { settings.apiKey = p.apiKey; }
-        // DeepSeek provider usually doesn't need custom baseURL unless using a proxy, 
+        if (p.apiKey) {
+          settings.apiKey = p.apiKey;
+        }
+        // DeepSeek provider usually doesn't need custom baseURL unless using a proxy,
         // but we support it if provided.
         if (p.apiEndpoint) {
-             let baseURL = p.apiEndpoint.replace(/\/chat\/completions\/?$/, '');
-             settings.baseURL = baseURL;
+          let baseURL = p.apiEndpoint.replace(/\/chat\/completions\/?$/, "");
+          settings.baseURL = baseURL;
         }
         return createDeepSeek(settings);
-      }
+      },
     });
 
     // Generic (OpenAI Compatible)
     // Use createOpenAICompatible for better compatibility with non-OpenAI providers
     this.register({
-        id: 'generic',
-        label: 'Generic (OpenAI Compatible)',
-        create: (p) => {
-            const settings: any = {
-                name: 'generic',
-            };
-            if (p.apiEndpoint) {
-                // Clean up baseURL: remove /chat/completions if present
-                let baseURL = p.apiEndpoint.replace(/\/chat\/completions\/?$/, '');
-                settings.baseURL = baseURL;
-            }
-            if (p.apiKey) { settings.apiKey = p.apiKey; }
-
-            // Add debug fetch to log actual URLs
-            settings.fetch = async (url: string | Request | URL, options?: any) => {
-                const urlStr = url.toString();
-                logger.info(`[AI-SDK Fetch] Requesting: ${urlStr}`);
-                if (options && options.body) {
-                    try {
-                        // Log the first 1000 chars of body to avoid spam, but enough to see tools
-                        const bodyStr = options.body.toString();
-                        logger.debug(`[AI-SDK Fetch] Request Body (snippet): ${bodyStr.substring(0, 2000)}`);
-                    } catch (e) {
-                        // ignore
-                    }
-                }
-                try {
-                    const response = await fetch(url, options);
-                    if (!response.ok) {
-                        logger.error(`[AI-SDK Fetch] Error ${response.status} from ${urlStr}`);
-                        try {
-                            const clone = response.clone();
-                            const text = await clone.text();
-                            logger.error(`[AI-SDK Fetch] Error Body: ${text}`);
-                        } catch (e) {
-                            logger.error(`[AI-SDK Fetch] Could not read error body: ${e}`);
-                        }
-                    }
-                    return response;
-                } catch (e) {
-                    logger.error(`[AI-SDK Fetch] Network Error: ${e}`);
-                    throw e;
-                }
-            };
-
-            return createOpenAICompatible(settings);
+      id: "generic",
+      label: "Generic (OpenAI Compatible)",
+      create: (p) => {
+        const settings: any = {
+          name: "generic",
+        };
+        if (p.apiEndpoint) {
+          // Clean up baseURL: remove /chat/completions if present
+          let baseURL = p.apiEndpoint.replace(/\/chat\/completions\/?$/, "");
+          settings.baseURL = baseURL;
         }
+        if (p.apiKey) {
+          settings.apiKey = p.apiKey;
+        }
+
+        // Add debug fetch to log actual URLs
+        settings.fetch = async (url: string | Request | URL, options?: any) => {
+          const urlStr = url.toString();
+          logger.info(`[AI-SDK Fetch] Requesting: ${urlStr}`);
+          if (options && options.body) {
+            try {
+              // Log the first 1000 chars of body to avoid spam, but enough to see tools
+              const bodyStr = options.body.toString();
+              logger.debug(`[AI-SDK Fetch] Request Body (snippet): ${bodyStr.substring(0, 2000)}`);
+            } catch (e) {
+              // ignore
+            }
+          }
+          try {
+            const response = await fetch(url, options);
+            if (!response.ok) {
+              logger.error(`[AI-SDK Fetch] Error ${response.status} from ${urlStr}`);
+              try {
+                const clone = response.clone();
+                const text = await clone.text();
+                logger.error(`[AI-SDK Fetch] Error Body: ${text}`);
+              } catch (e) {
+                logger.error(`[AI-SDK Fetch] Could not read error body: ${e}`);
+              }
+            }
+            return response;
+          } catch (e) {
+            logger.error(`[AI-SDK Fetch] Network Error: ${e}`);
+            throw e;
+          }
+        };
+
+        return createOpenAICompatible(settings);
+      },
     });
 
     // Anthropic
     this.register({
-      id: 'anthropic',
-      label: 'Anthropic',
+      id: "anthropic",
+      label: "Anthropic",
       create: (p) => {
         const settings: any = {};
-        if (p.apiEndpoint) { settings.baseURL = p.apiEndpoint; }
-        if (p.apiKey) { settings.apiKey = p.apiKey; }
+        if (p.apiEndpoint) {
+          settings.baseURL = p.apiEndpoint;
+        }
+        if (p.apiKey) {
+          settings.apiKey = p.apiKey;
+        }
         return createAnthropic(settings);
-      }
+      },
     });
 
     // Google
     this.register({
-      id: 'google',
-      label: 'Google Gemini',
+      id: "google",
+      label: "Google Gemini",
       create: (p) => {
         const settings: any = {};
-        if (p.apiEndpoint) { settings.baseURL = p.apiEndpoint; }
-        if (p.apiKey) { settings.apiKey = p.apiKey; }
+        if (p.apiEndpoint) {
+          settings.baseURL = p.apiEndpoint;
+        }
+        if (p.apiKey) {
+          settings.apiKey = p.apiKey;
+        }
         return createGoogleGenerativeAI(settings);
-      }
+      },
     });
-
-
 
     this.initialized = true;
   }
@@ -162,16 +174,16 @@ export class AIProviderRegistry {
    */
   static createModel(provider: Provider, modelId: string): LanguageModel {
     this.ensureInitialized();
-    
+
     // 尝试获取对应的工厂，如果找不到则默认使用 openai (兼容模式)
     let factory = this.factories[provider.providerType];
     if (!factory) {
       // 如果 providerType 是未知的（例如用户手动修改了配置文件），尝试回退到 openai
-      factory = this.factories['openai'];
+      factory = this.factories["openai"];
     }
 
     if (!factory) {
-        throw new Error(`Provider factory not found for type: ${provider.providerType}`);
+      throw new Error(`Provider factory not found for type: ${provider.providerType}`);
     }
 
     const aiProviderInstance = factory.create(provider);
