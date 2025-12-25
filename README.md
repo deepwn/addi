@@ -27,6 +27,7 @@
   - [添加模型 Add Model](#添加模型-add-model)
   - [快速编辑 Edit API Key](#快速编辑-edit-api-key)
   - [切换模型 Switch Model](#切换模型-switch-model)
+- [自定义工具 Custom Tools](#自定义工具-custom-tools)
 - [命令 Commands](#命令-commands)
 - [配置项 Settings Items](#配置项-settings-items)
 - [配置文件格式 Config Format](#配置文件格式-config-format)
@@ -146,6 +147,17 @@ Provider 节点右侧钥匙图标 → 输入密钥 → 保存。
 ### 切换模型 Switch Model
 
 Copilot 侧边栏 → 模型下拉 → 管理模型 → 选择 Addi → 勾选自定义模型 → 返回选择该模型。
+
+## 自定义工具 Custom Tools
+
+Addi 允许你定义自定义工具，让 AI 模型能够执行本地命令或发送 HTTP 请求。
+
+1.  在侧边栏的 "Custom Tools" 面板中点击 `+` (Add Tool)。
+2.  输入工具名称和描述（这些信息会被发送给模型，帮助它理解何时使用该工具）。
+3.  选择工具类型：
+    *   **Command**: 执行本地 Shell 命令。支持变量插值，例如 `echo ${message}`。
+    *   **HTTP**: 发送 HTTP 请求。支持变量插值，例如 `https://api.example.com/search?q=${query}`。
+4.  在与 Copilot 对话时，如果模型认为需要使用该工具，它会自动调用并获取结果。
 
 ## 命令 Commands
 

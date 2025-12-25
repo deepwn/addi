@@ -6,8 +6,20 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [0.0.11] - 2025-12-25
 
+### Major Refactor
+- **Vercel AI SDK Integration**: Completely rewrote the core LLM engine to use Vercel AI SDK (`ai`, `@ai-sdk/openai`, `@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/deepseek`). This improves stability, standardizes streaming, and simplifies future provider additions.
+- **DeepSeek Support**: Added native support for DeepSeek via `@ai-sdk/deepseek`.
+
+### Added
+- **Custom Tools**: New "Custom Tools" panel allows you to define your own tools (Shell Commands or HTTP Requests) that can be automatically called by the model during chat.
+- **Tool Management**: Add, delete, and manage custom tools directly from the sidebar.
+
 ### Changed
-- **Fixes**: Addressed several minor bugs and improved overall stability based on user feedback. (deepseek `reasoning_content` missing at next request with tool calling in thinking chain)
+- **Architecture**: Removed legacy `LLMClient` and manual HTTP fetching logic.
+- **Performance**: Improved message conversion and stream handling.
+
+### Fixed
+- **Stability**: Addressed various bugs related to stream parsing and connection handling by leveraging the robust AI SDK.
 
 ## [0.0.10] - 2025-12-23
 

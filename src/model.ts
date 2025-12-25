@@ -3,7 +3,7 @@ import { Model, ProviderRepository } from "./types";
 import { TokenFormatter } from "./utils";
 import { logger } from "./logger";
 import { ToolRegistry } from "./toolRegistry";
-import { LLMClient } from "./services/llmClient";
+import { LLMService } from "./services/llmService";
 import { MessageConverter } from "./services/messageConverter";
 
 
@@ -42,10 +42,14 @@ export class ModelTreeItem extends vscode.TreeItem {
   }
 }
 
-export class AddiChatProvider implements vscode.LanguageModelChatProvider {
-  private llmClient = new LLMClient();
+import { CustomToolManager } from "./services/customToolManager";
 
-  constructor(private repository: ProviderRepository) {}
+export class AddiChatProvider implements vscode.LanguageModelChatProvider {
+  private llmService: LLMService;
+
+  constructor(private repository: ProviderRepository, toolManager?: CustomToolManager) {
+      this.llmService = new LLMService(toolManager);
+  }
 
   async provideLanguageModelChatInformation(options: { silent: boolean }, _token: vscode.CancellationToken): Promise<vscode.LanguageModelChatInformation[]> {
     const providers = this.repository.getProviders();
@@ -123,7 +127,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       return;
     }
 
-    if (!provider.apiEndpoint || provider.apiEndpoint.trim() === "") {
+    if ((!provider.apiEndpoint || provider.apiEndpoint.trim() === "") && provider.providerType === 'generic') {
       logger.warn("Provider missing API endpoint", logger.sanitizeProvider(provider));
       progress.report(new vscode.LanguageModelTextPart("unconfigured API endpoint."));
       return;
@@ -146,19 +150,8 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     };
 
     try {
-      if (this.isOpenAiEndpoint(provider.apiEndpoint)) {
-        logger.debug("Dispatching request to OpenAI endpoint", logger.sanitizeProvider(provider));
-        await this.llmClient.callOpenAiApi(provider, storedModel, messages, options, toolDefinitions, progress, token, onStats);
-      } else if (this.isAnthropicEndpoint(provider.apiEndpoint)) {
-        logger.debug("Dispatching request to Anthropic endpoint", logger.sanitizeProvider(provider));
-        await this.llmClient.callAnthropicApi(provider, storedModel, messages, options, toolDefinitions, progress, token, options?.modelOptions?.["toolInvocationToken"], onStats);
-      } else if (this.isGoogleEndpoint(provider.apiEndpoint)) {
-        logger.debug("Dispatching request to Google endpoint", logger.sanitizeProvider(provider));
-        await this.llmClient.callGoogleApi(provider, storedModel, messages, options, toolDefinitions, progress, token, options?.modelOptions?.["toolInvocationToken"], onStats);
-      } else {
-        logger.debug("Dispatching request to generic OpenAI-compatible endpoint", logger.sanitizeProvider(provider));
-        await this.llmClient.callGenericOpenAiCompatibleApi(provider, storedModel, messages, options, toolDefinitions, progress, token, onStats);
-      }
+      logger.debug("Dispatching request via LLMService", logger.sanitizeProvider(provider));
+      await this.llmService.chat(provider, storedModel, messages, options, progress, token, onStats);
     } catch (error) {
       logger.error("Model query error", {
         error: error instanceof Error ? error.message : String(error),
@@ -193,18 +186,6 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
     }
     const textContent = JSON.stringify(text);
     return Math.ceil(textContent.length / 4);
-  }
-
-  private isOpenAiEndpoint(endpoint: string): boolean {
-    return endpoint.includes("openai.com");
-  }
-
-  private isAnthropicEndpoint(endpoint: string): boolean {
-    return endpoint.includes("anthropic.com");
-  }
-
-  private isGoogleEndpoint(endpoint: string): boolean {
-    return endpoint.includes("googleapis.com");
   }
 
   private resolveToolDefinitions(options: vscode.ProvideLanguageModelChatResponseOptions | undefined): ReadonlyArray<vscode.LanguageModelChatTool> | undefined {

@@ -102,7 +102,7 @@
         {
           "icon": "resources/icon.min.svg",
           "id": "addiProviders",
-          "name": "Panel",
+          "name": "Providers",
           "commands": [
             {
               "command": "addi.addProvider",
@@ -110,6 +110,12 @@
               "icon": "$(add)"
             }
           ]
+        },
+        {
+          "id": "addiTools",
+          "name": "Custom Tools",
+          "icon": "$(tools)",
+          "contextualTitle": "Addi Tools"
         }
       ]
     },
@@ -119,6 +125,16 @@
           "command": "addi.addProvider",
           "when": "view == addiProviders",
           "group": "navigation@1"
+        },
+        {
+          "command": "addi.addTool",
+          "when": "view == addiTools",
+          "group": "navigation"
+        },
+        {
+          "command": "addi.refreshTools",
+          "when": "view == addiTools",
+          "group": "navigation"
         },
         {
           "command": "addi.importConfig",
@@ -248,6 +264,16 @@
         {
           "command": "addi.useModel",
           "when": "view == addiProviders && viewItem == model",
+          "group": "inline"
+        },
+        {
+          "command": "addi.editTool",
+          "when": "view == addiTools && viewItem == tool",
+          "group": "inline"
+        },
+        {
+          "command": "addi.deleteTool",
+          "when": "view == addiTools && viewItem == tool",
           "group": "inline"
         }
       ]
@@ -385,6 +411,34 @@
         "category": "Addi"
       },
       {
+        "command": "addi.addTool",
+        "title": "Add Tool",
+        "shortTitle": "Add",
+        "icon": "$(add)",
+        "category": "Addi"
+      },
+      {
+        "command": "addi.editTool",
+        "title": "Edit Tool",
+        "shortTitle": "Edit",
+        "icon": "$(edit)",
+        "category": "Addi"
+      },
+      {
+        "command": "addi.deleteTool",
+        "title": "Delete Tool",
+        "shortTitle": "Delete",
+        "icon": "$(trash)",
+        "category": "Addi"
+      },
+      {
+        "command": "addi.refreshTools",
+        "title": "Refresh Tools",
+        "shortTitle": "Refresh",
+        "icon": "$(refresh)",
+        "category": "Addi"
+      },
+      {
         "command": "addi.useModel",
         "title": "Use Model",
         "shortTitle": "Use",
@@ -493,6 +547,7 @@
     "clean:fast": "rimraf dist out .vscode-test *.vsix"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/mocha": "^10.0.10",
     "@types/node": "25.x",
     "@types/vscode": "^1.107.0",
@@ -506,5 +561,15 @@
     "typescript": "^5.9.3",
     "webpack": "^5.104.1",
     "webpack-cli": "^6.0.1"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.1",
+    "@ai-sdk/deepseek": "^2.0.1",
+    "@ai-sdk/google": "^3.0.1",
+    "@ai-sdk/openai": "^3.0.1",
+    "@ai-sdk/openai-compatible": "^2.0.1",
+    "ai": "^6.0.3",
+    "js-yaml": "^4.1.1",
+    "zod": "^4.2.1"
   }
 }
