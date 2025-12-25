@@ -7,3 +7,4 @@ node_modules
 addi-config.json
 addi-config.encrypt.txt
 .DS_Store
+.env
