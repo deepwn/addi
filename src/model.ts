@@ -46,9 +46,17 @@ import { CustomToolManager } from "./services/customToolManager";
 
 export class AddiChatProvider implements vscode.LanguageModelChatProvider {
   private llmService: LLMService;
+  private readonly _onDidChangeLanguageModelChatInformation = new vscode.EventEmitter<void>();
+  public readonly onDidChangeLanguageModelChatInformation = this._onDidChangeLanguageModelChatInformation.event;
 
   constructor(private repository: ProviderRepository, toolManager?: CustomToolManager) {
       this.llmService = new LLMService(toolManager);
+      // Listen for repository updates to refresh the model list in Copilot
+      if (this.repository.onDidUpdate) {
+          this.repository.onDidUpdate(() => {
+              this._onDidChangeLanguageModelChatInformation.fire();
+          });
+      }
   }
 
   async provideLanguageModelChatInformation(options: { silent: boolean }, _token: vscode.CancellationToken): Promise<vscode.LanguageModelChatInformation[]> {

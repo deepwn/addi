@@ -39,6 +39,7 @@ export interface Provider {
 export interface ProviderRepository {
   getProviders(): Provider[];
   findModel(modelSid: string): { provider: Provider; model: Model } | null;
+  onDidUpdate?: (listener: () => any) => any;
 }
 
 export type ChatMessageRole = "system" | "user" | "assistant";

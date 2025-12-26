@@ -22,11 +22,11 @@ export class ConfigManager {
   }
 
   static getDefaultMaxInputTokens(): number {
-    return this.getConfiguration().get<number>("defaultMaxInputTokens", 4096);
+    return this.getConfiguration().get<number>("defaultMaxInputTokens", 65536);
   }
 
   static getDefaultMaxOutputTokens(): number {
-    return this.getConfiguration().get<number>("defaultMaxOutputTokens", 1024);
+    return this.getConfiguration().get<number>("defaultMaxOutputTokens", 65536);
   }
 
   static getDefaultModelFamily(): string {
