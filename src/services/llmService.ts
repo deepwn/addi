@@ -224,6 +224,15 @@ export class LLMService {
           }
           hasOutput = true;
           progress.report(new vscode.LanguageModelTextPart(part.text));
+        } else if (part.type === 'reasoning-delta') {
+            if (!firstTokenTime) {
+                firstTokenTime = Date.now();
+            }
+            hasOutput = true;
+            // Output reasoning as text, maybe italicized or quoted if markdown supported, 
+            // but LanguageModelTextPart is plain text usually interpreted as markdown in chat.
+            // We'll just stream it. Users can distinguish contextually.
+            progress.report(new vscode.LanguageModelTextPart(part.text));
         } else if (part.type === 'tool-call') {
             logger.info("Tool Call", part);
             // Check if this tool is one of the providedTools (VS Code tools)

@@ -40,6 +40,38 @@ export class AIProviderRegistry {
     if (this.initialized) {
       return;
     }
+
+    // Helper to create a debug fetch wrapper
+    const createDebugFetch = (baseFetch?: typeof fetch) => {
+        return async (url: string | Request | URL, options?: any) => {
+            const urlStr = url.toString();
+            logger.info(`[AI-SDK Fetch] Requesting: ${urlStr}`);
+            if (options && options.body) {
+                try {
+                    const bodyStr = options.body.toString();
+                    logger.debug(`[AI-SDK Fetch] Request Body (snippet): ${bodyStr.substring(0, 2000)}`);
+                } catch (e) { /* ignore */ }
+            }
+            try {
+                const fetchFn = baseFetch || fetch;
+                const response = await fetchFn(url, options);
+                if (!response.ok) {
+                    logger.error(`[AI-SDK Fetch] Error ${response.status} from ${urlStr}`);
+                    try {
+                        const clone = response.clone();
+                        const text = await clone.text();
+                        logger.error(`[AI-SDK Fetch] Error Body: ${text}`);
+                    } catch (e) {
+                        logger.error(`[AI-SDK Fetch] Could not read error body: ${e}`);
+                    }
+                }
+                return response;
+            } catch (e) {
+                logger.error(`[AI-SDK Fetch] Network Error: ${e}`);
+                throw e;
+            }
+        };
+    };
     
     // OpenAI
     const openAIFactory: ProviderFactory = {
@@ -53,6 +85,7 @@ export class AIProviderRegistry {
             settings.baseURL = baseURL; 
         }
         if (p.apiKey) { settings.apiKey = p.apiKey; }
+        settings.fetch = createDebugFetch();
         
         return createOpenAI(settings);
       }
@@ -64,14 +97,20 @@ export class AIProviderRegistry {
       id: 'deepseek',
       label: 'DeepSeek',
       create: (p) => {
-        const settings: any = {};
+        const settings: any = {
+            name: 'deepseek',
+        };
         if (p.apiKey) { settings.apiKey = p.apiKey; }
-        // DeepSeek provider usually doesn't need custom baseURL unless using a proxy, 
-        // but we support it if provided.
+        
+        // Use createOpenAICompatible for DeepSeek to ensure reasoning_content support
+        // and better compatibility with latest features.
         if (p.apiEndpoint) {
              let baseURL = p.apiEndpoint.replace(/\/chat\/completions\/?$/, '');
              settings.baseURL = baseURL;
+        } else {
+            settings.baseURL = 'https://api.deepseek.com';
         }
+        settings.fetch = createDebugFetch();
         return createDeepSeek(settings);
       }
     });
@@ -93,36 +132,7 @@ export class AIProviderRegistry {
             if (p.apiKey) { settings.apiKey = p.apiKey; }
 
             // Add debug fetch to log actual URLs
-            settings.fetch = async (url: string | Request | URL, options?: any) => {
-                const urlStr = url.toString();
-                logger.info(`[AI-SDK Fetch] Requesting: ${urlStr}`);
-                if (options && options.body) {
-                    try {
-                        // Log the first 1000 chars of body to avoid spam, but enough to see tools
-                        const bodyStr = options.body.toString();
-                        logger.debug(`[AI-SDK Fetch] Request Body (snippet): ${bodyStr.substring(0, 2000)}`);
-                    } catch (e) {
-                        // ignore
-                    }
-                }
-                try {
-                    const response = await fetch(url, options);
-                    if (!response.ok) {
-                        logger.error(`[AI-SDK Fetch] Error ${response.status} from ${urlStr}`);
-                        try {
-                            const clone = response.clone();
-                            const text = await clone.text();
-                            logger.error(`[AI-SDK Fetch] Error Body: ${text}`);
-                        } catch (e) {
-                            logger.error(`[AI-SDK Fetch] Could not read error body: ${e}`);
-                        }
-                    }
-                    return response;
-                } catch (e) {
-                    logger.error(`[AI-SDK Fetch] Network Error: ${e}`);
-                    throw e;
-                }
-            };
+            settings.fetch = createDebugFetch();
 
             return createOpenAICompatible(settings);
         }
@@ -136,6 +146,7 @@ export class AIProviderRegistry {
         const settings: any = {};
         if (p.apiEndpoint) { settings.baseURL = p.apiEndpoint; }
         if (p.apiKey) { settings.apiKey = p.apiKey; }
+        settings.fetch = createDebugFetch();
         return createAnthropic(settings);
       }
     });
@@ -148,6 +159,7 @@ export class AIProviderRegistry {
         const settings: any = {};
         if (p.apiEndpoint) { settings.baseURL = p.apiEndpoint; }
         if (p.apiKey) { settings.apiKey = p.apiKey; }
+        settings.fetch = createDebugFetch();
         return createGoogleGenerativeAI(settings);
       }
     });
