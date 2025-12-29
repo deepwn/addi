@@ -4,6 +4,20 @@ All notable changes to the "addi" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.0.13] - 2025-12-29
+
+### Security
+- **Secure Storage**: Migrated API Key storage to VS Code's native `SecretStorage`. API Keys are now encrypted by the OS and are no longer synced via Settings Sync (only non-sensitive config is synced).
+- **Secure Export**: Exporting configuration without a password now automatically strips all API Keys. API Keys are only included when exporting with a password (encrypted).
+
+## [0.0.12] - 2025-12-27
+
+### Re-build
+- **Extension Re-build**: Rebuilt the entire extension ai based on `@ai-sdk/*` packages to improve stability and maintainability.
+- **Dependency Updates**: Updated all dependencies to their latest versions, ensuring compatibility and security.
+### Fixed
+- **Bug Fixes**: Fixed some bug with model verification, streaming, and tool calling to enhance user experience and reliability (when switching to Vercel AI SDK).
+
 ## [0.0.11] - 2025-12-25
 
 ### Major Refactor

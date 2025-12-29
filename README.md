@@ -164,10 +164,11 @@ Addi 允许你定义自定义工具，让 AI 模型能够执行本地命令或�
 | Command ID          | 标题                 | 用途               |
 | ------------------- | -------------------- | ------------------ |
 | `addi.manage`       | Management           | 打开管理视图       |
-| `addi.exportConfig` | Export Configuration | 导出配置           |
-| `addi.importConfig` | Import Configuration | 导入配置           |
+| `addi.exportConfig` | Export Configuration | 导出配置 (支持加密) |
+| `addi.importConfig` | Import Configuration | 导入配置 (支持解密) |
 | `addi.showLogs`     | Show Logs            | 打开 Addi 日志输出 |
-| `addi.setLogLevel`  | Set Log Level        | 快速调整日志级别   |
+
+> **注意**: 导出配置时，如果**不设置密码**，导出的 JSON 文件将**不包含**任何 API Key（为了安全）。如果需要备份或迁移 API Key，请务必设置导出密码，此时文件将以加密格式保存。
 
 `Show Logs` 将在 VS Code 的 **输出 (Output)** 面板中定位 “Addi” 通道，可随时查看调试信息。通过 `Set Log Level` 或在设置中修改 `addi.logLevel`，即可在 `off / error / warn / info / debug` 之间切换输出详细程度。
 日志内容会自动脱敏，并额外记录模型解析、请求选项等关键上下文，便于排查问题。

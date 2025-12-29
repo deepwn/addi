@@ -184,7 +184,7 @@ suite("CommandHandler Test Suite", () => {
 
   test("exportConfig should export unencrypted JSON", async () => {
     const providers: Provider[] = [
-      { id: "p1", name: "P1", models: [], providerType: "generic" },
+      { id: "p1", name: "P1", models: [], providerType: "generic", apiKey: "secret-key" },
     ];
     manager.setProviders(providers);
 
@@ -210,6 +210,7 @@ suite("CommandHandler Test Suite", () => {
     const exported = JSON.parse(content);
     assert.strictEqual(exported.length, 1);
     assert.strictEqual(exported[0].id, "p1");
+    assert.strictEqual(exported[0].apiKey, undefined, "API Key should be stripped from unencrypted export");
   });
 
   test("exportConfig should export encrypted content when password provided", async () => {
@@ -268,7 +269,7 @@ suite("CommandHandler Test Suite", () => {
   test("importConfig should import encrypted content", async () => {
     // First export to get valid encrypted string
     const providers: Provider[] = [
-      { id: "p1", name: "Encrypted", models: [], providerType: "generic" },
+      { id: "p1", name: "Encrypted", models: [], providerType: "generic", apiKey: "secret-key" },
     ];
     manager.setProviders(providers);
 
@@ -304,5 +305,6 @@ suite("CommandHandler Test Suite", () => {
     const saved = manager.savedProviders as Provider[];
     assert.strictEqual(saved.length, 1);
     assert.strictEqual(saved[0]!.name, "Encrypted");
+    assert.strictEqual(saved[0]!.apiKey, "secret-key", "API Key should be preserved in encrypted import");
   });
 });
