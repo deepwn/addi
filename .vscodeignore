@@ -11,7 +11,7 @@ refer_documents/**
 *.log
 .gitignore
 .yarnrc
-webpack.config.js
+bunfig.toml
 *.md
 !readme.md
 !README.md

@@ -283,12 +283,12 @@
       "properties": {
         "addi.defaultMaxInputTokens": {
           "type": "number",
-          "default": 65536,
+          "default": 4096,
           "description": "Max input tokens"
         },
         "addi.defaultMaxOutputTokens": {
           "type": "number",
-          "default": 65536,
+          "default": 1024,
           "description": "Max output tokens"
         },
         "addi.defaultModelFamily": {
@@ -537,13 +537,13 @@
     "languageModelTools": []
   },
   "scripts": {
-    "test": "tsc -p . --outDir out && npm run package && vscode-test",
-    "package": "webpack --mode production --devtool hidden-source-map",
-    "watch": "webpack --mode development --watch",
-    "compile": "webpack --mode development",
-    "release": "npm run package && npx @vscode/vsce package --baseImagesUrl https://raw.githubusercontent.com/deepwn/addi/refs/heads/main/ --no-yarn",
+    "test": "tsc -p . --outDir out && bun run package && vscode-test",
+    "package": "bun build ./src/extension.ts --outdir ./dist --target node --format cjs --external vscode --sourcemap --minify",
+    "watch": "bun build ./src/extension.ts --outdir ./dist --target node --format cjs --external vscode --sourcemap --watch",
+    "compile": "bun build ./src/extension.ts --outdir ./dist --target node --format cjs --external vscode --sourcemap",
+    "release": "bun run package && bunx @vscode/vsce package --baseImagesUrl https://raw.githubusercontent.com/deepwn/addi/refs/heads/main/ --no-yarn",
     "debug": "code --extensionDevelopmentPath=.",
-    "clean": "node scripts/clean.js",
+    "clean": "bun scripts/clean.js",
     "clean:fast": "rimraf dist out .vscode-test *.vsix"
   },
   "devDependencies": {
@@ -557,10 +557,7 @@
     "@vscode/test-electron": "^2.5.2",
     "eslint": "^9.39.2",
     "rimraf": "^6.1.2",
-    "ts-loader": "^9.5.4",
-    "typescript": "^5.9.3",
-    "webpack": "^5.104.1",
-    "webpack-cli": "^6.0.1"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.1",

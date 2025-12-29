@@ -2,6 +2,7 @@ out
 dist
 example
 node_modules
+bun.lockb
 .vscode-test/
 *.vsix
 addi-config.json

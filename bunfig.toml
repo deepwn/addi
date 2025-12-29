@@ -1,0 +1,35 @@
+# Bun Configuration File for Addi VS Code Extension
+# Learn more: https://bun.sh/docs/runtime/bunfig
+
+[install]
+# Use exact versions in package.json (no caret or tilde)
+exact = false
+
+# Run scripts from node_modules/.bin automatically
+auto = true
+
+# Registry configuration
+registry = "https://registry.npmjs.org"
+
+[install.scopes]
+# You can set registries for specific scopes here
+# For example:
+# ["@company"] = "https://registry.company.com"
+
+[run]
+# Set default shell to use for bun run
+shell = "system"
+
+[test]
+# Default test configuration
+preload = []
+
+[build]
+# Build target
+target = "node"
+
+# Output format
+format = "cjs"
+
+# Include sourcemaps
+sourcemap = "inline"

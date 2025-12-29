@@ -6,6 +6,11 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [0.0.13] - 2025-12-29
 
+### Bun Migration
+- **Build System**: Migrated from Webpack to Bun's native build system for faster and more efficient builds.
+
+> [!WARNING] Should delete Webpack config and related files after confirming Bun build is stable. and remove `node_modules` and old lock files before reinstalling with Bun.
+
 ### Security
 - **Secure Storage**: Migrated API Key storage to VS Code's native `SecretStorage`. API Keys are now encrypted by the OS and are no longer synced via Settings Sync (only non-sensitive config is synced).
 - **Secure Export**: Exporting configuration without a password now automatically strips all API Keys. API Keys are only included when exporting with a password (encrypted).

@@ -155,18 +155,18 @@ Addi 允许你定义自定义工具，让 AI 模型能够执行本地命令或�
 1.  在侧边栏的 "Custom Tools" 面板中点击 `+` (Add Tool)。
 2.  输入工具名称和描述（这些信息会被发送给模型，帮助它理解何时使用该工具）。
 3.  选择工具类型：
-    *   **Command**: 执行本地 Shell 命令。支持变量插值，例如 `echo ${message}`。
-    *   **HTTP**: 发送 HTTP 请求。支持变量插值，例如 `https://api.example.com/search?q=${query}`。
+    - **Command**: 执行本地 Shell 命令。支持变量插值，例如 `echo ${message}`。
+    - **HTTP**: 发送 HTTP 请求。支持变量插值，例如 `https://api.example.com/search?q=${query}`。
 4.  在与 Copilot 对话时，如果模型认为需要使用该工具，它会自动调用并获取结果。
 
 ## 命令 Commands
 
-| Command ID          | 标题                 | 用途               |
-| ------------------- | -------------------- | ------------------ |
-| `addi.manage`       | Management           | 打开管理视图       |
+| Command ID          | 标题                 | 用途                |
+| ------------------- | -------------------- | ------------------- |
+| `addi.manage`       | Management           | 打开管理视图        |
 | `addi.exportConfig` | Export Configuration | 导出配置 (支持加密) |
 | `addi.importConfig` | Import Configuration | 导入配置 (支持解密) |
-| `addi.showLogs`     | Show Logs            | 打开 Addi 日志输出 |
+| `addi.showLogs`     | Show Logs            | 打开 Addi 日志输出  |
 
 > **注意**: 导出配置时，如果**不设置密码**，导出的 JSON 文件将**不包含**任何 API Key（为了安全）。如果需要备份或迁移 API Key，请务必设置导出密码，此时文件将以加密格式保存。
 
@@ -179,8 +179,8 @@ Addi 允许你定义自定义工具，让 AI 模型能够执行本地命令或�
 
 | Setting                         | 默认    | 说明                                                |
 | ------------------------------- | ------- | --------------------------------------------------- |
-| `addi.defaultMaxInputTokens`    | 4096    | 默认最大输入 tokens                                 |
-| `addi.defaultMaxOutputTokens`   | 1024    | 默认最大输出 tokens                                 |
+| `addi.defaultMaxInputTokens`    | 65535   | 默认最大输入 tokens                                 |
+| `addi.defaultMaxOutputTokens`   | 65535   | 默认最大输出 tokens                                 |
 | `addi.defaultModelFamily`       | "Addi"  | 默认模型 family                                     |
 | `addi.defaultModelVersion`      | "1.0.0" | 默认模型 version                                    |
 | `addi.saveConfigToSettingsSync` | true    | 是否保存到 VSCode Settings Sync 云端                |
