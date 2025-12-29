@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { streamText, jsonSchema, tool, Tool } from 'ai';
+import { streamText, jsonSchema, Tool } from 'ai';
 import { Provider, Model } from '../types';
 import { AIProviderRegistry } from './aiRegistry';
 import { MessageConverter } from './messageConverter';
@@ -38,13 +38,17 @@ export class LLMService {
       // Add Custom Tools
       if (this.toolManager) {
           const customTools = this.toolManager.getTools();
+          logger.debug('LLMService: customTools from manager', { tools: customTools && customTools.length ? customTools.map((t: any) => t.name) : customTools });
           for (const ct of customTools) {
               try {
-                tools[ct.name] = tool({
+                tools[ct.name] = {
                     description: ct.description,
                     inputSchema: jsonSchema(ct.parameters),
                     execute: async (args: any) => {
-                        logger.info(`Executing custom tool ${ct.name}`, args);
+                        // Log tool execution without sensitive args
+                        logger.debug(`Executing custom tool ${ct.name}`, { 
+                            paramCount: Object.keys(args || {}).length 
+                        });
                         let lastResult = '';
                         
                         // Helper for interpolation
@@ -104,7 +108,7 @@ export class LLMService {
                         }
                         return lastResult;
                     }
-                } as any);
+                } as any;
               } catch (e) {
                   logger.error(`Failed to register custom tool ${ct.name}`, e);
               }
@@ -120,7 +124,7 @@ export class LLMService {
               try {
                   schema = tool.inputSchema ? JSON.parse(JSON.stringify(tool.inputSchema)) : { type: 'object', properties: {} };
               } catch (e) {
-                  logger.warn(`Failed to clone schema for tool ${tool.name}, using default object schema`, e);
+                  logger.error(`Failed to clone schema for tool ${tool.name}, using default object schema`, e);
                   schema = { type: 'object', properties: {} };
               }
               
@@ -129,7 +133,7 @@ export class LLMService {
               
               // Double check top-level is object
               if (schema.type !== 'object') {
-                   logger.warn(`Tool ${tool.name} has non-object schema type: ${schema.type}. Forcing to object.`);
+                   logger.error(`Tool ${tool.name} has non-object schema type: ${schema.type}. Forcing to object.`);
                    schema.type = 'object';
               }
 
@@ -154,9 +158,10 @@ export class LLMService {
                   }
               }
 
+              // Log tool registration without sensitive schema details
               logger.info(`Registering tool: ${tool.name}`, { 
                   description: tool.description && tool.description.length > 50 ? tool.description.substring(0, 50) + '...' : tool.description,
-                  schema: logSchema 
+                  propertyCount: logSchema.properties ? Object.keys(logSchema.properties).length : 0
               });
 
               try {
@@ -208,14 +213,23 @@ export class LLMService {
         }
       };
 
+      logger.debug('LLMService: tools registered at call time', { tools: Object.keys(tools) });
       if (Object.keys(tools).length > 0) {
           streamOptions.tools = tools;
-          streamOptions.maxSteps = 10;
+          // maxSteps is deprecated/removed in newer ai-sdk versions (since v5)
+          // Let the SDK manage tool calling limits automatically
       }
 
       const result = streamText(streamOptions);
 
       // 6. 处理流式响应
+      const streamStartTime = Date.now();
+      logger.info("Stream processing started", { 
+          modelId: model.id, 
+          messageCount: coreMessages.length,
+          toolCount: Object.keys(tools).length 
+      });
+      
       let hasOutput = false;
       for await (const part of result.fullStream) {
         if (part.type === 'text-delta') {
@@ -234,26 +248,113 @@ export class LLMService {
             // We'll just stream it. Users can distinguish contextually.
             progress.report(new vscode.LanguageModelTextPart(part.text));
         } else if (part.type === 'tool-call') {
-            logger.info("Tool Call", part);
-            // Check if this tool is one of the providedTools (VS Code tools)
+            logger.debug("Tool Call", { toolCallId: part.toolCallId, toolName: part.toolName });
+            // If this is a VS Code provided tool, report to VS Code to execute it.
             const isProvidedTool = providedTools?.some(t => t.name === part.toolName);
+            const args = (part as any).args ?? (part as any).input;
+
             if (isProvidedTool) {
-                // Report to VS Code so it can execute the tool
-                // Note: ai-sdk part might use 'args' or 'input' depending on version/type
-                const args = (part as any).args ?? (part as any).input;
                 progress.report(new vscode.LanguageModelToolCallPart(part.toolCallId, part.toolName, args));
-                hasOutput = true; // Tool call counts as output
+                hasOutput = true;
+                continue;
+            }
+
+            // If we have a custom tool registered in `tools` with an execute function, run it locally
+            const registeredTool = (tools as any)[part.toolName];
+            // Debug: log whether we found the registered tool and if it exposes execute
+            logger.debug('LLMService: tool-call', { toolName: part.toolName, registeredToolExists: !!registeredTool, hasExecute: registeredTool && typeof registeredTool.execute === 'function' });
+            if (registeredTool && typeof registeredTool.execute === 'function') {
+                try {
+                    const execResult = await registeredTool.execute(args ?? {});
+                    // Wrap the result as LanguageModelTextPart inside a LanguageModelToolResultPart
+                    const contentParts: vscode.LanguageModelResponsePart[] = [];
+                    if (typeof execResult === 'string') {
+                        contentParts.push(new vscode.LanguageModelTextPart(execResult));
+                    } else if (execResult instanceof Uint8Array) {
+                        contentParts.push(new vscode.LanguageModelDataPart(execResult, 'application/octet-stream'));
+                    } else if (execResult && typeof execResult === 'object' && execResult.text) {
+                        contentParts.push(new vscode.LanguageModelTextPart(String(execResult.text)));
+                    } else {
+                        contentParts.push(new vscode.LanguageModelTextPart(String(execResult)));
+                    }
+
+                    try {
+                        progress.report(new vscode.LanguageModelToolResultPart(part.toolCallId, contentParts));
+                    } catch (e) {
+                        // Fallback: report as text if ToolResultPart is not constructible in this environment
+                        progress.report(new vscode.LanguageModelTextPart(String(execResult)));
+                    }
+                    hasOutput = true;
+                } catch (e: any) {
+                    logger.error(`Custom tool ${part.toolName} execution failed`, e);
+                    const msg = `Tool \"${part.toolName}\" execution error: ${e && e.message ? e.message : String(e)}`;
+                    // Report error back to model so it can retry or choose another action
+                        // Also send a ToolResultPart containing structured error info so the model
+                        // receives a tool-result (with error) in protocol form. This increases
+                        // the chance the model will re-issue the tool-call or choose another action.
+                        const errorPayload = { error: true, message: e && e.message ? e.message : String(e) };
+                        const contentPartsForToolResult: vscode.LanguageModelResponsePart[] = [];
+                        try {
+                            contentPartsForToolResult.push(new vscode.LanguageModelTextPart(JSON.stringify(errorPayload)));
+                            contentPartsForToolResult.push(new vscode.LanguageModelTextPart(msg));
+                            progress.report(new vscode.LanguageModelToolResultPart(part.toolCallId, contentPartsForToolResult));
+                        } catch (inner) {
+                            // If ToolResultPart can't be constructed in this environment, fall back to text
+                            progress.report(new vscode.LanguageModelTextPart(JSON.stringify(errorPayload)));
+                            progress.report(new vscode.LanguageModelTextPart(msg));
+                        }
+                        hasOutput = true;
+                }
+            } else {
+                logger.error(`Tool call for unknown tool: ${part.toolName}, ignoring. Available tools: ${Object.keys(tools).join(', ')}`);
             }
         } else if (part.type === 'tool-result') {
-            logger.info("Tool Result", part);
+            logger.debug("Tool Result", { toolCallId: part.toolCallId, toolName: part.toolName });
+            // If the tool result contains an error, report a sanitized error back to the model
+            const toolErr = (part as any).error ?? (part as any).result?.error ?? null;
+            if (toolErr) {
+                // Log full error server-side for debugging
+                logger.error(`Tool ${part.toolName} returned error`, toolErr);
+
+                // Build a safe, truncated message for the model (no stacktraces, no secrets)
+                let rawMessage: string;
+                if (typeof toolErr === 'string') {
+                    rawMessage = toolErr;
+                } else if (toolErr && typeof toolErr.message === 'string') {
+                    rawMessage = toolErr.message;
+                } else {
+                    rawMessage = String(toolErr);
+                }
+
+                const safeMessage = rawMessage.replace(/\s+/g, ' ').trim().slice(0, 1024);
+                const errorCode = (toolErr && (toolErr.code ?? toolErr.status)) || null;
+
+                // Create a clear, human-readable error message with retry suggestion
+                const retryMessage = `Tool "${part.toolName}" failed${errorCode ? ` (${errorCode})` : ''}: ${safeMessage}. Please try calling this tool again with corrected parameters or use an alternative approach.`;
+
+                // Report the error back to the model as a text part so the model can decide next steps
+                // Use plain text instead of JSON for better model understanding
+                progress.report(new vscode.LanguageModelTextPart(retryMessage));
+                hasOutput = true;
+
+                // Also log the JSON payload for debugging
+                logger.info("Tool error reported to model", { toolName: part.toolName, toolCallId: part.toolCallId, message: retryMessage });
+            }
         } else if (part.type === 'error') {
              logger.error("Stream Error", part.error);
              throw part.error;
         }
       }
       
+      const streamDuration = Date.now() - streamStartTime;
+      logger.info("Stream processing completed", { 
+          duration: streamDuration, 
+          hasOutput,
+          outputCount: hasOutput ? 1 : 0
+      });
+      
       if (!hasOutput) {
-          logger.warn("Stream finished with no text output");
+          logger.error("Stream finished with no text output");
       }
 
     } catch (error) {
