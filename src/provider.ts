@@ -10,9 +10,45 @@ export class ProviderModelManager {
   private readonly _onDidUpdate = new vscode.EventEmitter<void>();
   public readonly onDidUpdate = this._onDidUpdate.event;
   private syncEnabled = false;
+  private secretsCache: Map<string, string> = new Map();
 
   constructor(private context: vscode.ExtensionContext) {
-    // No polling needed
+    // Initialize secrets asynchronously
+    this.initializeSecrets();
+  }
+
+  private async initializeSecrets() {
+    try {
+      const stored = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
+      let migrationNeeded = false;
+
+      for (const p of stored) {
+        const secretKey = `addi.provider.apikey.${p.id}`;
+        const secret = await this.context.secrets.get(secretKey);
+        if (secret) {
+          this.secretsCache.set(p.id, secret);
+        } else if (p.apiKey) {
+          // Migration: Found in globalState but not in secrets
+          await this.context.secrets.store(secretKey, p.apiKey);
+          this.secretsCache.set(p.id, p.apiKey);
+          migrationNeeded = true;
+        }
+      }
+
+      if (migrationNeeded) {
+        // Remove apiKeys from globalState
+        const cleaned = stored.map((p) => {
+          const { apiKey, ...rest } = p;
+          return rest as Provider;
+        });
+        await this.context.globalState.update(ProviderModelManager.STORAGE_KEY, cleaned);
+        logger.info("Migrated API keys to SecretStorage");
+      }
+
+      this._onDidUpdate.fire();
+    } catch (error) {
+      logger.error("Failed to initialize secrets", error);
+    }
   }
 
   dispose() {
@@ -45,17 +81,71 @@ export class ProviderModelManager {
     const stored = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
     const mutated = this.normalizeProvidersInPlace(stored as Array<Provider & Record<string, unknown>>);
     if (mutated) {
+      // Save normalized data. At this point 'stored' only has apiKey if it was already in globalState.
+      // We can safely save it. Migration will eventually strip it.
       void this.context.globalState.update(ProviderModelManager.STORAGE_KEY, stored);
       logger.debug("Normalized provider data on load", { providerCount: stored.length });
     }
+
+    // Attach secrets from cache
+    for (const p of stored) {
+      if (this.secretsCache.has(p.id)) {
+        const secret = this.secretsCache.get(p.id);
+        if (secret !== undefined) {
+          p.apiKey = secret;
+        }
+      }
+    }
+
     logger.debug("Loaded providers", { providerCount: stored.length });
     return stored as Provider[];
   }
 
   async saveProviders(providers: Provider[]): Promise<void> {
     this.normalizeProvidersInPlace(providers as Array<Provider & Record<string, unknown>>);
-    await this.context.globalState.update(ProviderModelManager.STORAGE_KEY, providers);
-    
+
+    // Handle secrets
+    const providersToSave: Provider[] = [];
+
+    // Detect deleted providers to clean up secrets
+    const oldProviders = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
+    const newIds = new Set(providers.map((p) => p.id));
+
+    for (const oldP of oldProviders) {
+      if (!newIds.has(oldP.id)) {
+        const secretKey = `addi.provider.apikey.${oldP.id}`;
+        await this.context.secrets.delete(secretKey);
+        this.secretsCache.delete(oldP.id);
+      }
+    }
+
+    for (const p of providers) {
+      if (p.apiKey !== undefined) {
+        const secretKey = `addi.provider.apikey.${p.id}`;
+        // Store even if empty, to overwrite previous value
+        await this.context.secrets.store(secretKey, p.apiKey);
+        this.secretsCache.set(p.id, p.apiKey);
+      } else if (this.secretsCache.has(p.id)) {
+        // If apiKey is undefined in the incoming object, should we keep the old one?
+        // Usually saveProviders implies a full overwrite.
+        // But if the UI didn't send the apiKey (e.g. for security), we might want to preserve it?
+        // Assuming the UI sends the apiKey if it was modified or if it wants to keep it.
+        // If the UI sends a provider *without* apiKey property, it might mean "unchanged" or "cleared"?
+        // Given the context, let's assume we should preserve the existing secret if not provided?
+        // No, that's dangerous. If user wants to clear it, they send empty string.
+        // If they send undefined, it's ambiguous.
+        // However, looking at `getProviders`, we attach the key. So the UI *should* have it.
+        // So if it comes back as undefined, it might be lost.
+        // But let's stick to: if it's in the object, update secret.
+      }
+
+      // Clone and remove apiKey
+      const { apiKey, ...rest } = p;
+      providersToSave.push(rest as Provider);
+    }
+
+    await this.context.globalState.update(ProviderModelManager.STORAGE_KEY, providersToSave);
+
     this._onDidUpdate.fire();
     logger.info("Saved providers", { providerCount: providers.length });
   }

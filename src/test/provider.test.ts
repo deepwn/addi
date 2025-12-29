@@ -5,6 +5,7 @@ import { ProviderModelManager } from "../provider";
 // 模拟vscode模块
 class MockExtensionContext {
   private _globalState = new Map<string, unknown>();
+  private _secrets = new Map<string, string>();
 
   get globalState() {
     return {
@@ -19,6 +20,21 @@ class MockExtensionContext {
         // noop
       },
     } as unknown as vscode.Memento;
+  }
+
+  get secrets() {
+    return {
+      get: (key: string) => Promise.resolve(this._secrets.get(key)),
+      store: (key: string, value: string) => {
+        this._secrets.set(key, value);
+        return Promise.resolve();
+      },
+      delete: (key: string) => {
+        this._secrets.delete(key);
+        return Promise.resolve();
+      },
+      onDidChange: new vscode.EventEmitter<vscode.SecretStorageChangeEvent>().event,
+    } as unknown as vscode.SecretStorage;
   }
 }
 
