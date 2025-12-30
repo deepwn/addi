@@ -52,7 +52,13 @@ export interface ChatMessage {
 export interface ToolStep {
   name?: string;
   id?: string;
-  run?: string;
+  // `run` is now a structured command with arguments to avoid shell parsing ambiguities.
+  // Use `run.command` and optional `run.args` array. Legacy string forms are still
+  // accepted by the loader and will be normalized.
+  run?: {
+    command: string;
+    args?: string[];
+  };
   http?: {
     url: string;
     method?: string;
@@ -68,5 +74,6 @@ export interface CustomTool {
   parameters: JSONSchema7; // JSON Schema object
   steps: ToolStep[];
   source?: 'global' | 'workspace';
+  visibility?: 'public' | 'private' | 'global';
   fileName?: string;
 }

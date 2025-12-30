@@ -272,6 +272,11 @@
           "group": "inline"
         },
         {
+          "command": "addi.copyTool",
+          "when": "view == addiTools && viewItem == tool",
+          "group": "inline@1"
+        },
+        {
           "command": "addi.deleteTool",
           "when": "view == addiTools && viewItem == tool",
           "group": "inline"
@@ -418,6 +423,13 @@
         "category": "Addi"
       },
       {
+        "command": "addi.copyTool",
+        "title": "Copy Tool",
+        "shortTitle": "Copy",
+        "icon": "$(copy)",
+        "category": "Addi"
+      },
+      {
         "command": "addi.editTool",
         "title": "Edit Tool",
         "shortTitle": "Edit",
@@ -548,7 +560,7 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.0.3",
+    "@types/node": "25.x",
     "@types/vscode": "^1.107.0",
     "@typescript-eslint/eslint-plugin": "^8.50.1",
     "@typescript-eslint/parser": "^8.50.1",

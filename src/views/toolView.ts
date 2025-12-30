@@ -33,6 +33,14 @@ export class ToolTreeItem extends vscode.TreeItem {
         this.tooltip = `${tool.description}\nSource: ${tool.source}\nFile: ${tool.fileName}`;
         this.description = `${tool.steps.length} steps (${tool.source})`;
         this.contextValue = 'tool';
-        this.iconPath = new vscode.ThemeIcon(tool.source === 'global' ? 'globe' : 'file-code');
+        // Choose icon by visibility when available (public/private/global)
+        const vis = (tool as any).visibility || (tool.source === 'global' ? 'global' : 'public');
+        if (vis === 'global') {
+            this.iconPath = new vscode.ThemeIcon('globe');
+        } else if (vis === 'private') {
+            this.iconPath = new vscode.ThemeIcon('lock');
+        } else {
+            this.iconPath = new vscode.ThemeIcon('file-code');
+        }
     }
 }

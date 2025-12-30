@@ -9,6 +9,7 @@ import * as cp from 'child_process';
 import * as util from 'util';
 
 const exec = util.promisify(cp.exec);
+const execFile = util.promisify(cp.execFile);
 
 export class LLMService {
   constructor(private toolManager?: CustomToolManager) {}
@@ -52,23 +53,84 @@ export class LLMService {
                         let lastResult = '';
                         
                         // Helper for interpolation
+                        const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                         const interpolate = (text: string, data: Record<string, any>) => {
                             let result = text;
                             for (const [key, value] of Object.entries(data)) {
-                                // Replace ${key} with value
-                                result = result.replace(new RegExp(`\\$\{${key}\}`, 'g'), String(value));
+                                // Replace ${key} with value (escape key safely)
+                                const pattern = new RegExp('\\$\\{' + escapeRegExp(String(key)) + '\\}', 'g');
+                                result = result.replace(pattern, String(value));
                             }
                             return result;
                         };
 
+                        const splitArgsRespectingQuotes = (s: string) => {
+                            const parts: string[] = [];
+                            let current = '';
+                            let inSingle = false;
+                            let inDouble = false;
+                            for (let i = 0; i < s.length; i++) {
+                                const ch = s[i];
+                                if (ch === "'" && !inDouble) {
+                                    inSingle = !inSingle;
+                                    continue;
+                                }
+                                if (ch === '"' && !inSingle) {
+                                    inDouble = !inDouble;
+                                    continue;
+                                }
+                                if (ch === ' ' && !inSingle && !inDouble) {
+                                    if (current.length > 0) {
+                                        parts.push(current);
+                                        current = '';
+                                    }
+                                    continue;
+                                }
+                                current += ch;
+                            }
+                            if (current.length > 0) { parts.push(current); };
+                            return parts;
+                        };
+
                         for (const step of ct.steps) {
                              if (step.run) {
-                                let cmd = interpolate(step.run, args);
-                                try {
-                                    const { stdout, stderr } = await exec(cmd);
-                                    lastResult = stdout.trim() || stderr.trim();
-                                } catch (e: any) {
-                                    throw new Error(`Step ${step.name || 'unknown'} failed: ${e.message}`);
+                                // New structured form: { command, args[] }
+                                if (typeof step.run === 'object' && step.run.command) {
+                                    const cmdRendered = interpolate(String(step.run.command), args);
+                                    const cmdArgs = (step.run.args || []).map((a: any) => interpolate(String(a), args));
+                                    try {
+                                        const { stdout, stderr } = await execFile(cmdRendered, cmdArgs as string[]);
+                                        lastResult = (stdout || '').toString().trim() || (stderr || '').toString().trim();
+                                    } catch (e: any) {
+                                        // fallback to shell execution of the reconstructed command for compatibility
+                                        try {
+                                            const shellCmd = [cmdRendered, ...cmdArgs].join(' ');
+                                            const { stdout, stderr } = await exec(shellCmd);
+                                            lastResult = stdout.trim() || stderr.trim();
+                                        } catch (inner: any) {
+                                            throw new Error(`Step ${step.name || 'unknown'} failed: ${inner && inner.message ? inner.message : String(inner)}`);
+                                        }
+                                    }
+                                } else {
+                                    // Legacy string form (kept for backward compatibility)
+                                    const rendered = interpolate(String(step.run), args);
+                                    const tokens = splitArgsRespectingQuotes(rendered);
+                                    if (tokens.length === 0) {
+                                        continue;
+                                    }
+                                    const cmd = tokens[0]! as string;
+                                    const cmdArgs = tokens.slice(1) as string[];
+                                    try {
+                                        const { stdout, stderr } = await execFile(cmd, cmdArgs);
+                                        lastResult = (stdout || '').toString().trim() || (stderr || '').toString().trim();
+                                    } catch (e: any) {
+                                        try {
+                                            const { stdout, stderr } = await exec(rendered);
+                                            lastResult = stdout.trim() || stderr.trim();
+                                        } catch (inner: any) {
+                                            throw new Error(`Step ${step.name || 'unknown'} failed: ${inner && inner.message ? inner.message : String(inner)}`);
+                                        }
+                                    }
                                 }
                             } else if (step.http) {
                                 let url = interpolate(step.http.url, args);

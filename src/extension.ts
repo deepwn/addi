@@ -166,25 +166,36 @@ export function activate(context: vscode.ExtensionContext) {
         const name = await vscode.window.showInputBox({ prompt: "Tool Name (filename)", placeHolder: "my-tool" });
         if (!name) { return; }
 
-        const scope = await vscode.window.showQuickPick(["Workspace (.vscode/addi/)", "Global (~/.addi/)"], { placeHolder: "Where to create?" });
+        const scope = await vscode.window.showQuickPick(["Workspace Public (.addi/public)", "Workspace Private (.addi/private)", "Global (~/.addi/)"] , { placeHolder: "Where to create?" });
         if (!scope) { return; }
 
         let dirPath = "";
-        if (scope.startsWith("Workspace")) {
-            if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
-                vscode.window.showErrorMessage("No workspace open.");
-                return;
-            }
-            const wf = vscode.workspace.workspaceFolders[0];
-            if (wf) {
-                dirPath = vscode.Uri.joinPath(wf.uri, ".vscode", "addi").fsPath;
-            } else {
-                return;
-            }
+        if (scope.startsWith("Workspace Public")) {
+          if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+            vscode.window.showErrorMessage("No workspace open.");
+            return;
+          }
+          const wf = vscode.workspace.workspaceFolders[0];
+          if (wf) {
+            dirPath = vscode.Uri.joinPath(wf.uri, ".addi", "public").fsPath;
+          } else {
+            return;
+          }
+        } else if (scope.startsWith("Workspace Private")) {
+          if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+            vscode.window.showErrorMessage("No workspace open.");
+            return;
+          }
+          const wf = vscode.workspace.workspaceFolders[0];
+          if (wf) {
+            dirPath = vscode.Uri.joinPath(wf.uri, ".addi", "private").fsPath;
+          } else {
+            return;
+          }
         } else {
-            const os = require('os');
-            const path = require('path');
-            dirPath = path.join(os.homedir(), ".addi");
+          const os = require('os');
+          const path = require('path');
+          dirPath = path.join(os.homedir(), ".addi");
         }
 
         const fs = require('fs');
@@ -226,9 +237,39 @@ steps:
 `;
         }
 
+        if (!fs.existsSync(dirPath)) {
+          fs.mkdirSync(dirPath, { recursive: true });
+        }
         fs.writeFileSync(filePath, content);
         const doc = await vscode.workspace.openTextDocument(filePath);
         await vscode.window.showTextDocument(doc);
+    })
+  );
+
+  // Info button: show tip and open .gitignore when requested
+  context.subscriptions.push(
+    vscode.commands.registerCommand('addi.gitIgnoreInfo', async () => {
+      if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+        vscode.window.showInformationMessage('Open a workspace to manage .gitignore for Addi tools.');
+        return;
+      }
+      const wf = vscode.workspace.workspaceFolders![0]!;
+      const path = require('path');
+      const fs = require('fs');
+      const gitignorePath = path.join(wf.uri.fsPath, '.gitignore');
+      const open = await vscode.window.showInformationMessage('Private tools are best kept out of the repo. Click Open to edit .gitignore.', 'Open', 'Cancel');
+      if (open === 'Open') {
+        if (!fs.existsSync(gitignorePath)) {
+          try {
+            fs.writeFileSync(gitignorePath, '.addi/*.ignore.yaml\n', 'utf8');
+          } catch (e) {
+            vscode.window.showErrorMessage('Failed to create .gitignore');
+            return;
+          }
+        }
+        const doc = await vscode.workspace.openTextDocument(gitignorePath);
+        await vscode.window.showTextDocument(doc);
+      }
     })
   );
 
@@ -254,11 +295,11 @@ steps:
                 }
 
                 if (filePath && fs.existsSync(filePath)) {
-                    fs.unlinkSync(filePath);
-                    vscode.window.showInformationMessage(`Deleted ${item.tool.fileName}`);
-                    // Refresh will happen automatically via watcher
+                  fs.unlinkSync(filePath);
+                  vscode.window.showInformationMessage(`Deleted ${item.tool.fileName}`);
+                  // Refresh will happen automatically via watcher
                 } else {
-                    vscode.window.showErrorMessage(`Could not find file for tool: ${item.tool.fileName}`);
+                  vscode.window.showErrorMessage(`Could not find file for tool: ${item.tool.fileName}`);
                 }
             }
         }
@@ -302,6 +343,41 @@ steps:
           }
       })
   );
+
+  // Copy tool command
+  context.subscriptions.push(vscode.commands.registerCommand('addi.copyTool', async (item: ToolTreeItem) => {
+    if (!item || !item.tool || !item.tool.fileName) { return; }
+    const fs = require('fs');
+    const path = require('path');
+    const os = require('os');
+
+    let src = '';
+    if (item.tool.source === 'global') {
+      src = path.join(os.homedir(), '.addi', item.tool.fileName);
+    } else {
+      if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) { return; }
+      const wf = vscode.workspace.workspaceFolders[0];
+      if (!wf) { return; }
+      const vis = (item.tool as any).visibility || 'public';
+      src = path.join(wf.uri.fsPath, '.addi', vis === 'private' ? 'private' : 'public', item.tool.fileName);
+    }
+
+    if (!fs.existsSync(src)) { vscode.window.showErrorMessage('Tool file not found: ' + src); return; }
+    const parsed = path.parse(item.tool.fileName);
+    const destName = parsed.name + '-copy' + parsed.ext;
+    let dest = '';
+    if (item.tool.source === 'global') {
+      dest = path.join(os.homedir(), '.addi', destName);
+    } else {
+      const wf = vscode.workspace.workspaceFolders![0];
+      if (!wf) { return; }
+      const vis = (item.tool as any).visibility || 'public';
+      dest = path.join(wf.uri.fsPath, '.addi', vis === 'private' ? 'private' : 'public', destName);
+    }
+    fs.copyFileSync(src, dest);
+    const doc = await vscode.workspace.openTextDocument(dest);
+    await vscode.window.showTextDocument(doc);
+  }));
 
 }
 

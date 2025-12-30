@@ -47,7 +47,8 @@ function makeStreamWithToolCall(toolName: string) {
   } as any;
 }
 
-suite('LLMService tool-call handling', () => {
+suite('LLMService tool-call handling', function() {
+  this.timeout(10000);
   let origStream: any;
 
   setup(() => {

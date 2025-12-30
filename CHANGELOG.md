@@ -15,7 +15,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - **Secure Storage**: Migrated API Key storage to VS Code's native `SecretStorage`. API Keys are now encrypted by the OS and are no longer synced via Settings Sync (only non-sensitive config is synced).
 - **Secure Export**: Exporting configuration without a password now automatically strips all API Keys. API Keys are only included when exporting with a password (encrypted).
 
-> [!WARNING] Users will need to re-enter their API Keys after updating to this version, as the storage mechanism has changed.
+> [!WARNING] Users will need to re-enter their API Keys after updating to this version, as the storage mechanism has changed. Or backup and re-import with password to transfer existing keys.
 
 ## [0.0.12] - 2025-12-27
 
