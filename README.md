@@ -27,6 +27,7 @@
   - [添加模型 Add Model](#添加模型-add-model)
   - [快速编辑 Edit API Key](#快速编辑-edit-api-key)
   - [切换模型 Switch Model](#切换模型-switch-model)
+- [自定义工具 Custom Tools](#自定义工具-custom-tools)
 - [命令 Commands](#命令-commands)
 - [配置项 Settings Items](#配置项-settings-items)
 - [配置文件格式 Config Format](#配置文件格式-config-format)
@@ -147,15 +148,70 @@ Provider 节点右侧钥匙图标 → 输入密钥 → 保存。
 
 Copilot 侧边栏 → 模型下拉 → 管理模型 → 选择 Addi → 勾选自定义模型 → 返回选择该模型。
 
+## 自定义工具 Custom Tools
+
+Addi 允许你通过文件方式定义自定义工具，让 AI 模型能够执行本地命令或发送 HTTP 请求。为了便于管理与保密，工具放置在工作区的 `.addi` 目录下，分为两个子目录：
+
+- `.addi/public`：公开工具（推荐放置可共享或无敏感信息的工具定义）。
+- `.addi/private`：私有工具（推荐放置包含密钥或敏感参数的工具定义；Addi 会在检测到 Git 仓库时提示将 `.addi/private` 加入 `.gitignore`）。
+
+支持文件后缀：`.yml` 与 `.yaml`。
+
+使用方法：
+
+1. 在工作区中创建文件 `./.addi/public/my-tool.yml` 或 `./.addi/private/my-secret-tool.yml`。
+2. 文件内容为 YAML 格式的工具定义，示例：
+
+```yaml
+name: echoTool
+description: "Echo a message back"
+inputs:
+  message:
+    description: "The message to echo"
+    required: true
+steps:
+  - name: default
+    command: echo
+    args: ["${message}"]
+```
+
+字段说明：
+- `name`：工具标识符，会发送给模型作为可调用工具名。
+- `description`：简短描述，帮助模型判断何时调用该工具（会发送给模型）。
+- `inputs` / `parameters`：工具参数定义（简化格式会转换为 JSON Schema）。
+- `steps`：执行步骤数组，推荐使用结构化 `command` + `args` 形式：
+
+  ```yaml
+  steps:
+    - name: default
+      command: echo
+      args: ["${message}"]
+  ```
+
+  系统仍向后兼容旧的 `run: "echo ${message}"` 字符串形式，但推荐使用结构化格式以避免 shell 注入与解析歧义。
+
+> [!Warning] 不应该随意使用未经过验证的其他人提供的工具定义，以免引入安全风险。请在使用前仔细审查工具内容。
+
+在与 Copilot 对话时，如果模型发起 `tool-call`，Addi 会尝试：
+
+- 首先将调用转发给 VS Code 提供的工具（如果存在）；
+- 否则在工作区已注册的自定义工具中查找并执行相应步骤，并将命令输出或错误作为 `tool-result` 返回给模型（同时也会附带一条人类可读的错误提示，提升模型自动重试或改用替代策略的概率）。
+
+安全提示：
+
+- 把包含敏感信息的工具放入 `.addi/private`，并接受 Addi 的 `.gitignore` 提示以避免将私密内容提交到代码仓库；
+- 工具定义中尽量避免将长期有效凭据以明文形式写入文件，建议使用环境变量或外部秘密管理器结合运行时注入。
+
 ## 命令 Commands
 
-| Command ID          | 标题                 | 用途               |
-| ------------------- | -------------------- | ------------------ |
-| `addi.manage`       | Management           | 打开管理视图       |
-| `addi.exportConfig` | Export Configuration | 导出配置           |
-| `addi.importConfig` | Import Configuration | 导入配置           |
-| `addi.showLogs`     | Show Logs            | 打开 Addi 日志输出 |
-| `addi.setLogLevel`  | Set Log Level        | 快速调整日志级别   |
+| Command ID          | 标题                 | 用途                |
+| ------------------- | -------------------- | ------------------- |
+| `addi.manage`       | Management           | 打开管理视图        |
+| `addi.exportConfig` | Export Configuration | 导出配置 (支持加密) |
+| `addi.importConfig` | Import Configuration | 导入配置 (支持解密) |
+| `addi.showLogs`     | Show Logs            | 打开 Addi 日志输出  |
+
+> **注意**: 导出配置时，如果**不设置密码**，导出的 JSON 文件将**不包含**任何 API Key（为了安全）。如果需要备份或迁移 API Key，请务必设置导出密码，此时文件将以加密格式保存。
 
 `Show Logs` 将在 VS Code 的 **输出 (Output)** 面板中定位 “Addi” 通道，可随时查看调试信息。通过 `Set Log Level` 或在设置中修改 `addi.logLevel`，即可在 `off / error / warn / info / debug` 之间切换输出详细程度。
 日志内容会自动脱敏，并额外记录模型解析、请求选项等关键上下文，便于排查问题。
@@ -166,8 +222,8 @@ Copilot 侧边栏 → 模型下拉 → 管理模型 → 选择 Addi → 勾选�
 
 | Setting                         | 默认    | 说明                                                |
 | ------------------------------- | ------- | --------------------------------------------------- |
-| `addi.defaultMaxInputTokens`    | 4096    | 默认最大输入 tokens                                 |
-| `addi.defaultMaxOutputTokens`   | 1024    | 默认最大输出 tokens                                 |
+| `addi.defaultMaxInputTokens`    | 65535   | 默认最大输入 tokens                                 |
+| `addi.defaultMaxOutputTokens`   | 65535   | 默认最大输出 tokens                                 |
 | `addi.defaultModelFamily`       | "Addi"  | 默认模型 family                                     |
 | `addi.defaultModelVersion`      | "1.0.0" | 默认模型 version                                    |
 | `addi.saveConfigToSettingsSync` | true    | 是否保存到 VSCode Settings Sync 云端                |

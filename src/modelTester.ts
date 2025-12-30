@@ -1,8 +1,9 @@
 import * as vscode from "vscode";
 import { ModelDraft, Provider, Model } from "./types";
-import { MessageConverter } from "./services/messageConverter";
-import { LLMClient } from "./services/llmClient";
+import { AIProviderRegistry } from "./services/aiRegistry";
+import { generateText, ModelMessage, Tool, jsonSchema } from "ai";
 import { logger } from "./logger";
+import { LLMService } from "./services/llmService";
 
 export interface TestResult {
   success: boolean;
@@ -25,7 +26,6 @@ export interface TestOptions {
 export type ProgressCallback = (message: string) => void;
 
 export class ModelTester {
-  private static readonly COARSE_STEP = 64 * 1024;
   private static readonly VISION_TEST_IMAGE =
     "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAACAAIDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAr/xAAZEAEAAgMAAAAAAAAAAAAAAAAAAQIxcbH/xAAVAQEBAAAAAAAAAAAAAAAAAAAGB//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/ALH64jUcAF1Qf//Z";
 
@@ -40,12 +40,12 @@ export class ModelTester {
       // Use configured maxOutputTokens to verify if the model supports the setting
       const testMaxTokens = (modelDraft.maxOutputTokens && modelDraft.maxOutputTokens > 0) ? modelDraft.maxOutputTokens : undefined;
 
-      const payload: { type: "text" | "vision" | "tools"; prompt?: string; maxTokens?: number } = { 
+      const payload: { type: "text" | "vision" | "tools"; prompt?: string; maxOutputTokens?: number } = { 
           type: "text", 
           prompt: `Reply exactly '${connectToken}'`
       };
       if (testMaxTokens !== undefined) {
-          payload.maxTokens = testMaxTokens;
+          payload.maxOutputTokens = testMaxTokens;
       }
 
       const response = await this.performRequest(provider, modelDraft, payload, token);
@@ -56,19 +56,24 @@ export class ModelTester {
       result.success = true;
 
       // 2. Detect Token Limits
-      if (options.detectOutput) {
-        onProgress?.("Detecting output token limits...");
-        result.detectedMaxOutputTokens = await this.detectLimit(provider, modelDraft, "output", token, onProgress);
-        if (result.detectedMaxOutputTokens) {
-            modelDraft.maxOutputTokens = result.detectedMaxOutputTokens;
-        }
-      }
-
-      if (options.detectInput) {
-        onProgress?.("Detecting input token limits...");
-        result.detectedMaxInputTokens = await this.detectLimit(provider, modelDraft, "input", token, onProgress);
-        if (result.detectedMaxInputTokens) {
-            modelDraft.maxInputTokens = result.detectedMaxInputTokens;
+      if (options.detectInput || options.detectOutput) {
+        onProgress?.("Detecting token limits...");
+        // Use 'output' mode to enable error probing which is most effective for finding max context
+        const limit = await this.detectLimit(provider, modelDraft, "output", token, onProgress);
+        
+        if (limit !== undefined) {
+            // Strategy: Use detected Output Limit (max_tokens) as the base.
+            // Set maxOutputTokens to the detected limit.
+            // Set maxInputTokens to half of the detected limit (as a conservative heuristic requested by user).
+            if (options.detectOutput) {
+                result.detectedMaxOutputTokens = limit;
+                modelDraft.maxOutputTokens = limit;
+            }
+            if (options.detectInput) {
+                const inputLimit = Math.floor(limit / 2);
+                result.detectedMaxInputTokens = inputLimit;
+                modelDraft.maxInputTokens = inputLimit;
+            }
         }
       }
 
@@ -97,20 +102,93 @@ export class ModelTester {
       // 5. Speed Test
       if (options.checkSpeed) {
         onProgress?.("Measuring response speed...");
-        result.speed = await this.measureSpeed(provider, modelDraft, token);
+        try {
+          result.speed = await this.measureSpeed(provider, modelDraft, token);
+        } catch (speedError) {
+          logger.warn("Speed test failed", speedError);
+          // Don't fail the whole test, just leave speed undefined
+        }
       }
-    } catch (e) {
-      result.success = false;
-      result.error = e instanceof Error ? e.message : String(e);
+
+    } catch (error: any) {
+      result.error = error.message || String(error);
+      logger.error("Model test failed", error);
     }
 
     return result;
   }
 
+  private static async performRequest(
+    provider: Provider,
+    modelDraft: ModelDraft,
+    payload: { type: "text" | "vision" | "tools"; prompt?: string; maxOutputTokens?: number },
+    signal: AbortSignal
+  ): Promise<string | undefined> {
+    
+    const aiModel = AIProviderRegistry.createModel(provider, this.resolveModelIdentifierFromDraft(modelDraft));
+    
+    let messages: ModelMessage[] = [];
+    let tools: Record<string, Tool> | undefined = undefined;
+
+    if (payload.type === "vision") {
+      // Construct a vision message
+      messages = [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: "Describe this image" },
+            { type: 'image', image: Buffer.from(this.VISION_TEST_IMAGE, "base64") }
+          ]
+        }
+      ];
+    } else {
+      // Use simple string content for text-only requests to ensure maximum compatibility
+      messages = [
+        { role: 'user', content: payload.prompt ?? "Reply 'OK'." }
+      ];
+    }
+
+    if (payload.type === "tools") {
+      tools = {
+        test_tool: {
+          description: "A test tool",
+          inputSchema: jsonSchema({ type: "object", properties: {} }),
+        } as any
+      };
+    }
+
+    // Use maxTokens which is the standard property in AI SDK Core
+    const result = await generateText({
+      model: aiModel,
+      messages,
+      maxTokens: payload.maxOutputTokens ?? 100,
+      tools,
+      abortSignal: signal,
+    } as any);
+
+    if (payload.type === "tools") {
+        // Check if tool was called
+        if (result.toolCalls && result.toolCalls.length > 0) {
+            return "Tool called";
+        }
+        return "Tool not called";
+    }
+
+    return result.text;
+  }
+
   private static async measureSpeed(provider: Provider, modelDraft: ModelDraft, token: AbortSignal): Promise<number> {
-    const client = new LLMClient();
+    // Use LLMService to measure speed
+    const llmService = new LLMService();
     const model: Model = { ...modelDraft, sid: "temp" };
-    const messages = [vscode.LanguageModelChatMessage.User("Count from 1 to 50. e.g. 1, 2, 3...")];
+    const messages = [new vscode.LanguageModelTextPart("Count from 1 to 50. e.g. 1, 2, 3...")];
+    
+    // Mock VS Code message
+    const vsMessages: vscode.LanguageModelChatRequestMessage[] = [{
+        role: vscode.LanguageModelChatMessageRole.User,
+        content: messages,
+        name: undefined
+    }];
 
     let firstTokenTime = 0;
     let endTime = 0;
@@ -127,46 +205,73 @@ export class ModelTester {
       onCancellationRequested: (listener) => {
         token.addEventListener("abort", listener);
         return { dispose: () => token.removeEventListener("abort", listener) };
-      },
-    };
-
-    const onStats = (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => {
-      firstTokenTime = stats.firstTokenTime;
-      endTime = stats.endTime;
-      tokenCount = stats.tokenCount;
-    };
-
-    try {
-      if (provider.providerType === "openai" || provider.providerType === "generic") {
-        await client.callOpenAiApi(provider, model, messages, undefined, undefined, progressReporter, cancellationToken, onStats);
-      } else if (provider.providerType === "anthropic") {
-        await client.callAnthropicApi(provider, model, messages, undefined, undefined, progressReporter, cancellationToken, undefined, onStats);
-      } else if (provider.providerType === "google") {
-        await client.callGoogleApi(provider, model, messages, undefined, undefined, progressReporter, cancellationToken, undefined, onStats);
       }
-    } catch (e) {
-      return 0;
-    }
+    };
 
-    if (firstTokenTime > 0 && tokenCount > 0) {
-      const duration = Math.max((endTime - firstTokenTime) / 1000, 0.001);
+    await llmService.chat(
+        provider,
+        model,
+        vsMessages,
+        undefined,
+        progressReporter,
+        cancellationToken,
+        (stats) => {
+            firstTokenTime = stats.firstTokenTime;
+            endTime = stats.endTime;
+            tokenCount = stats.tokenCount;
+        }
+    );
+
+    if (tokenCount > 0 && endTime > firstTokenTime) {
+      const duration = (endTime - firstTokenTime) / 1000;
       return tokenCount / duration;
     }
     return 0;
   }
 
-  private static async detectLimit(provider: Provider, modelDraft: ModelDraft, mode: "input" | "output", token: AbortSignal, onProgress?: ProgressCallback): Promise<number> {
+  private static resolveModelIdentifierFromDraft(modelDraft: ModelDraft): string {
+    const trimmedId = modelDraft.id?.trim();
+    if (trimmedId) {
+      return trimmedId;
+    }
+    const trimmedFamily = (modelDraft.family ?? "addi").trim();
+    if (trimmedFamily) {
+      return trimmedFamily;
+    }
+    const draftSid = modelDraft.sid?.trim();
+    if (draftSid) {
+      return draftSid;
+    }
+    return "addi";
+  }
+
+  private static async detectLimit(
+    provider: Provider,
+    modelDraft: ModelDraft,
+    _mode: "input" | "output",
+    token: AbortSignal,
+    onProgress?: ProgressCallback
+  ): Promise<number | undefined> {
     // 1. Try to probe via error message first (Zero-cost)
-    if (mode === 'output') {
-        const probed = await this.probeLimitFromError(provider, modelDraft, token);
-        if (probed > 0) {
-            onProgress?.(`Probed ${mode} limit from API error: ${probed}`);
-            return probed;
-        }
+    // This is the most accurate way if the API supports it
+    const probed = await this.probeLimitFromError(provider, modelDraft, token, onProgress);
+    if (probed > 0) {
+        onProgress?.(`Probed limit from API error: ${probed}`);
+        return probed;
     }
 
+    // 2. Binary Search for Output Limit (max_tokens)
+    // If probing failed (API returned OK for huge max_tokens), it might mean the API ignores max_tokens
+    // OR it supports a very large value. We try to find the boundary where it starts rejecting.
+    // If it never rejects (even at 512k), we assume it ignores the parameter, but we return the highest tested value
+    // as a "safe" limit, or we could fallback to a default.
+    
+    const testMode = "output"; 
+    onProgress?.("Probing max_tokens limit via binary search...");
+
     // Coarse search (Reverse)
-    const coarsePoints = [524288, 262144, 196608, 131072, 65536, 1024]; // 512k, 256k, 192k, 128k, 64k, 1k
+    // 128k, 64k, 32k, 16k, 8k, 4k
+    const coarsePoints = [131072, 65536, 32768, 16384, 8192, 4096]; 
     let high = 0;
     let low = 0;
 
@@ -174,44 +279,47 @@ export class ModelTester {
       if (token.aborted) {
         return 0;
       }
-      onProgress?.(`Probing ${mode} limit: ${point} tokens...`);
-      const success = await this.verifyLimit(provider, modelDraft, point, mode, token);
+      onProgress?.(`Probing ${testMode} limit: ${point} tokens...`);
+      const success = await this.verifyLimit(provider, modelDraft, point, testMode, token);
       if (success) {
         high = point;
-        // If we passed at 256k, we can stop or try higher? For now, cap at 256k.
         if (point === coarsePoints[0]) {
-          return point;
+          // If the highest point (128k) succeeds, it's possible the API ignores max_tokens.
+          // In this case, returning 128k is safer than 512k.
+          return point; 
         }
-        // Found the upper bound of the working range.
-        // The previous point failed, this one passed.
-        // So the limit is between [point, previous_point_that_failed]
-        // But wait, we are iterating downwards.
-        // 256k (Fail) -> 192k (Fail) -> 128k (Pass).
-        // Limit is between 128k and 192k.
         low = point;
-        high = point + this.COARSE_STEP;
+        // The gap is between this point (success) and the previous point (failed)
+        const prevIndex = coarsePoints.indexOf(point) - 1;
+        const prevPoint = prevIndex >= 0 ? coarsePoints[prevIndex] : undefined;
+        high = prevPoint !== undefined ? prevPoint : point * 2; 
         break;
       }
     }
 
     if (low === 0) {
-      return 0; // Even 1k failed
+      // Even the lowest point failed? Try a very small fallback
+      const fallback = 1024;
+      onProgress?.(`Probing fallback limit: ${fallback}...`);
+      if (await this.verifyLimit(provider, modelDraft, fallback, testMode, token)) {
+          return fallback;
+      }
+      return 0; 
     }
 
     // Binary search between low and high
-    onProgress?.(`Refining ${mode} limit between ${low} and ${high}...`);
+    onProgress?.(`Refining ${testMode} limit between ${low} and ${high}...`);
     let best = low;
     let l = low;
     let r = high;
 
     while (r - l > 1024) {
-      // Precision 1k
       if (token.aborted) {
         return best;
       }
       const mid = Math.floor((l + r) / 2);
-      onProgress?.(`Probing ${mode} limit: ${mid} tokens...`);
-      const success = await this.verifyLimit(provider, modelDraft, mid, mode, token);
+      onProgress?.(`Probing ${testMode} limit: ${mid} tokens...`);
+      const success = await this.verifyLimit(provider, modelDraft, mid, testMode, token);
       if (success) {
         best = mid;
         l = mid;
@@ -223,24 +331,32 @@ export class ModelTester {
     return best;
   }
 
-  private static async probeLimitFromError(provider: Provider, modelDraft: ModelDraft, token: AbortSignal): Promise<number> {
+  private static async probeLimitFromError(provider: Provider, modelDraft: ModelDraft, token: AbortSignal, onProgress?: ProgressCallback): Promise<number> {
       try {
           // Send a huge max_tokens to provoke an error
           const hugeValue = 100000000;
-          const payload = { type: "text", maxTokens: hugeValue, prompt: "Reply 'OK'." };
+          const payload = { type: "text", maxOutputTokens: hugeValue, prompt: "Reply 'OK'." };
           
           // We expect this to fail and throw an error string
           await this.performRequest(provider, modelDraft, payload as any, token);
           return 0; // Surprisingly succeeded?
-      } catch (e) {
-          const errorMsg = String(e).toLowerCase();
+      } catch (e: any) {
+          let errorMsg = (e.message || String(e)).toLowerCase();
           
-          // Regex patterns to extract limits from common error messages
-          // OpenAI: "This model's maximum context length is 4097 tokens."
-          // Anthropic: "max_tokens_to_sample exceeds limit of 100000"
-          // Generic: "limit is 128000"
+          // Check for AI SDK specific error fields to capture the full error details
+          if (e.responseBody) {
+              errorMsg += " " + String(e.responseBody).toLowerCase();
+          }
+          if (e.data) {
+              errorMsg += " " + JSON.stringify(e.data).toLowerCase();
+          }
+
+          onProgress?.(`Probing error message: ${errorMsg}`);
           
           const patterns = [
+              /range.*?\[\s*\d+\s*,\s*(\d+)\s*\]/, // Matches [1, 8192] -> 8192
+              /range.*?\(\s*.*,\s*(\d+)\s*\)/, // Matches (1, 8192) -> 8192
+              /between \d+ and (\d+)/, // Matches between 1 and 8192
               /maximum context length is (\d+)/,
               /context window is (\d+)/,
               /limit of (\d+)/,
@@ -262,318 +378,33 @@ export class ModelTester {
       }
   }
 
-  private static async verifyLimit(provider: Provider, modelDraft: ModelDraft, value: number, _mode: "input" | "output", token: AbortSignal): Promise<boolean> {
+  private static async verifyLimit(provider: Provider, modelDraft: ModelDraft, value: number, mode: "input" | "output", token: AbortSignal): Promise<boolean> {
     try {
       const intValue = Math.floor(value);
       let payload: any = { type: "text" };
       
-      // Use parameter validation to test limits.
-      // We set maxTokens to the target value. If the API rejects it (e.g. exceeds context length or output limit),
-      // it will throw an error (non-200 response).
-      // This avoids sending large prompts which would consume user tokens.
-      payload.maxTokens = intValue;
-      payload.prompt = "Reply 'OK'.";
+      if (mode === 'input') {
+          // Construct a prompt with approximately 'value' tokens.
+          // We use "word " which is typically 1 token in many tokenizers.
+          // To be safe and efficient, we can use a repeated string.
+          // "a " is often 1 token.
+          const chunk = "a "; 
+          const repeatCount = intValue; 
+          // Limit payload size to avoid OOM or network issues if value is huge
+          if (repeatCount > 200000) { return false; } // Hard cap for safety
+          
+          payload.prompt = chunk.repeat(repeatCount) + "Reply 'OK'.";
+          // We don't set maxOutputTokens here, let it use default
+      } else {
+          payload.maxOutputTokens = intValue;
+          payload.prompt = "Reply 'OK'.";
+      }
 
       const responseText = await this.performRequest(provider, modelDraft, payload, token);
-      // If the API returns successfully, it means the parameters were accepted.
       return responseText !== undefined;
     } catch (e) {
       return false;
     }
   }
 
-  private static async performRequest(
-    provider: Provider,
-    modelDraft: ModelDraft,
-    payload: { type: "text" | "vision" | "tools"; prompt?: string; maxTokens?: number },
-    signal: AbortSignal
-  ): Promise<string | undefined> {
-    const apiEndpoint = provider.apiEndpoint?.trim();
-    const apiKey = provider.apiKey?.trim();
-
-    if (!apiEndpoint) {
-      throw new Error("Unconfigured API endpoint");
-    }
-    if (!apiKey) {
-      throw new Error("Unconfigured API key");
-    }
-
-    const maxTokens = payload.maxTokens ?? 100; // Default to 100 to be safe
-    const prompt = payload.prompt ?? "Reply 'OK'.";
-
-    switch (provider.providerType) {
-      case "openai":
-      case "generic":
-        return await this.requestOpenAI(apiEndpoint, apiKey, modelDraft, payload, signal, maxTokens, prompt);
-      case "anthropic":
-        return await this.requestAnthropic(apiEndpoint, apiKey, modelDraft, payload, signal, maxTokens, prompt);
-      case "google":
-        return await this.requestGoogle(apiEndpoint, apiKey, modelDraft, payload, signal, maxTokens, prompt);
-    }
-  }
-
-  private static async requestOpenAI(endpoint: string, key: string, draft: ModelDraft, payload: any, signal: AbortSignal, maxTokens: number, prompt: string): Promise<string> {
-    const url = this.resolveChatCompletionsUrl(endpoint, "https://api.openai.com/v1");
-
-    let messages: any[];
-    if (payload.type === "vision") {
-      const imagePart = new vscode.LanguageModelDataPart(Buffer.from(this.VISION_TEST_IMAGE, "base64"), "image/png");
-      const mockMsg = {
-        role: vscode.LanguageModelChatMessageRole.User,
-        content: [new vscode.LanguageModelTextPart("Describe this image"), imagePart],
-        name: undefined,
-      } as unknown as vscode.LanguageModelChatRequestMessage;
-      messages = MessageConverter.toOpenAiMessages([mockMsg]);
-    } else {
-      messages = [{ role: "user", content: prompt }];
-    }
-
-    const body: any = {
-      model: this.resolveModelIdentifierFromDraft(draft),
-      messages,
-      max_tokens: maxTokens,
-      stream: false,
-    };
-
-    if (payload.type === "tools") {
-      body.tools = [
-        {
-          type: "function",
-          function: {
-            name: "test_tool",
-            description: "A test tool",
-            parameters: { type: "object", properties: {} },
-          },
-        },
-      ];
-      body.tool_choice = "none";
-    }
-
-    const data = await this.doFetch(
-      url,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-        body: JSON.stringify(body),
-        signal,
-      },
-      "OpenAI"
-    );
-
-    const content = data.choices?.[0]?.message?.content;
-    if (typeof content === 'string' && content.length > 0) {
-        return content;
-    }
-    // If content is missing or empty, return the raw JSON to help debug
-    return JSON.stringify(data);
-  }
-
-  private static async requestAnthropic(endpoint: string, key: string, draft: ModelDraft, payload: any, signal: AbortSignal, maxTokens: number, prompt: string): Promise<string> {
-    const baseUrl = this.normalizeBaseUrl(endpoint, "https://api.anthropic.com");
-    const url = this.buildUrl(baseUrl, "/v1/messages");
-
-    let messages: any[];
-    if (payload.type === "vision") {
-      const imagePart = new vscode.LanguageModelDataPart(Buffer.from(this.VISION_TEST_IMAGE, "base64"), "image/png");
-      const mockMsg = {
-        role: vscode.LanguageModelChatMessageRole.User,
-        content: [new vscode.LanguageModelTextPart("Describe this image"), imagePart],
-        name: undefined,
-      } as unknown as vscode.LanguageModelChatRequestMessage;
-      messages = MessageConverter.toAnthropicMessages([mockMsg]);
-    } else {
-      messages = [{ role: "user", content: prompt }];
-    }
-
-    const body: any = {
-      model: this.resolveModelIdentifierFromDraft(draft),
-      max_tokens: maxTokens,
-      messages,
-      stream: false,
-    };
-
-    if (payload.type === "tools") {
-      body.tools = [
-        {
-          name: "test_tool",
-          description: "A test tool",
-          input_schema: { type: "object", properties: {} },
-        },
-      ];
-    }
-
-    const data = await this.doFetch(
-      url,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify(body),
-        signal,
-      },
-      "Anthropic"
-    );
-
-    const content = data.content?.[0]?.text;
-    if (typeof content === 'string' && content.length > 0) {
-        return content;
-    }
-    return JSON.stringify(data);
-  }
-
-  private static async requestGoogle(endpoint: string, key: string, draft: ModelDraft, payload: any, signal: AbortSignal, maxTokens: number, prompt: string): Promise<string> {
-    const baseUrl = this.normalizeBaseUrl(endpoint, "https://generativelanguage.googleapis.com/v1beta");
-    const modelId = this.resolveModelIdentifierFromDraft(draft);
-    const url = `${baseUrl}/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(key)}`;
-
-    let contents: any[];
-    if (payload.type === "vision") {
-      const imagePart = new vscode.LanguageModelDataPart(Buffer.from(this.VISION_TEST_IMAGE, "base64"), "image/png");
-      const mockMsg = {
-        role: vscode.LanguageModelChatMessageRole.User,
-        content: [new vscode.LanguageModelTextPart("Describe this image"), imagePart],
-        name: undefined,
-      } as unknown as vscode.LanguageModelChatRequestMessage;
-      contents = MessageConverter.toGoogleMessages([mockMsg]);
-    } else {
-      contents = [{ role: "user", parts: [{ text: prompt }] }];
-    }
-
-    const body: any = {
-      contents,
-      generationConfig: { maxOutputTokens: maxTokens },
-    };
-
-    if (payload.type === "tools") {
-      body.tools = [{ function_declarations: [{ name: "test_tool", description: "A test tool" }] }];
-    }
-
-    const data = await this.doFetch(
-      url,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal,
-      },
-      "Google"
-    );
-
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (typeof content === 'string' && content.length > 0) {
-        return content;
-    }
-    return JSON.stringify(data);
-  }
-
-  private static sanitizeHeaders(headers: any): Record<string, string> {
-    if (!headers) {
-      return {};
-    }
-    const safeHeaders: Record<string, string> = {};
-    
-    let entries: [string, any][] = [];
-    
-    if (typeof headers.entries === 'function') {
-        entries = Array.from(headers.entries());
-    } else if (Array.isArray(headers)) {
-        entries = headers as [string, any][];
-    } else {
-        entries = Object.entries(headers);
-    }
-
-    for (const [key, value] of entries) {
-      if (key.toLowerCase() === "authorization" || key.toLowerCase() === "x-api-key") {
-        safeHeaders[key] = "***";
-      } else {
-        safeHeaders[key] = String(value);
-      }
-    }
-    return safeHeaders;
-  }
-
-  private static async doFetch(url: string, init: RequestInit, providerName: string): Promise<any> {
-    logger.debug(`Sending ${providerName} API request (Tester)`, {
-      url,
-      headers: this.sanitizeHeaders(init.headers),
-      body: typeof init.body === "string" ? JSON.parse(init.body) : init.body
-    });
-
-    const response = await fetch(url, init);
-
-    logger.debug(`Received ${providerName} API response (Tester)`, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries())
-    });
-
-    if (!response.ok) {
-      throw new Error(await this.readResponseError(response));
-    }
-    const data: any = await response.json();
-    if (!data || typeof data !== "object") {
-      throw new Error(`${providerName} API response format error`);
-    }
-    return data;
-  }
-
-  private static resolveModelIdentifierFromDraft(modelDraft: ModelDraft): string {
-    const trimmedId = modelDraft.id?.trim();
-    if (trimmedId) {
-      return trimmedId;
-    }
-    const trimmedFamily = (modelDraft.family ?? "addi").trim();
-    if (trimmedFamily) {
-      return trimmedFamily;
-    }
-    const draftSid = modelDraft.sid?.trim();
-    if (draftSid) {
-      return draftSid;
-    }
-    return "addi";
-  }
-
-  private static async readResponseError(response: Response): Promise<string> {
-    const statusInfo = `${response.status} ${response.statusText}`;
-    let body: string;
-    try {
-      body = await response.text();
-    } catch (error) {
-      return statusInfo;
-    }
-    if (!body) {
-      return statusInfo;
-    }
-    try {
-      const parsed = JSON.parse(body);
-      if (typeof parsed?.error === "string") {
-        return `${statusInfo} - ${parsed.error}`;
-      }
-      if (parsed?.error?.message) {
-        return `${statusInfo} - ${parsed.error.message}`;
-      }
-      return `${statusInfo} - ${body}`;
-    } catch {
-      return `${statusInfo} - ${body}`;
-    }
-  }
-
-  private static resolveChatCompletionsUrl(endpoint: string, fallback: string): string {
-    const base = this.normalizeBaseUrl(endpoint, fallback);
-    const lower = base.toLowerCase();
-    if (lower.endsWith("/chat/completions")) {
-      return base;
-    }
-    return this.buildUrl(base, "/chat/completions");
-  }
-
-  private static normalizeBaseUrl(endpoint: string | undefined, fallback: string): string {
-    const base = (endpoint && endpoint.trim()) || fallback;
-    return base.replace(/\/+$/, "");
-  }
-
-  private static buildUrl(base: string, path: string): string {
-    const normalizedBase = base.endsWith("/") ? base.slice(0, -1) : base;
-    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-    return `${normalizedBase}${normalizedPath}`;
-  }
 }

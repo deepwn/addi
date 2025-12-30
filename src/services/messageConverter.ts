@@ -1,6 +1,163 @@
 import * as vscode from "vscode";
+import { ModelMessage, UserContent, ToolContent, AssistantContent } from "ai";
+import { logger } from "../logger";
 
 export class MessageConverter {
+  static async toAiCoreMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): Promise<ModelMessage[]> {
+    const coreMessages: ModelMessage[] = [];
+
+    for (const msg of messages) {
+      if (msg.role === vscode.LanguageModelChatMessageRole.User) {
+        const userContent: UserContent = [];
+        const toolResults: vscode.LanguageModelToolResultPart[] = [];
+
+        for (const part of msg.content) {
+          if (part instanceof vscode.LanguageModelTextPart) {
+            userContent.push({ type: "text", text: part.value });
+          } else if (part instanceof vscode.LanguageModelDataPart) {
+            if (part.mimeType.startsWith("image/")) {
+              // @ts-ignore: vscode.LanguageModelDataPart.value might be missing in types
+              const data = part.value || (part as any).data;
+              // Ensure data is in a format ai-sdk accepts (base64 string or Uint8Array)
+              userContent.push({ type: "image", image: data });
+            }
+          } else if (part instanceof vscode.LanguageModelToolResultPart) {
+            toolResults.push(part);
+          }
+        }
+
+        // 1. 先处理 Tool Results (作为单独的 Tool Message)
+        if (toolResults.length > 0) {
+          const toolContent: ToolContent = toolResults.map((tr) => {
+            const toolName = this.findToolName(messages, tr.callId);
+
+            // Check for images or mixed content
+            const hasImage = tr.content.some((c) => c instanceof vscode.LanguageModelDataPart);
+
+            let output: any;
+
+            if (hasImage) {
+              const contentParts = tr.content
+                .map((c) => {
+                  if (c instanceof vscode.LanguageModelTextPart) {
+                    return { type: "text", text: c.value };
+                  } else if (c instanceof vscode.LanguageModelDataPart) {
+                    // @ts-ignore
+                    const data = c.value || (c as any).data;
+                    const base64 = data instanceof Uint8Array ? MessageConverter.uint8ArrayToBase64(data) : Buffer.from(data).toString("base64");
+                    return {
+                      type: "file-data",
+                      data: base64,
+                      mediaType: c.mimeType,
+                    };
+                  }
+                  return null;
+                })
+                .filter((p) => p !== null);
+              output = { type: "content", value: contentParts };
+            } else {
+              // 提取结果文本
+              const resultText = tr.content
+                .map((c) => {
+                  if (c instanceof vscode.LanguageModelTextPart) {
+                    return c.value;
+                  }
+                  return "";
+                })
+                .join("");
+
+              if (toolName === "unknown") {
+                logger.warn(`Could not find tool name for callId: ${tr.callId}`);
+              }
+
+              // Log result length
+              logger.debug(`Tool Result for ${toolName} (${tr.callId}): ${resultText.length} chars`);
+
+              output = { type: "text", value: resultText || "Success" };
+              // Try to parse as JSON if it looks like JSON (starts with { or [)
+              const trimmed = resultText.trim();
+              if ((trimmed.startsWith("{") || trimmed.startsWith("[")) && trimmed.length < 100000) {
+                try {
+                  const json = JSON.parse(resultText);
+                  if (typeof json === "object" && json !== null) {
+                    output = { type: "json", value: json };
+                  }
+                } catch (e) {
+                  // Not valid JSON, keep as text
+                }
+              }
+            }
+
+            return {
+              type: "tool-result",
+              toolCallId: tr.callId,
+              toolName: toolName,
+              output: output,
+            } as any;
+          });
+          coreMessages.push({ role: "tool", content: toolContent });
+        }
+
+        // 2. 再处理 User Content (Text/Image)
+        if (userContent.length > 0) {
+          coreMessages.push({ role: "user", content: userContent });
+        }
+      } else if (msg.role === vscode.LanguageModelChatMessageRole.Assistant) {
+        const content: AssistantContent = [];
+        for (const part of msg.content) {
+          if (part instanceof vscode.LanguageModelTextPart) {
+            content.push({ type: "text", text: part.value });
+          } else if (part instanceof vscode.LanguageModelToolCallPart) {
+            content.push({
+              type: "tool-call",
+              toolCallId: part.callId,
+              toolName: part.name,
+              input: part.input,
+            } as any);
+          }
+        }
+        // Ensure assistant message has content
+        if (content.length > 0) {
+          coreMessages.push({ role: "assistant", content });
+        } else {
+          // If empty, maybe skip or add placeholder?
+          // VS Code might send empty assistant message if it's just a placeholder?
+          // Let's log warning
+          logger.warn("Encountered empty assistant message, skipping.");
+        }
+      }
+    }
+
+    // Log the converted messages for debugging
+    logger.debug(
+      `Converted Messages: ${JSON.stringify(
+        coreMessages,
+        (key, value) => {
+          if (key === "image") {
+            return "[Image Data]";
+          }
+          return value;
+        },
+        2
+      )}`
+    );
+
+    return coreMessages;
+  }
+
+  private static findToolName(messages: readonly vscode.LanguageModelChatRequestMessage[], callId: string): string {
+    for (const msg of messages) {
+      if (msg.role === vscode.LanguageModelChatMessageRole.Assistant) {
+        for (const part of msg.content) {
+          if (part instanceof vscode.LanguageModelToolCallPart && part.callId === callId) {
+            return part.name;
+          }
+        }
+      }
+    }
+    return "unknown";
+  }
+
   static mapChatRole(role: vscode.LanguageModelChatMessageRole): string {
     return role === vscode.LanguageModelChatMessageRole.User ? "user" : "assistant";
   }
@@ -34,7 +191,7 @@ export class MessageConverter {
   }
 
   static uint8ArrayToBase64(array: Uint8Array): string {
-    return Buffer.from(array).toString('base64');
+    return Buffer.from(array).toString("base64");
   }
 
   static extractToolCallFromParts(parts: readonly unknown[]): { name: string; arguments: string; id?: string } | undefined {
@@ -68,10 +225,14 @@ export class MessageConverter {
   static extractToolResultFromParts(parts: readonly unknown[]): { id?: string; content: string } | undefined {
     for (const part of parts) {
       if (part instanceof vscode.LanguageModelToolResultPart) {
-        const content = part.content.map(p => {
-            if (p instanceof vscode.LanguageModelTextPart) { return p.value; }
+        const content = part.content
+          .map((p) => {
+            if (p instanceof vscode.LanguageModelTextPart) {
+              return p.value;
+            }
             return "";
-        }).join("");
+          })
+          .join("");
         return { id: part.callId, content };
       }
       if (!part || typeof part !== "object") {
@@ -105,7 +266,7 @@ export class MessageConverter {
       const parts = Array.isArray(msg.content) ? (msg.content as readonly unknown[]) : [msg.content];
       const toolCall = this.extractToolCallFromParts(parts);
       const toolResult = this.extractToolResultFromParts(parts);
-      
+
       // Handle content parts (text and images)
       const contentParts: any[] = [];
       for (const part of parts) {
@@ -148,7 +309,7 @@ export class MessageConverter {
         // If we have text content alongside tool call, we should include it?
         // For now, let's keep existing behavior but use contentParts if available and not tool call.
         const contentText = this.extractTextFromMessageParts(parts);
-        entry["content"] = contentText || null; 
+        entry["content"] = contentText || null;
       } else if (toolResult) {
         entry["content"] = toolResult.content;
         if (toolResult.id) {
@@ -156,11 +317,11 @@ export class MessageConverter {
         }
       } else {
         // If we have mixed content (images), use array. If only text, use string (for better compatibility).
-        const hasImage = contentParts.some(p => p.type === "image_url");
+        const hasImage = contentParts.some((p) => p.type === "image_url");
         if (hasImage) {
-            entry["content"] = contentParts;
+          entry["content"] = contentParts;
         } else {
-            entry["content"] = this.extractTextFromMessageParts(parts);
+          entry["content"] = this.extractTextFromMessageParts(parts);
         }
       }
 
@@ -193,7 +354,7 @@ export class MessageConverter {
         continue;
       }
       const role = this.mapChatRole(msg.role);
-      
+
       const parts = Array.isArray(msg.content) ? (msg.content as readonly unknown[]) : [msg.content];
       const contentParts: any[] = [];
 
@@ -215,13 +376,13 @@ export class MessageConverter {
         }
       }
 
-      const hasImage = contentParts.some(p => p.type === "image");
-      
+      const hasImage = contentParts.some((p) => p.type === "image");
+
       if (hasImage) {
-         result.push({ role, content: contentParts });
+        result.push({ role, content: contentParts });
       } else {
-         const textContent = contentParts.map(p => p.text).join("");
-         result.push({ role, content: textContent });
+        const textContent = contentParts.map((p) => p.text).join("");
+        result.push({ role, content: textContent });
       }
     }
     return result;
@@ -237,7 +398,7 @@ export class MessageConverter {
         return;
       }
       const role = msg.role === vscode.LanguageModelChatMessageRole.User ? "user" : "model";
-      
+
       const parts = Array.isArray(msg.content) ? (msg.content as readonly unknown[]) : [msg.content];
       const msgParts: Array<Record<string, unknown>> = [];
 

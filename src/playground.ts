@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
-import { Provider, Model } from "./types";
+import { Provider, Model, ChatMessage } from "./types";
 import { ConfigManager } from "./utils";
-import { ChatMessage } from "./apiClient";
 import { TextDecoder } from "util";
 import { logger } from "./logger";
 

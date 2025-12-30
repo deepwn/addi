@@ -732,7 +732,15 @@ export class CommandHandler {
   }
 
   private encodeProvidersForExport(providers: Provider[], password?: string): string {
-    const plainJson = JSON.stringify(providers, null, 2);
+    // If no password is provided, strip sensitive information (apiKey)
+    const exportData = password
+      ? providers
+      : providers.map((p) => {
+          const { apiKey, ...rest } = p;
+          return rest;
+        });
+
+    const plainJson = JSON.stringify(exportData, null, 2);
 
     if (!password) {
       return plainJson;
@@ -855,8 +863,8 @@ export class CommandHandler {
       }
 
       const passwordInput = await UserFeedback.showInputBox({
-        prompt: "Enter password to encrypt configuration (optional)",
-        placeHolder: "Leave empty to export without encryption",
+        prompt: "Enter password to encrypt (API Keys included). Leave empty for plain JSON (API Keys EXCLUDED).",
+        placeHolder: "Password set: API Keys included. Empty: API Keys EXCLUDED.",
         password: true,
         value: "",
         ignoreFocusOut: true,

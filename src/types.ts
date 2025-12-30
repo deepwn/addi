@@ -1,3 +1,5 @@
+import { JSONSchema7 } from 'ai';
+
 export interface ModelCapabilities {
   imageInput?: boolean;
   toolCalling?: boolean | number;
@@ -21,7 +23,7 @@ export interface Model extends Omit<ModelDraft, "sid"> {
   sid: string;
 }
 
-export type ProviderType = "openai" | "anthropic" | "google" | "generic";
+export type ProviderType = "openai" | "anthropic" | "google" | "deepseek" | "generic";
 
 export interface Provider {
   id: string;
@@ -37,4 +39,41 @@ export interface Provider {
 export interface ProviderRepository {
   getProviders(): Provider[];
   findModel(modelSid: string): { provider: Provider; model: Model } | null;
+  onDidUpdate?: (listener: () => any) => any;
+}
+
+export type ChatMessageRole = "system" | "user" | "assistant";
+
+export interface ChatMessage {
+  role: ChatMessageRole;
+  content: string;
+}
+
+export interface ToolStep {
+  name?: string;
+  id?: string;
+  // `run` is now a structured command with arguments to avoid shell parsing ambiguities.
+  // Use `run.command` and optional `run.args` array. Legacy string forms are still
+  // accepted by the loader and will be normalized.
+  run?: {
+    command: string;
+    args?: string[];
+  };
+  http?: {
+    url: string;
+    method?: string;
+    headers?: Record<string, string>;
+    body?: any;
+  };
+}
+
+export interface CustomTool {
+  id: string;
+  name: string;
+  description: string;
+  parameters: JSONSchema7; // JSON Schema object
+  steps: ToolStep[];
+  source?: 'global' | 'workspace';
+  visibility?: 'public' | 'private' | 'global';
+  fileName?: string;
 }

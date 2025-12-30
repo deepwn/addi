@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "module": "Node16",
+    "module": "NodeNext",
     "target": "ES2022",
     "lib": ["ES2022"],
     "outDir": "dist",
@@ -20,6 +20,7 @@
     "noPropertyAccessFromIndexSignature": true,
     "noUncheckedIndexedAccess": true,
     "resolveJsonModule": true,
+    "moduleResolution": "NodeNext",
     "declaration": true,
     "declarationMap": true,
     "removeComments": false,

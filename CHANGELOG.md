@@ -4,10 +4,43 @@ All notable changes to the "addi" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.0.13] - 2025-12-29
+
+### Bun Migration
+- **Build System**: Migrated from Webpack to Bun's native build system for faster and more efficient builds.
+
+> [!WARNING] Should delete Webpack config and related files after confirming Bun build is stable. and remove `node_modules` and old lock files before reinstalling with Bun.
+
+### Security
+- **Secure Storage**: Migrated API Key storage to VS Code's native `SecretStorage`. API Keys are now encrypted by the OS and are no longer synced via Settings Sync (only non-sensitive config is synced).
+- **Secure Export**: Exporting configuration without a password now automatically strips all API Keys. API Keys are only included when exporting with a password (encrypted).
+
+> [!WARNING] Users will need to re-enter their API Keys after updating to this version, as the storage mechanism has changed. Or backup and re-import with password to transfer existing keys.
+
+## [0.0.12] - 2025-12-27
+
+### Re-build
+- **Extension Re-build**: Rebuilt the entire extension ai based on `@ai-sdk/*` packages to improve stability and maintainability.
+- **Dependency Updates**: Updated all dependencies to their latest versions, ensuring compatibility and security.
+### Fixed
+- **Bug Fixes**: Fixed some bug with model verification, streaming, and tool calling to enhance user experience and reliability (when switching to Vercel AI SDK).
+
 ## [0.0.11] - 2025-12-25
 
+### Major Refactor
+- **Vercel AI SDK Integration**: Completely rewrote the core LLM engine to use Vercel AI SDK (`ai`, `@ai-sdk/openai`, `@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/deepseek`). This improves stability, standardizes streaming, and simplifies future provider additions.
+- **DeepSeek Support**: Added native support for DeepSeek via `@ai-sdk/deepseek`.
+
+### Added
+- **Custom Tools**: New "Custom Tools" panel allows you to define your own tools (Shell Commands or HTTP Requests) that can be automatically called by the model during chat.
+- **Tool Management**: Add, delete, and manage custom tools directly from the sidebar.
+
 ### Changed
-- **Fixes**: Addressed several minor bugs and improved overall stability based on user feedback. (deepseek `reasoning_content` missing at next request with tool calling in thinking chain)
+- **Architecture**: Removed legacy `LLMClient` and manual HTTP fetching logic.
+- **Performance**: Improved message conversion and stream handling.
+
+### Fixed
+- **Stability**: Addressed various bugs related to stream parsing and connection handling by leveraging the robust AI SDK.
 
 ## [0.0.10] - 2025-12-23
 

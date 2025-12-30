@@ -7,9 +7,11 @@ node_modules/**
 src/**
 .git/**
 scripts/**
+refer_documents/**
+*.log
 .gitignore
 .yarnrc
-webpack.config.js
+bunfig.toml
 *.md
 !readme.md
 !README.md
