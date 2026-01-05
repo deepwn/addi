@@ -4,6 +4,15 @@ All notable changes to the "addi" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.0.15] - 2026-01-05
+
+### Added
+- **MCP Server Integration**: Integrated a local Model Context Protocol (MCP) server to handle tool execution, providing a more robust and standard way to run local tools.
+- **Documentation**: Added [CUSTOM_TOOLS.md](CUSTOM_TOOLS.md) to provide a comprehensive guide on creating and using custom tools.
+
+### Improved
+- **Tool Execution**: Enhanced the stability of script execution by leveraging the MCP server architecture.
+
 ## [0.0.14] - 2026-01-05
 
 ### Added

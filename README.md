@@ -150,122 +150,24 @@ Copilot 侧边栏 → 模型下拉 → 管理模型 → 选择 Addi → 勾选�
 
 ## 自定义工具 Custom Tools
 
-Addi 允许你通过文件方式定义自定义工具，让 AI 模型能够执行本地命令或发送 HTTP 请求。为了便于管理与保密，工具放置在工作区的 `.addi` 目录下，分为两个子目录：
+Addi 支持通过 YAML 文件定义自定义工具，让 AI 能够执行本地脚本、HTTP 请求等操作。
 
-- `.addi/public`：公开工具（推荐放置可共享或无敏感信息的工具定义）。
-- `.addi/private`：私有工具（推荐放置包含密钥或敏感参数的工具定义；Addi 会在检测到 Git 仓库时提示将 `.addi/private` 加入 `.gitignore`）。
+详细文档请参考：[自定义工具指南 (CUSTOM_TOOLS.md)](CUSTOM_TOOLS.md)
 
-支持文件后缀：`.yml` 与 `.yaml`。
+### 快速概览
 
-使用方法：
-
-1. 在工作区中创建文件 `./.addi/public/my-tool.yml` 或 `./.addi/private/my-secret-tool.yml`。
-2. 文件内容为 YAML 格式的工具定义，示例：
-
-```yaml
-name: echoTool
-description: "Echo a message back"
-inputs:
-  message:
-    description: "The message to echo"
-    required: true
-steps:
-  - name: default
-    command: echo
-    args: ["${message}"]
-```
-
-字段说明：
-
-- `name`：工具标识符，会发送给模型作为可调用工具名。
-- `description`：简短描述，帮助模型判断何时调用该工具（会发送给模型）。
-- `inputs` / `parameters`：工具参数定义（简化格式会转换为 JSON Schema）。
-- `steps`：执行步骤数组，推荐使用结构化 `command` + `args` 形式：
-
-  ```yaml
-  steps:
-    - name: default
-      command: echo
-      args: ["${message}"]
-  ```
-
-  系统仍向后兼容旧的 `run: "echo ${message}"` 字符串形式，但推荐使用结构化格式以避免 shell 注入与解析歧义。
-
-> [!Warning] 不应该随意使用未经过验证的其他人提供的工具定义，以免引入安全风险。请在使用前仔细审查工具内容。
-
-在与 Copilot 对话时，如果模型发起 `tool-call`，Addi 会尝试：
-
-- 首先将调用转发给 VS Code 提供的工具（如果存在）；
-- 否则在工作区已注册的自定义工具中查找并执行相应步骤，并将命令输出或错误作为 `tool-result` 返回给模型（同时也会附带一条人类可读的错误提示，提升模型自动重试或改用替代策略的概率）。
-
-## 自定义工具 Custom Tools
-
-Addi 支持通过 YAML 文件定义自定义工具，这些工具可以被模型调用以执行本地命令或 HTTP 请求。
-
-### 目录结构
-
-工具文件存放在工作区的 `.addi` 目录下：
-
-- `.addi/public/`: 公共工具，可以提交到版本控制。
-- `.addi/private/`: 私有工具，包含敏感信息，建议在 `.gitignore` 中忽略。
-
-### 工具定义格式
-
-支持简单的单行命令和复杂的脚本执行。
-
-#### 示例 1: 简单命令 (Legacy)
-
-```yaml
-name: my_tool
-description: A simple tool
-steps:
-  - run: echo "Hello World"
-```
-
-#### 示例 2: 多步骤脚本 (New)
-
-支持指定 `shell` (如 `node`, `python`, `bash`, `powershell`) 和环境变量 `env`。
-
-```yaml
-name: get_netinfo
-description: Get network information
-steps:
-  - name: Start
-    run: echo "Starting analysis..."
-
-  - name: Run Script
-    shell: node
-    env:
-      MY_VAR: "some value"
-    run: |
-      const os = require('os');
-      console.log('Platform: ' + os.platform());
-      console.log('Env Var: ' + process.env.MY_VAR);
-```
-
-#### 示例 3: HTTP 请求
-
-```yaml
-name: get_ip
-description: Get public IP
-inputs:
-  ip:
-    description: IP address (optional)
-    default: ""
-steps:
-  - http:
-      url: http://ip-api.com/json/${{ inputs.ip }}
-      method: GET
-```
-
-### 变量替换
-
-支持使用 `${{ inputs.variable }}` 语法引用输入参数（类似 GitHub Actions）。
-
-安全提示：
-
-- 把包含敏感信息的工具放入 `.addi/private`，并接受 Addi 的 `.gitignore` 提示以避免将私密内容提交到代码仓库；
-- 工具定义中尽量避免将长期有效凭据以明文形式写入文件，建议使用环境变量或外部秘密管理器结合运行时注入。
+1. **创建工具文件**：在 `.addi/public/` (共享) 或 `.addi/private/` (私有) 目录下创建 `.yaml` 文件。
+2. **定义工具**：
+   ```yaml
+   name: "get-ip"
+   description: "Get public IP"
+   runs:
+     using: "composite"
+     steps:
+       - run: curl -s http://ip-api.com/json/
+         shell: bash
+   ```
+3. **使用工具**：在对话中直接询问 "Check my IP"。
 
 ## 命令 Commands
 
