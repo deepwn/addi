@@ -24,3 +24,5 @@ bunfig.toml
 !**/*.min.(svg|png|jpg|jpeg|gif)
 mcp-server/**
 .addi/**
+release/**
+bin/**

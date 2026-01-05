@@ -10,3 +10,5 @@ addi-config.encrypt.txt
 .DS_Store
 .env
 .addi/private
+bin/
+release/
