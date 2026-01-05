@@ -6,6 +6,9 @@ import { logger } from "../logger";
 
 export class McpServerService {
   private static instance: McpServerService;
+  // Define the required MCP server version. Update this only when a new binary is released.
+  private static readonly REQUIRED_MCP_VERSION = "0.0.15";
+  
   private _onDidStatusChange = new vscode.EventEmitter<void>();
   public readonly onDidStatusChange = this._onDidStatusChange.event;
 
@@ -19,7 +22,48 @@ export class McpServerService {
   }
 
   public async initialize() {
-    await this.getOrDownloadBinary();
+    const binaryPath = await this.getOrDownloadBinary();
+    if (binaryPath) {
+        await this.checkForUpdate(binaryPath);
+    }
+  }
+
+  private async checkForUpdate(binaryPath: string) {
+      // Use the hardcoded required version instead of the extension version
+      const requiredVersion = McpServerService.REQUIRED_MCP_VERSION;
+
+      // Get binary version
+      const currentVersion = await this.getBinaryVersion(binaryPath);
+      if (!currentVersion) { return; }
+
+      // Simple version comparison (string equality for now, assuming exact match required)
+      // In future, could use semver comparison
+      if (currentVersion !== requiredVersion && currentVersion !== "dev") {
+          // Prompt update
+          const selection = await vscode.window.showInformationMessage(
+              `New version of Addi MCP Server is available (Current: ${currentVersion}, Required: ${requiredVersion}). Update now?`,
+              "Update",
+              "Ignore"
+          );
+          if (selection === "Update") {
+              await this.downloadBinary(binaryPath);
+          }
+      }
+  }
+
+  private async getBinaryVersion(binaryPath: string): Promise<string | null> {
+      return new Promise((resolve) => {
+          const cp = require("child_process");
+          // Run binary with --version flag
+          cp.exec(`"${binaryPath}" --version`, (err: any, stdout: string) => {
+              if (err) {
+                  logger.warn(`Failed to get version from binary: ${err}`);
+                  resolve(null);
+                  return;
+              }
+              resolve(stdout.trim());
+          });
+      });
   }
 
   public async restart() {
@@ -103,33 +147,147 @@ export class McpServerService {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    // TODO: Replace with actual download logic from GitHub Releases or similar
-    // For now, we will try to copy from the workspace if available (Dev mode)
+    // 1. Try to copy from local dev build (release/bin or mcp-server)
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders && workspaceFolders.length > 0) {
-      // Check for both 'mcp-server.exe' (default go build) and 'addi-mcp-server.exe' (if renamed)
-      const binaryName = process.platform === "win32" ? "mcp-server.exe" : "mcp-server";
       const folder = workspaceFolders[0];
-      if (!folder) {
-        return null;
-      }
-      const devBuildPath = path.join(folder.uri.fsPath, "mcp-server", binaryName);
+      if (folder) {
+        const platform = process.platform;
+        const arch = process.arch;
+        const binaryName = platform === "win32" ? "mcp-server.exe" : "mcp-server";
+        
+        // Check release/bin first (cross-compiled names)
+        // e.g. mcp-server-darwin-arm64
+        const releaseName = `mcp-server-${platform}-${arch}${platform === "win32" ? ".exe" : ""}`;
+        const releaseBuildPath = path.join(folder.uri.fsPath, "release", "bin", releaseName);
+        
+        // Check mcp-server/ (direct go build)
+        const devBuildPath = path.join(folder.uri.fsPath, "mcp-server", binaryName);
 
-      if (fs.existsSync(devBuildPath)) {
-        try {
-          fs.copyFileSync(devBuildPath, targetPath);
-          fs.chmodSync(targetPath, 0o755); // Make executable
-          vscode.window.showInformationMessage("MCP Server installed successfully (from dev build).");
-          this._onDidStatusChange.fire();
-          return targetPath;
-        } catch (e) {
-          logger.error("Failed to copy dev build", e);
+        let sourcePath: string | null = null;
+        if (fs.existsSync(releaseBuildPath)) {
+            sourcePath = releaseBuildPath;
+            logger.info(`Found local release build at ${releaseBuildPath}`);
+        } else if (fs.existsSync(devBuildPath)) {
+            sourcePath = devBuildPath;
+            logger.info(`Found local dev build at ${devBuildPath}`);
+        }
+
+        if (sourcePath) {
+          try {
+            fs.copyFileSync(sourcePath, targetPath);
+            fs.chmodSync(targetPath, 0o755); // Make executable
+            vscode.window.showInformationMessage("MCP Server installed successfully (from local build).");
+            this._onDidStatusChange.fire();
+            return targetPath;
+          } catch (e) {
+            logger.error("Failed to copy local build", e);
+          }
         }
       }
     }
 
-    vscode.window.showErrorMessage("Automatic download not yet implemented. Please build the mcp-server manually and place it at " + targetPath);
-    return null;
+    // 2. Download from GitHub Releases
+    const platform = process.platform;
+    const arch = process.arch;
+    // Map node arch to go arch if necessary (usually same for amd64/arm64)
+    // Node: x64, arm64. Go: amd64, arm64.
+    const goArch = arch === 'x64' ? 'amd64' : arch;
+    
+    const releaseName = `mcp-server-${platform}-${goArch}${platform === "win32" ? ".exe" : ""}`;
+    
+    // Use the required version for download URL
+    const targetVersion = McpServerService.REQUIRED_MCP_VERSION;
+    
+    // GitHub Release URL format: https://github.com/deepwn/addi/releases/download/vX.Y.Z/mcp-server-darwin-arm64
+    const downloadUrl = `https://github.com/deepwn/addi/releases/download/v${targetVersion}/${releaseName}`;
+    const checksumUrl = `https://github.com/deepwn/addi/releases/download/v${targetVersion}/checksums.txt`;
+
+    return await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Downloading Addi MCP Server (${targetVersion})...`,
+        cancellable: false
+    }, async (_progress) => {
+        try {
+            logger.info(`Downloading MCP server from ${downloadUrl}`);
+            const response = await fetch(downloadUrl);
+            if (!response.ok) {
+                throw new Error(`Failed to download: ${response.statusText}`);
+            }
+            
+            const buffer = await response.arrayBuffer();
+            fs.writeFileSync(targetPath, Buffer.from(buffer));
+
+            // Verify Checksum
+            try {
+                logger.info(`Fetching checksums from ${checksumUrl}`);
+                const checksumResponse = await fetch(checksumUrl);
+                if (checksumResponse.ok) {
+                    const checksumText = await checksumResponse.text();
+                    const expectedHash = this.parseChecksum(checksumText, releaseName);
+                    
+                    if (expectedHash) {
+                        const actualHash = await this.calculateFileHash(targetPath);
+                        if (actualHash !== expectedHash) {
+                            throw new Error(`Checksum verification failed. Expected ${expectedHash}, got ${actualHash}`);
+                        }
+                        logger.info("Checksum verification passed.");
+                    } else {
+                        logger.warn(`No checksum found for ${releaseName} in checksums.txt`);
+                    }
+                } else {
+                    logger.warn("Failed to download checksums.txt, skipping verification.");
+                }
+            } catch (checksumErr) {
+                if (checksumErr instanceof Error && checksumErr.message.includes("Checksum verification failed")) {
+                     throw checksumErr;
+                }
+                logger.warn(`Checksum verification error: ${checksumErr}`);
+            }
+
+            fs.chmodSync(targetPath, 0o755);
+            
+            vscode.window.showInformationMessage("MCP Server downloaded and installed successfully.");
+            this._onDidStatusChange.fire();
+            return targetPath;
+        } catch (e) {
+            // Cleanup partial file
+            if (fs.existsSync(targetPath)) {
+                fs.unlinkSync(targetPath);
+            }
+            logger.error("Failed to download MCP server", e);
+            vscode.window.showErrorMessage(`Failed to download MCP server: ${e instanceof Error ? e.message : String(e)}. Please check your internet connection or manually download from GitHub Releases.`);
+            return null;
+        }
+    });
+  }
+
+  private parseChecksum(checksumText: string, filename: string): string | null {
+      const lines = checksumText.split('\n');
+      for (const line of lines) {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length >= 2) {
+              const hash = parts[0];
+              const file = parts[1];
+              if (!hash || !file) { continue; }
+              // shasum output might have *filename or just filename, and might include path
+              if (file === filename || file === `*${filename}` || file.endsWith(`/${filename}`) || file.endsWith(`\\${filename}`)) {
+                  return hash;
+              }
+          }
+      }
+      return null;
+  }
+
+  private async calculateFileHash(filePath: string): Promise<string> {
+      return new Promise((resolve, reject) => {
+          const crypto = require("crypto");
+          const hash = crypto.createHash("sha256");
+          const stream = fs.createReadStream(filePath);
+          stream.on("error", reject);
+          stream.on("data", (chunk: any) => hash.update(chunk));
+          stream.on("end", () => resolve(hash.digest("hex")));
+      });
   }
 
   public async callTool(toolName: string, args: any): Promise<any> {

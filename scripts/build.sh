@@ -15,6 +15,10 @@ echo "Bin Dir: $BIN_DIR"
 rm -rf "$RELEASE_DIR"
 mkdir -p "$BIN_DIR"
 
+# Get version from package.json
+VERSION=$(node -p "require('$PROJECT_ROOT/package.json').version")
+echo "Building version: $VERSION"
+
 # 1. Build MCP Server for multiple platforms
 echo "Building MCP Server..."
 cd "$PROJECT_ROOT/mcp-server"
@@ -44,7 +48,7 @@ do
 
     # Disable CGO for static binaries and easier cross-compilation
     # The project appears to be pure Go (parsing YAML, executing subprocesses), so CGO is likely unnecessary.
-    env CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -o "$BIN_DIR/$output_name" .
+    env CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w -X main.Version=$VERSION" -o "$BIN_DIR/$output_name" .
     
     if [ $? -ne 0 ]; then
         echo "Failed to build for $GOOS/$GOARCH"
@@ -54,6 +58,16 @@ done
 
 echo "MCP Server built successfully for all platforms."
 
+# Generate checksums
+echo "Generating checksums..."
+cd "$BIN_DIR"
+if command -v sha256sum &> /dev/null; then
+    sha256sum * > "$RELEASE_DIR/checksums.txt"
+elif command -v shasum &> /dev/null; then
+    shasum -a 256 * > "$RELEASE_DIR/checksums.txt"
+else
+    echo "Warning: Checksum tool not found. Skipping checksum generation."
+fi
 cd "$PROJECT_ROOT"
 
 # 2. Run Extension Release

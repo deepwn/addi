@@ -14,6 +14,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+var Version = "dev"
+
 func main() {
 	mode := flag.String("mode", "local", "Execution mode: local, docker, or both")
 	dirsFlag := flag.String("dirs", "", "Comma-separated list of directories to scan for tools")
@@ -21,7 +23,7 @@ func main() {
 	flag.Parse()
 
 	if *versionFlag {
-		fmt.Println("0.0.1")
+		fmt.Println(Version)
 		os.Exit(0)
 	}
 
@@ -32,7 +34,7 @@ func main() {
 	}
 
 	// Create a new MCP server
-	s := server.NewMCPServer("addi-mcp-server", "0.0.1")
+	s := server.NewMCPServer("addi-mcp-server", Version)
 
 	// Load tools
 	var dirs []string
