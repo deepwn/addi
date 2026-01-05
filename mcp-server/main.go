@@ -15,7 +15,13 @@ import (
 
 func main() {
 	mode := flag.String("mode", "local", "Execution mode: local, docker, or both")
+	versionFlag := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
+
+	if *versionFlag {
+		fmt.Println("0.0.1")
+		os.Exit(0)
+	}
 
 	execMode := runner.ExecutionMode(*mode)
 	if execMode != runner.ModeLocal && execMode != runner.ModeDocker && execMode != runner.ModeBoth {

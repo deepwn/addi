@@ -38,8 +38,6 @@
   ],
   "activationEvents": [
     "onLanguageModelChat:addi-provider",
-    "onLanguageModelTool:addi_run_tool",
-    "onLanguageModelTool:addi_list_tools",
     "onStartupFinished"
   ],
   "enabledApiProposals": [
@@ -562,56 +560,6 @@
         "vendor": "addi-provider",
         "displayName": "Addi",
         "managementCommand": "addi.manage"
-      }
-    ],
-    "languageModelTools": [
-      {
-        "name": "addi_run_tool",
-        "toolReferenceName": "addi_run",
-        "displayName": "Addi Custom Tool Runner",
-        "modelDescription": "Execute custom tools defined in Addi (e.g. scripts, http requests). Use this to extend capabilities with user-defined workflows.",
-        "userDescription": "Execute custom tools defined in Addi",
-        "icon": "$(tools)",
-        "canBeReferencedInPrompt": true,
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "tool_name": {
-              "type": "string",
-              "description": "The name of the custom tool to execute"
-            },
-            "parameters": {
-              "type": "object",
-              "description": "The parameters required by the custom tool"
-            }
-          },
-          "required": [
-            "tool_name"
-          ]
-        },
-        "tags": [
-          "addi",
-          "custom",
-          "script"
-        ]
-      },
-      {
-        "name": "addi_list_tools",
-        "toolReferenceName": "addi_list",
-        "displayName": "Addi List Tools",
-        "modelDescription": "List all available custom tools defined in Addi with their descriptions and parameters.",
-        "userDescription": "List available Addi custom tools",
-        "icon": "$(list-unordered)",
-        "canBeReferencedInPrompt": true,
-        "inputSchema": {
-          "type": "object",
-          "properties": {},
-          "required": []
-        },
-        "tags": [
-          "addi",
-          "list"
-        ]
       }
     ]
   },

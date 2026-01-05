@@ -26,7 +26,7 @@ export class McpServerService {
     public async initialize() {
         const binaryPath = await this.getOrDownloadBinary();
         if (binaryPath) {
-            this.startServer(binaryPath);
+            await this.startServer(binaryPath);
         }
     }
 
@@ -207,9 +207,18 @@ export class McpServerService {
         return null;
     }
 
-    private startServer(binaryPath: string) {
+    private async startServer(binaryPath: string) {
         if (this.serverProcess) {
             this.serverProcess.kill();
+        }
+
+        // Check version
+        try {
+            const version = cp.execSync(`"${binaryPath}" --version`).toString().trim();
+            logger.info(`MCP Server Version: ${version}`);
+            this.outputChannel.appendLine(`MCP Server Version: ${version}`);
+        } catch (e) {
+            logger.warn("Failed to get MCP Server version", e);
         }
 
         const config = vscode.workspace.getConfiguration('addi');
@@ -230,8 +239,15 @@ export class McpServerService {
                 this.outputChannel.append(`[Error] ${data.toString()}`);
             });
 
-            this.serverProcess.on('close', (code) => {
-                this.outputChannel.appendLine(`MCP Server exited with code ${code}`);
+            this.serverProcess.on('close', (code, signal) => {
+                const timestamp = new Date().toLocaleTimeString();
+                if (code !== null) {
+                    this.outputChannel.appendLine(`[${timestamp}] MCP Server exited with code ${code}`);
+                } else if (signal) {
+                    this.outputChannel.appendLine(`[${timestamp}] MCP Server exited with signal ${signal}`);
+                } else {
+                    this.outputChannel.appendLine(`[${timestamp}] MCP Server exited (unknown reason)`);
+                }
                 this.serverProcess = null;
             });
             

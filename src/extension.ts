@@ -37,8 +37,10 @@ export function activate(context: vscode.ExtensionContext) {
   mcpService.initialize().catch(err => logger.error("Failed to initialize MCP Server", err));
 
   context.subscriptions.push(vscode.commands.registerCommand("addi.downloadMcpServer", () => {
-    mcpService.downloadMcpServer().then(() => {
-        vscode.window.showInformationMessage("MCP Server downloaded successfully. Please reload window.");
+    mcpService.downloadMcpServer().then(async () => {
+        await mcpService.initialize();
+        toolManager.refresh();
+        vscode.window.showInformationMessage("MCP Server downloaded and started successfully.");
     }).catch(err => {
         vscode.window.showErrorMessage(`Failed to download MCP Server: ${err}`);
     });
