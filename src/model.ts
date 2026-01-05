@@ -49,8 +49,8 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
   private readonly _onDidChangeLanguageModelChatInformation = new vscode.EventEmitter<void>();
   public readonly onDidChangeLanguageModelChatInformation = this._onDidChangeLanguageModelChatInformation.event;
 
-  constructor(private repository: ProviderRepository, toolManager?: CustomToolManager) {
-      this.llmService = new LLMService(toolManager);
+  constructor(private repository: ProviderRepository, toolManager?: CustomToolManager, context?: vscode.ExtensionContext) {
+      this.llmService = new LLMService(toolManager, context);
       // Listen for repository updates to refresh the model list in Copilot
       if (this.repository.onDidUpdate) {
           this.repository.onDidUpdate(() => {

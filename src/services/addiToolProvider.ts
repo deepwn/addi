@@ -1,52 +1,52 @@
 import * as vscode from 'vscode';
 import { CustomToolManager } from '../services/customToolManager';
-import { CustomToolExecutor } from '../services/customToolExecutor';
 import { logger } from '../logger';
+import { McpServerService } from './mcpServerService';
 
 export class AddiToolProvider {
-    constructor(private toolManager: CustomToolManager) {}
+    constructor(private toolManager: CustomToolManager, private context: vscode.ExtensionContext) {}
 
     register(context: vscode.ExtensionContext) {
         context.subscriptions.push(
-            vscode.lm.registerTool('addi_run_tool', new AddiRunTool(this.toolManager)),
+            vscode.lm.registerTool('addi_run_tool', new AddiRunTool(this.context)),
             vscode.lm.registerTool('addi_list_tools', new AddiListTools(this.toolManager))
         );
     }
 }
 
 class AddiRunTool implements vscode.LanguageModelTool<any> {
-    constructor(private toolManager: CustomToolManager) {}
+    constructor(private context: vscode.ExtensionContext) {}
 
     async invoke(
         options: vscode.LanguageModelToolInvocationOptions<any>,
-        token: vscode.CancellationToken
+        _token: vscode.CancellationToken
     ): Promise<vscode.LanguageModelToolResult> {
         const { tool_name, parameters } = options.input;
         
         logger.info(`AddiRunTool invoked for: ${tool_name}`);
 
-        const tools = this.toolManager.getTools();
-        const tool = tools.find(t => t.name === tool_name);
-
-        if (!tool) {
-            return {
-                content: [new vscode.LanguageModelTextPart(`Error: Tool '${tool_name}' not found. Use addi_list_tools to see available tools.`)]
-            };
-        }
-
         try {
-            const executor = new CustomToolExecutor(tool);
-            // Wrap parameters in 'input' as expected by CustomToolExecutor if needed, 
-            // but CustomToolExecutor expects the raw input object that matches the tool's schema.
-            // Here 'parameters' IS that object.
-            const result = await executor.invoke({
-                input: parameters || {},
-                toolInvocationToken: options.toolInvocationToken
-            }, token);
+            const mcpService = McpServerService.getInstance(this.context);
+            const result = await mcpService.callTool(tool_name, parameters || {});
             
-            return result;
+            // MCP result structure: { content: [{ type: 'text', text: '...' }], isError: boolean }
+            // We need to convert it to vscode.LanguageModelToolResult
+            
+            const contentParts: vscode.LanguageModelTextPart[] = [];
+            if (result.content && Array.isArray(result.content)) {
+                for (const part of result.content) {
+                    if (part.type === 'text') {
+                        contentParts.push(new vscode.LanguageModelTextPart(part.text));
+                    }
+                }
+            }
+
+            return {
+                content: contentParts
+            };
+
         } catch (e: any) {
-            logger.error(`Error executing ${tool_name}`, e);
+            logger.error(`Error executing ${tool_name} via MCP`, e);
             return {
                 content: [new vscode.LanguageModelTextPart(`Error executing tool '${tool_name}': ${e.message}`)]
             };

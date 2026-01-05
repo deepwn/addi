@@ -351,6 +351,21 @@
           ],
           "default": "both",
           "description": "Target to apply the sort rule"
+        },
+        "addi.mcpServer.executionMode": {
+          "type": "string",
+          "enum": [
+            "local",
+            "docker",
+            "both"
+          ],
+          "default": "local",
+          "description": "Execution mode for custom tools: 'local' (host shell), 'docker' (container), or 'both'."
+        },
+        "addi.mcpServer.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Addi MCP Server binary. If empty, defaults to ~/.addi/bin/addi-mcp-server."
         }
       }
     },

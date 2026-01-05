@@ -6,25 +6,23 @@ import * as yaml from "js-yaml";
 // zod removed for direct JSON Schema generation
 import { CustomTool } from "../types";
 import { logger } from "../logger";
-import { CustomToolExecutor } from "./customToolExecutor";
 import { ToolParser } from "../utils/toolParser";
+import { McpServerService } from "./mcpServerService";
 
 export class CustomToolManager {
   private readonly _onDidUpdate = new vscode.EventEmitter<void>();
   public readonly onDidUpdate = this._onDidUpdate.event;
   private tools: CustomTool[] = [];
   private watchers: vscode.FileSystemWatcher[] = [];
-  private registeredTools: vscode.Disposable[] = [];
   public lastUpdated: number = Date.now();
 
-  constructor(_context: vscode.ExtensionContext) {
+  constructor(private context: vscode.ExtensionContext) {
     this.refresh();
     this.setupWatchers();
   }
 
   dispose() {
     this.watchers.forEach((w) => w.dispose());
-    this.registeredTools.forEach((t) => t.dispose());
   }
 
   private setupWatchers() {
@@ -62,10 +60,7 @@ export class CustomToolManager {
 
   async refresh() {
     this.lastUpdated = Date.now();
-    // Dispose existing tools
-    this.registeredTools.forEach((t) => t.dispose());
-    this.registeredTools = [];
-
+    
     const newTools: CustomTool[] = [];
 
     // 1. Load Global Tools (~/.addi/*.yaml)
@@ -116,19 +111,14 @@ export class CustomToolManager {
 
     this.tools = newTools;
 
-    // Register tools
-    for (const tool of this.tools) {
-      try {
-        const disposable = vscode.lm.registerTool(tool.name, new CustomToolExecutor(tool));
-        this.registeredTools.push(disposable);
-        logger.info(`Registered tool: ${tool.name}`);
-      } catch (e) {
-        logger.error(`Failed to register tool ${tool.name}`, e);
-      }
-    }
-
+    // Register tools - NO LONGER NEEDED as we use AddiToolProvider which delegates to MCP
+    // But we still keep the list for UI display
+    
     this._onDidUpdate.fire();
     logger.info(`Loaded ${this.tools.length} custom tools`);
+    
+    // Restart MCP Server to pick up changes
+    McpServerService.getInstance(this.context).restart();
   }
 
   private loadToolsFromDir(dirPath: string, source: string): CustomTool[] {
@@ -158,18 +148,5 @@ export class CustomToolManager {
       logger.error(`Error reading directory ${dirPath}`, e);
     }
     return tools;
-  }
-
-  // Legacy methods stubbed or removed
-  async addTool(_tool: CustomTool): Promise<void> {
-    // Not supported in file-based mode directly via object
-    // We could implement writing to file here
-    vscode.window.showInformationMessage("Please create a YAML file in .addi/ or ~/.addi/ to add tools.");
-  }
-
-  async deleteTool(_id: string): Promise<void> {
-    // Find the tool and delete the file?
-    // For now, read-only from UI
-    vscode.window.showInformationMessage("Please delete the YAML file to remove the tool.");
   }
 }

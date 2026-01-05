@@ -9,6 +9,7 @@ import { EditorViewManager } from "./views/editorView";
 import { CustomToolManager } from "./services/customToolManager";
 import { ToolTreeDataProvider, ToolTreeItem } from "./views/toolView";
 import { AddiToolProvider } from "./services/addiToolProvider";
+import { McpServerService } from "./services/mcpServerService";
 
 function readLogLevel(): LogLevel {
   const config = vscode.workspace.getConfiguration("addi");
@@ -29,6 +30,19 @@ export function activate(context: vscode.ExtensionContext) {
 
   const manager = new ProviderModelManager(context);
   context.subscriptions.push(new vscode.Disposable(() => manager.dispose()));
+
+  // Initialize MCP Server Service
+  const mcpService = McpServerService.getInstance(context);
+  context.subscriptions.push(new vscode.Disposable(() => mcpService.dispose()));
+  mcpService.initialize().catch(err => logger.error("Failed to initialize MCP Server", err));
+
+  context.subscriptions.push(vscode.commands.registerCommand("addi.downloadMcpServer", () => {
+    mcpService.downloadMcpServer().then(() => {
+        vscode.window.showInformationMessage("MCP Server downloaded successfully. Please reload window.");
+    }).catch(err => {
+        vscode.window.showErrorMessage(`Failed to download MCP Server: ${err}`);
+    });
+  }));
   
   const applySettingsSyncPreference = () => {
     const config = vscode.workspace.getConfiguration("addi");
@@ -91,11 +105,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Custom Tools
   const toolManager = new CustomToolManager(context);
-  const toolTreeDataProvider = new ToolTreeDataProvider(toolManager);
+  const toolTreeDataProvider = new ToolTreeDataProvider(toolManager, context);
   vscode.window.registerTreeDataProvider("addiTools", toolTreeDataProvider);
 
   // Register Addi Tool Provider (Bridge for global tools)
-  const addiToolProvider = new AddiToolProvider(toolManager);
+  const addiToolProvider = new AddiToolProvider(toolManager, context);
   addiToolProvider.register(context);
 
   // Debug command to list registered tools
@@ -108,7 +122,7 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  vscode.lm.registerLanguageModelChatProvider("addi-provider", new AddiChatProvider(manager, toolManager));
+  vscode.lm.registerLanguageModelChatProvider("addi-provider", new AddiChatProvider(manager, toolManager, context));
 
   const treeDataProvider = new AddiTreeDataProvider(manager);
   context.subscriptions.push(manager.onDidUpdate(() => treeDataProvider.refresh()));
@@ -339,7 +353,6 @@ steps:
       })
   );
 
-  // TODO: Implement editTool
   context.subscriptions.push(
       vscode.commands.registerCommand("addi.editTool", async (item: ToolTreeItem) => {
           if (!item || !item.tool || !item.tool.fileName) {

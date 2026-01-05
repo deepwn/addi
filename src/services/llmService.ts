@@ -5,10 +5,11 @@ import { AIProviderRegistry } from './aiRegistry';
 import { MessageConverter } from './messageConverter';
 import { logger } from '../logger';
 import { CustomToolManager } from './customToolManager';
-import { CustomToolExecutor } from './customToolExecutor';
+
+import { McpServerService } from './mcpServerService';
 
 export class LLMService {
-  constructor(private toolManager?: CustomToolManager) {}
+  constructor(private toolManager?: CustomToolManager, private context?: vscode.ExtensionContext) {}
 
   async chat(
     provider: Provider,
@@ -51,25 +52,30 @@ export class LLMService {
                             paramCount: Object.keys(args || {}).length 
                         });
                         
-                        // Use CustomToolExecutor to execute the tool
-                        const executor = new CustomToolExecutor(ct);
-                        const result = await executor.invoke({
-                            input: args,
-                            toolInvocationToken: undefined // Not available here, but executor handles undefined token
-                        }, token);
-
-                        // Extract content from result
-                        if (result.content && result.content.length > 0) {
-                            const parts = result.content.map(p => {
-                                if (p instanceof vscode.LanguageModelTextPart) {
-                                    return p.value;
-                                }
-                                return '';
-                            });
-                            return parts.join('\n');
+                        if (!this.context) {
+                            return "Error: Extension context not available for tool execution.";
                         }
-                        return "Tool executed successfully with no output.";
-                    },
+
+                        try {
+                            const mcpService = McpServerService.getInstance(this.context);
+                            const result = await mcpService.callTool(ct.name, args);
+                            
+                            // MCP result structure: { content: [{ type: 'text', text: '...' }], isError: boolean }
+                            if (result.content && Array.isArray(result.content)) {
+                                const parts = result.content.map((p: any) => {
+                                    if (p.type === 'text') {
+                                        return p.text;
+                                    }
+                                    return '';
+                                });
+                                return parts.join('\n');
+                            }
+                            return "Tool executed successfully with no output.";
+                        } catch (e: any) {
+                            logger.error(`Error executing ${ct.name} via MCP`, e);
+                            return `Error executing tool '${ct.name}': ${e.message}`;
+                        }
+                    }
                 };
               } catch (e) {
                   logger.error(`Failed to register custom tool ${ct.name} for AI SDK`, e);
