@@ -1,10 +1,11 @@
 import * as vscode from "vscode";
 import { AddiChatProvider } from "./model";
-import { ProviderModelManager, AddiTreeDataProvider, ProviderTreeItem } from "./provider";
+import { ProviderModelManager } from "./provider";
+import { AddiTreeDataProvider, ProviderTreeItem } from "./views/providerView";
 import { CommandHandler } from "./commands";
 import { ModelTreeItem } from "./model";
 import { logger, LogLevel } from "./logger";
-import { EditorViewManager } from "./editorView";
+import { EditorViewManager } from "./views/editorView";
 import { CustomToolManager } from "./services/customToolManager";
 import { ToolTreeDataProvider, ToolTreeItem } from "./views/toolView";
 

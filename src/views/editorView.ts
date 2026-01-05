@@ -1,10 +1,11 @@
 import * as vscode from "vscode";
-import { ProviderModelManager, ProviderTreeItem } from "./provider";
-import { ModelTreeItem } from "./model";
-import { logger } from "./logger";
-import { Provider, Model } from "./types";
-import { TokenFormatter, ConfigManager } from "./utils";
-import { ModelTester } from "./modelTester";
+import { ProviderModelManager } from "../provider";
+import { ProviderTreeItem } from "./providerView";
+import { ModelTreeItem } from "../model";
+import { logger } from "../logger";
+import { Provider, Model } from "../types";
+import { TokenFormatter, ConfigManager } from "../utils";
+import { ModelTester } from "../modelTester";
 
 export class EditorViewManager {
   public static readonly viewType = "addiEditor";

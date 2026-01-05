@@ -8,7 +8,7 @@ import { logger } from "./logger";
 // playground logic moved to src/playground.ts
 import PlaygroundManager from "./playground";
 
-import { EditorViewManager } from "./editorView";
+import { EditorViewManager } from "./views/editorView";
 
 interface RemoteModelInfo {
   id: string;

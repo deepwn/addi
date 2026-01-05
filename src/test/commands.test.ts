@@ -1,7 +1,8 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { CommandHandler } from "../commands";
-import { ProviderModelManager, AddiTreeDataProvider, ProviderTreeItem } from "../provider";
+import { ProviderModelManager } from "../provider";
+import { AddiTreeDataProvider, ProviderTreeItem } from "../views/providerView";
 import { Provider } from "../types";
 
 // Mock ProviderModelManager
