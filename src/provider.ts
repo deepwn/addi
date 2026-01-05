@@ -14,12 +14,37 @@ export class ProviderModelManager {
   constructor(private context: vscode.ExtensionContext) {
     // Initialize secrets asynchronously
     this.initializeSecrets();
+    
+    // Listen for secret changes from other windows or background processes
+    this.context.secrets.onDidChange(async (e) => {
+      if (e.key.startsWith("addi.provider.apikey.")) {
+        const providerId = e.key.replace("addi.provider.apikey.", "");
+        const secret = await this.context.secrets.get(e.key);
+        if (secret) {
+          this.secretsCache.set(providerId, secret);
+        } else {
+          this.secretsCache.delete(providerId);
+        }
+        // We don't fire update here to avoid loops if the update came from us, 
+        // but strictly speaking we should if it came from outside.
+        // Since we can't distinguish, and this is just a cache update, 
+        // we can let the next getProviders() pick it up.
+        // However, if the UI shows "Key Set", we might want to refresh.
+        this._onDidUpdate.fire();
+      }
+    });
   }
 
   private async initializeSecrets() {
     try {
       const stored = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
       let migrationNeeded = false;
+
+      // Perform data migration/normalization once on startup
+      const { mutated } = this.normalizeProvidersInPlace(stored as Array<Provider & Record<string, unknown>>);
+      if (mutated) {
+        migrationNeeded = true;
+      }
 
       for (const p of stored) {
         const secretKey = `addi.provider.apikey.${p.id}`;
@@ -35,13 +60,13 @@ export class ProviderModelManager {
       }
 
       if (migrationNeeded) {
-        // Remove apiKeys from globalState
+        // Remove apiKeys from globalState and save normalized data
         const cleaned = stored.map((p) => {
           const { apiKey, ...rest } = p;
           return rest as Provider;
         });
         await this.context.globalState.update(ProviderModelManager.STORAGE_KEY, cleaned);
-        logger.info("Migrated API keys to SecretStorage");
+        logger.info("Migrated API keys and normalized data on startup");
       }
 
       this._onDidUpdate.fire();
@@ -78,12 +103,15 @@ export class ProviderModelManager {
 
   getProviders(): Provider[] {
     const stored = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
-    const mutated = this.normalizeProvidersInPlace(stored as Array<Provider & Record<string, unknown>>);
-    if (mutated) {
-      // Save normalized data. At this point 'stored' only has apiKey if it was already in globalState.
-      // We can safely save it. Migration will eventually strip it.
+    const { mutated, critical } = this.normalizeProvidersInPlace(stored as Array<Provider & Record<string, unknown>>);
+    
+    if (critical) {
+      // Only save if critical changes (like missing IDs) occurred.
+      // We avoid saving for cosmetic changes (defaults) to prevent race conditions with Settings Sync.
       void this.context.globalState.update(ProviderModelManager.STORAGE_KEY, stored);
-      logger.debug("Normalized provider data on load", { providerCount: stored.length });
+      logger.debug("Persisted critical provider data normalization", { providerCount: stored.length });
+    } else if (mutated) {
+      logger.debug("Applied cosmetic provider data normalization (in-memory only)", { providerCount: stored.length });
     }
 
     // Attach secrets from cache
@@ -149,8 +177,9 @@ export class ProviderModelManager {
     logger.info("Saved providers", { providerCount: providers.length });
   }
 
-  private normalizeProvidersInPlace(providers: Array<Provider & Record<string, unknown>>): boolean {
+  private normalizeProvidersInPlace(providers: Array<Provider & Record<string, unknown>>): { mutated: boolean; critical: boolean } {
     let mutated = false;
+    let critical = false;
 
     for (const provider of providers) {
       if (!provider.providerType) {
@@ -165,21 +194,31 @@ export class ProviderModelManager {
           provider.providerType = "generic";
         }
         mutated = true;
+        // Provider type inference is useful to persist but not strictly critical for ID stability.
+        // However, if we don't save it, we re-infer every time.
+        // Let's consider it cosmetic-ish unless we want to lock it.
       }
 
       if (!Array.isArray(provider.models)) {
         logger.warn("Provider models array invalid, resetting", logger.sanitizeProvider(provider));
         provider.models = [];
         mutated = true;
+        critical = true; // Data loss/reset is critical
         continue;
       }
 
       // Filter out invalid entries that may be present in persisted state
+      const initialLength = provider.models.length;
       provider.models = provider.models.filter((m) => m && typeof m === "object");
+      if (provider.models.length !== initialLength) {
+        mutated = true;
+        critical = true; // Deletion is critical
+      }
 
       provider.models = provider.models.map((model) => {
         const mutableModel = model as unknown as Record<string, unknown>;
         let changed = false;
+        let modelCritical = false;
 
         // Ensure token defaults exist for older or malformed saved models
         if (typeof mutableModel["maxInputTokens"] !== "number") {
@@ -248,12 +287,16 @@ export class ProviderModelManager {
         if (!sidCandidate) {
           mutableModel["sid"] = IdGenerator.generate();
           changed = true;
+          modelCritical = true; // Generating ID is critical
         }
 
         const remoteIdRaw = typeof mutableModel["id"] === "string" ? mutableModel["id"].trim() : "";
         if (!remoteIdRaw) {
           mutableModel["id"] = mutableModel["sid"] as string;
           changed = true;
+          // If we inferred ID from SID, and SID was generated, it's critical.
+          // If SID existed but ID was missing, it's also critical to lock it in.
+          modelCritical = true; 
         } else if (remoteIdRaw !== mutableModel["id"]) {
           mutableModel["id"] = remoteIdRaw;
           changed = true;
@@ -264,11 +307,14 @@ export class ProviderModelManager {
         }
 
         mutated = true;
+        if (modelCritical) {
+            critical = true;
+        }
         return mutableModel as unknown as Model;
       });
     }
 
-    return mutated;
+    return { mutated, critical };
   }
 
   private normalizeCapabilities(source?: Model["capabilities"], fallback?: Model["capabilities"]): Model["capabilities"] {
