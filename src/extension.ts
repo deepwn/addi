@@ -8,6 +8,7 @@ import { logger, LogLevel } from "./logger";
 import { EditorViewManager } from "./views/editorView";
 import { CustomToolManager } from "./services/customToolManager";
 import { ToolTreeDataProvider, ToolTreeItem } from "./views/toolView";
+import { AddiToolProvider } from "./services/addiToolProvider";
 
 function readLogLevel(): LogLevel {
   const config = vscode.workspace.getConfiguration("addi");
@@ -91,6 +92,20 @@ export function activate(context: vscode.ExtensionContext) {
   const toolManager = new CustomToolManager(context);
   const toolTreeDataProvider = new ToolTreeDataProvider(toolManager);
   vscode.window.registerTreeDataProvider("addiTools", toolTreeDataProvider);
+
+  // Register Addi Tool Provider (Bridge for global tools)
+  const addiToolProvider = new AddiToolProvider(toolManager);
+  addiToolProvider.register(context);
+
+  // Debug command to list registered tools
+  context.subscriptions.push(
+    vscode.commands.registerCommand("addi.debug.listTools", () => {
+      const tools = vscode.lm.tools;
+      const names = tools.map(t => t.name).join(", ");
+      vscode.window.showInformationMessage(`Registered LM Tools: ${names}`);
+      logger.info("Registered LM Tools", { tools: tools.map(t => ({ name: t.name, tags: t.tags })) });
+    })
+  );
 
   vscode.lm.registerLanguageModelChatProvider("addi-provider", new AddiChatProvider(manager, toolManager));
 
@@ -290,7 +305,17 @@ steps:
                      if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
                          const wf = vscode.workspace.workspaceFolders[0];
                          if (wf) {
-                            filePath = path.join(wf.uri.fsPath, '.vscode', 'addi', item.tool.fileName);
+                            // Check visibility to determine subfolder
+                            const subfolder = item.tool.visibility === 'private' ? 'private' : 'public';
+                            filePath = path.join(wf.uri.fsPath, '.addi', subfolder, item.tool.fileName);
+                            
+                            // Fallback check for legacy .vscode/addi location if not found
+                            if (!fs.existsSync(filePath)) {
+                                 const legacyPath = path.join(wf.uri.fsPath, '.vscode', 'addi', item.tool.fileName);
+                                 if (fs.existsSync(legacyPath)) {
+                                     filePath = legacyPath;
+                                 }
+                            }
                          }
                      }
                 }
@@ -331,7 +356,17 @@ steps:
                 if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
                     const wf = vscode.workspace.workspaceFolders[0];
                     if (wf) {
-                        filePath = path.join(wf.uri.fsPath, '.vscode', 'addi', item.tool.fileName);
+                        // Check visibility to determine subfolder
+                        const subfolder = item.tool.visibility === 'private' ? 'private' : 'public';
+                        filePath = path.join(wf.uri.fsPath, '.addi', subfolder, item.tool.fileName);
+                        
+                        // Fallback check for legacy .vscode/addi location if not found
+                        if (!fs.existsSync(filePath)) {
+                             const legacyPath = path.join(wf.uri.fsPath, '.vscode', 'addi', item.tool.fileName);
+                             if (fs.existsSync(legacyPath)) {
+                                 filePath = legacyPath;
+                             }
+                        }
                     }
                 }
           }

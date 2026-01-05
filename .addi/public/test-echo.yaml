@@ -1,0 +1,8 @@
+name: test_echo
+description: Echoes the input message back to the user. Useful for testing tool execution.
+inputs:
+  message:
+    type: string
+    description: The text message to echo.
+steps:
+  - run: "echo \"Echoing: ${message}\""

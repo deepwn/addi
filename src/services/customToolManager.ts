@@ -6,12 +6,14 @@ import * as yaml from "js-yaml";
 // zod removed for direct JSON Schema generation
 import { CustomTool } from "../types";
 import { logger } from "../logger";
+import { CustomToolExecutor } from "./customToolExecutor";
 
 export class CustomToolManager {
   private readonly _onDidUpdate = new vscode.EventEmitter<void>();
   public readonly onDidUpdate = this._onDidUpdate.event;
   private tools: CustomTool[] = [];
   private watchers: vscode.FileSystemWatcher[] = [];
+  private registeredTools: vscode.Disposable[] = [];
 
   constructor(_context: vscode.ExtensionContext) {
     this.refresh();
@@ -20,6 +22,7 @@ export class CustomToolManager {
 
   dispose() {
     this.watchers.forEach((w) => w.dispose());
+    this.registeredTools.forEach((t) => t.dispose());
   }
 
   private setupWatchers() {
@@ -56,6 +59,10 @@ export class CustomToolManager {
   }
 
   async refresh() {
+    // Dispose existing tools
+    this.registeredTools.forEach((t) => t.dispose());
+    this.registeredTools = [];
+
     const newTools: CustomTool[] = [];
 
     // 1. Load Global Tools (~/.addi/*.yaml)
@@ -105,6 +112,18 @@ export class CustomToolManager {
     }
 
     this.tools = newTools;
+
+    // Register tools
+    for (const tool of this.tools) {
+      try {
+        const disposable = vscode.lm.registerTool(tool.name, new CustomToolExecutor(tool));
+        this.registeredTools.push(disposable);
+        logger.info(`Registered tool: ${tool.name}`);
+      } catch (e) {
+        logger.error(`Failed to register tool ${tool.name}`, e);
+      }
+    }
+
     this._onDidUpdate.fire();
     logger.info(`Loaded ${this.tools.length} custom tools`);
   }

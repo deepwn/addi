@@ -1,0 +1,7 @@
+name: test_my_ip
+description: Returns the public IP address of the user using httpbin.org.
+inputs: {}
+steps:
+  - http:
+      url: https://httpbin.org/ip
+      method: GET
