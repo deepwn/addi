@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as crypto from "crypto";
-import { ProviderModelManager, ProviderTreeItem, AddiTreeDataProvider } from "./provider";
+import { ProviderModelManager } from "./provider";
+import { ProviderTreeItem, AddiTreeDataProvider } from "./views/providerView";
 import { ModelTreeItem } from "./model";
 import { ConfigManager, IdGenerator, UserFeedback } from "./utils";
 import { ModelDraft, Provider, Model } from "./types";

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { CustomTool } from '../types';
 import { logger } from '../logger';
 import * as cp from 'child_process';
+import { ToolUtils } from '../utils/toolUtils';
 
 export class CustomToolExecutor implements vscode.LanguageModelTool<any> {
     constructor(private readonly tool: CustomTool) {}
@@ -54,8 +55,8 @@ export class CustomToolExecutor implements vscode.LanguageModelTool<any> {
     }
 
     private async executeRunStep(run: { command: string; args?: string[] }, input: any, token?: vscode.CancellationToken): Promise<string> {
-        const args = run.args?.map(arg => this.replacePlaceholders(arg, input)) ?? [];
-        const command = this.replacePlaceholders(run.command, input);
+        const args = run.args?.map(arg => ToolUtils.replacePlaceholders(arg, input)) ?? [];
+        const command = ToolUtils.replacePlaceholders(run.command, input);
 
         logger.debug(`Executing command: ${command} ${args.join(' ')}`);
 
@@ -95,22 +96,24 @@ export class CustomToolExecutor implements vscode.LanguageModelTool<any> {
     }
 
     private async executeHttpStep(http: { url: string; method?: string; headers?: Record<string, string>; body?: any }, input: any, token?: vscode.CancellationToken): Promise<any> {
-        const url = this.replacePlaceholders(http.url, input);
+        const url = ToolUtils.replacePlaceholders(http.url, input);
         const method = http.method ?? 'GET';
         const headers: Record<string, string> = http.headers ? { ...http.headers } : {};
         
         for (const key in headers) {
             const val = headers[key];
             if (val) {
-                headers[key] = this.replacePlaceholders(val, input);
+                headers[key] = ToolUtils.replacePlaceholders(val, input);
             }
         }
 
         let body = http.body;
         if (body && typeof body === 'object') {
              body = JSON.stringify(body);
+             // Also replace in stringified body
+             body = ToolUtils.replacePlaceholders(body, input);
         } else if (typeof body === 'string') {
-            body = this.replacePlaceholders(body, input);
+            body = ToolUtils.replacePlaceholders(body, input);
         }
 
         logger.debug(`Executing HTTP ${method} ${url}`);
@@ -143,14 +146,5 @@ export class CustomToolExecutor implements vscode.LanguageModelTool<any> {
         } else {
             return await response.text();
         }
-    }
-
-    private replacePlaceholders(template: string, values: any): string {
-        if (!values || typeof values !== 'object') {
-            return template;
-        }
-        return template.replace(/\$\{(\w+)\}/g, (_, key) => {
-            return values[key] !== undefined ? String(values[key]) : `\${${key}}`;
-        });
     }
 }

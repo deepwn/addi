@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
-import { ProviderModelManager } from "../provider";
+import { ProviderModelManager } from "../../provider";
 
 // 模拟vscode模块
 class MockExtensionContext {

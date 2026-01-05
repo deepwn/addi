@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
-import { ConfigManager, InputValidator, TokenFormatter } from "../utils";
+import { ConfigManager, InputValidator, TokenFormatter } from "../../utils";
 
 // 模拟vscode.workspace
 const mockWorkspace = {

@@ -31,7 +31,7 @@ class StubToolManager {
         name: 'echoTool',
         description: 'Echo tool',
         parameters: { type: 'object', properties: {} },
-        steps: [ { run: 'echo OK' } ]
+        steps: [ { run: { command: 'echo OK', args: [] } } ]
       }
     ];
   }
@@ -54,7 +54,7 @@ suite('LLMService tool-call handling', function() {
   setup(() => {
     // Inject a mocked 'ai' module into require cache before loading LLMService
     const aiPath = require.resolve('ai');
-    const lmPath = require.resolve('../services/llmService');
+    const lmPath = require.resolve('../../services/llmService');
 
     // Save original cache entries (if any)
     const origAiEntry = require.cache[aiPath];
@@ -73,13 +73,13 @@ suite('LLMService tool-call handling', function() {
 
     // Remove compiled LLMService from cache so it will be reloaded against mock ai
     delete require.cache[lmPath];
-    LLMService = require('../services/llmService').LLMService;
+    LLMService = require('../../services/llmService').LLMService;
   });
 
   teardown(() => {
     // Restore original cache entries if they existed
     const aiPath = require.resolve('ai');
-    const lmPath = require.resolve('../services/llmService');
+    const lmPath = require.resolve('../../services/llmService');
     const orig = origStream as any;
     if (orig && orig.aiEntry) {
       require.cache[aiPath] = orig.aiEntry;
@@ -114,7 +114,7 @@ suite('LLMService tool-call handling', function() {
     // Patch tool steps to a failing command
     class FailingToolManager {
       getTools() {
-        return [ { id: 't2', name: 'failTool', description: '', parameters: { type: 'object', properties: {} }, steps: [ { run: 'node -e "process.exit(1)"' } ] } ];
+        return [ { id: 't2', name: 'failTool', description: '', parameters: { type: 'object', properties: {} }, steps: [ { run: { command: 'node -e "process.exit(1)"', args: [] } } ] } ];
       }
     }
 

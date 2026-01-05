@@ -6,11 +6,12 @@ import { StorageService } from "./services/storageService";
 
 export class ProviderModelManager {
   private storageService: StorageService;
-  public readonly onDidUpdate: vscode.Event<void>;
+  private _onDidUpdate = new vscode.EventEmitter<void>();
+  public readonly onDidUpdate = this._onDidUpdate.event;
 
   constructor(context: vscode.ExtensionContext) {
     this.storageService = new StorageService(context);
-    this.onDidUpdate = this.storageService.onDidUpdate;
+    this.storageService.onDidUpdate(() => this._onDidUpdate.fire());
 
     // Initialize storage with normalization callback
     this.storageService.initialize((providers) => {
@@ -32,12 +33,7 @@ export class ProviderModelManager {
   }
 
   refresh(): void {
-    // We can't force fire onDidUpdate easily if it's just the event from storageService.
-    // But storageService doesn't have a public fire method.
-    // We might need to expose a refresh method on StorageService or wrap the event.
-    // For now, let's assume refresh is mostly for UI updates which listen to onDidUpdate.
-    // If we want to force an update, we can maybe just do nothing if the data hasn't changed,
-    // or we can make onDidUpdate a separate emitter that forwards storage events + manual fires.
+    this._onDidUpdate.fire();
   }
 
   getProviders(): Provider[] {
