@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,9 +20,11 @@ type ToolDef struct {
 func LoadTools(dirs []string) ([]ToolDef, error) {
 	var tools []ToolDef
 	for _, dir := range dirs {
+		// fmt.Fprintf(os.Stderr, "Scanning directory: %s\n", dir)
 		// walk dir
 		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
+				// fmt.Fprintf(os.Stderr, "Error accessing path %s: %v\n", path, err)
 				return nil // skip errors
 			}
 			if info.IsDir() {
@@ -32,6 +35,8 @@ func LoadTools(dirs []string) ([]ToolDef, error) {
 				return nil
 			}
 
+			// fmt.Fprintf(os.Stderr, "Found potential tool file: %s\n", path)
+
 			f, err := os.Open(path)
 			if err != nil {
 				return nil
@@ -40,9 +45,11 @@ func LoadTools(dirs []string) ([]ToolDef, error) {
 
 			action, err := model.ReadAction(f)
 			if err != nil {
-				// Log error or skip
+				fmt.Fprintf(os.Stderr, "Error reading action from %s: %v\n", path, err)
 				return nil
 			}
+
+			// fmt.Fprintf(os.Stderr, "Loaded tool: %s\n", action.Name)
 
 			tools = append(tools, ToolDef{
 				Name:        action.Name,

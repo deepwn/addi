@@ -4,8 +4,13 @@ inputs:
   ip:
     description: The IP address to query. Leave empty to query the current IP.
     default: ""
-    type: string
-steps:
-  - http:
-      url: http://ip-api.com/json/${{ inputs.ip }}
-      method: GET
+runs:
+  using: "composite"
+  steps:
+    - run: |
+        if [ -z "${{ inputs.ip }}" ]; then
+          curl -s http://ip-api.com/json/
+        else
+          curl -s http://ip-api.com/json/${{ inputs.ip }}
+        fi
+      shell: bash

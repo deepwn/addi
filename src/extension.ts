@@ -8,7 +8,6 @@ import { logger, LogLevel } from "./logger";
 import { EditorViewManager } from "./views/editorView";
 import { CustomToolManager } from "./services/customToolManager";
 import { ToolTreeDataProvider, ToolTreeItem } from "./views/toolView";
-import { AddiToolProvider } from "./services/addiToolProvider";
 import { McpServerService } from "./services/mcpServerService";
 
 function readLogLevel(): LogLevel {
@@ -20,7 +19,6 @@ function readLogLevel(): LogLevel {
   return "warn";
 }
 
-// Trigger rebuild
 export function activate(context: vscode.ExtensionContext) {
   const initialLogLevel = readLogLevel();
   logger.initialize(context, initialLogLevel);
@@ -34,18 +32,94 @@ export function activate(context: vscode.ExtensionContext) {
   // Initialize MCP Server Service
   const mcpService = McpServerService.getInstance(context);
   context.subscriptions.push(new vscode.Disposable(() => mcpService.dispose()));
-  mcpService.initialize().catch(err => logger.error("Failed to initialize MCP Server", err));
+  mcpService.initialize().catch((err) => logger.error("Failed to initialize MCP Server", err));
 
-  context.subscriptions.push(vscode.commands.registerCommand("addi.downloadMcpServer", () => {
-    mcpService.downloadMcpServer().then(async () => {
-        await mcpService.initialize();
-        toolManager.refresh();
-        vscode.window.showInformationMessage("MCP Server downloaded and started successfully.");
-    }).catch(err => {
-        vscode.window.showErrorMessage(`Failed to download MCP Server: ${err}`);
-    });
-  }));
-  
+  // Register MCP Server Provider
+  const didChangeMcpEmitter = new vscode.EventEmitter<void>();
+  mcpService.onDidStatusChange(() => didChangeMcpEmitter.fire());
+
+  try {
+    // @ts-ignore
+    context.subscriptions.push(
+      vscode.lm.registerMcpServerDefinitionProvider("addi-mcp-provider-local", {
+        onDidChangeMcpServerDefinitions: didChangeMcpEmitter.event,
+        provideMcpServerDefinitions: async () => {
+          logger.info("provideMcpServerDefinitions called");
+          const binaryPath = mcpService.getBinaryPath();
+          logger.info(`MCP Binary path: ${binaryPath}`);
+
+          if (!binaryPath) {
+            return [];
+          }
+
+          const dirs: string[] = [];
+          const os = require("os");
+          const path = require("path");
+
+          // Global tools
+          dirs.push(path.join(os.homedir(), ".addi"));
+
+          // Workspace tools
+          if (vscode.workspace.workspaceFolders) {
+            for (const folder of vscode.workspace.workspaceFolders) {
+              dirs.push(path.join(folder.uri.fsPath, ".addi", "public"));
+              dirs.push(path.join(folder.uri.fsPath, ".addi", "private"));
+            }
+          }
+
+          const dirsArg = dirs.join(",");
+          logger.info(`MCP Tools directories: ${dirsArg}`);
+
+          return [new vscode.McpStdioServerDefinition("Addi MCP Server", binaryPath, ["--mode", "local", "--dirs", dirsArg], process.env as Record<string, string>)];
+        },
+      })
+    );
+    logger.info("Registered MCP Server Provider via vscode.lm");
+  } catch (e) {
+    logger.error("Failed to register MCP Server Provider", e);
+  }
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("addi.restartMcpServer", async () => {
+      await mcpService.restart();
+      toolManager.refresh();
+      vscode.window.showInformationMessage("MCP Server definitions refreshed.");
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("addi.downloadMcpServer", () => {
+      mcpService
+        .downloadMcpServer()
+        .then(async () => {
+          await mcpService.initialize();
+          toolManager.refresh();
+          vscode.window.showInformationMessage("MCP Server downloaded and started successfully.");
+        })
+        .catch((err) => {
+          vscode.window.showErrorMessage(`Failed to download MCP Server: ${err}`);
+        });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("addi.debug.mcpStatus", async () => {
+      const binaryPath = mcpService.getBinaryPath();
+      // @ts-ignore
+      const apiAvailable = vscode.lm && typeof vscode.lm.registerMcpServerDefinitionProvider === "function";
+
+      const info = [
+        `MCP API Available: ${apiAvailable}`,
+        `Binary Path: ${binaryPath}`,
+        `Binary Exists: ${binaryPath ? require("fs").existsSync(binaryPath) : false}`,
+        `Extension Version: ${version}`,
+      ].join("\n");
+
+      vscode.window.showInformationMessage(info, { modal: true });
+      logger.info("MCP Debug Status", { apiAvailable, binaryPath });
+    })
+  );
+
   const applySettingsSyncPreference = () => {
     const config = vscode.workspace.getConfiguration("addi");
     const enableSync = config.get<boolean>("saveConfigToSettingsSync", true);
@@ -111,16 +185,16 @@ export function activate(context: vscode.ExtensionContext) {
   vscode.window.registerTreeDataProvider("addiTools", toolTreeDataProvider);
 
   // Register Addi Tool Provider (Bridge for global tools)
-  const addiToolProvider = new AddiToolProvider(toolManager, context);
-  addiToolProvider.register(context);
+  // const addiToolProvider = new AddiToolProvider(toolManager, context);
+  // addiToolProvider.register(context);
 
   // Debug command to list registered tools
   context.subscriptions.push(
     vscode.commands.registerCommand("addi.debug.listTools", () => {
       const tools = vscode.lm.tools;
-      const names = tools.map(t => t.name).join(", ");
+      const names = tools.map((t) => t.name).join(", ");
       vscode.window.showInformationMessage(`Registered LM Tools: ${names}`);
-      logger.info("Registered LM Tools", { tools: tools.map(t => ({ name: t.name, tags: t.tags })) });
+      logger.info("Registered LM Tools", { tools: tools.map((t) => ({ name: t.name, tags: t.tags })) });
     })
   );
 
@@ -183,120 +257,128 @@ export function activate(context: vscode.ExtensionContext) {
   );
   context.subscriptions.push(vscode.commands.registerCommand("addi.exportConfig", () => commandHandler.exportConfig()));
   context.subscriptions.push(vscode.commands.registerCommand("addi.importConfig", () => commandHandler.importConfig()));
-  context.subscriptions.push(vscode.commands.registerCommand("addi.openSettings", () => {
-      vscode.commands.executeCommand('workbench.action.openSettings', '@ext:deepwn.addi');
-  }));
+  context.subscriptions.push(
+    vscode.commands.registerCommand("addi.openSettings", () => {
+      vscode.commands.executeCommand("workbench.action.openSettings", "@ext:deepwn.addi");
+    })
+  );
 
   const editorManager = new EditorViewManager(context.extensionUri, manager, () => treeDataProvider.refresh());
   commandHandler.setEditorViewManager(editorManager);
 
   context.subscriptions.push(
     vscode.commands.registerCommand("addi.addTool", async () => {
-        // Create a template file
-        const type = await vscode.window.showQuickPick(["command", "http"], { placeHolder: "Tool Type" });
-        if (!type) { return; }
+      // Create a template file
+      const type = await vscode.window.showQuickPick(["command", "http"], { placeHolder: "Tool Type" });
+      if (!type) {
+        return;
+      }
 
-        const name = await vscode.window.showInputBox({ prompt: "Tool Name (filename)", placeHolder: "my-tool" });
-        if (!name) { return; }
+      const name = await vscode.window.showInputBox({ prompt: "Tool Name (filename)", placeHolder: "my-tool" });
+      if (!name) {
+        return;
+      }
 
-        const scope = await vscode.window.showQuickPick(["Workspace Public (.addi/public)", "Workspace Private (.addi/private)", "Global (~/.addi/)"] , { placeHolder: "Where to create?" });
-        if (!scope) { return; }
+      const scope = await vscode.window.showQuickPick(["Workspace Public (.addi/public)", "Workspace Private (.addi/private)", "Global (~/.addi/)"], {
+        placeHolder: "Where to create?",
+      });
+      if (!scope) {
+        return;
+      }
 
-        let dirPath = "";
-        if (scope.startsWith("Workspace Public")) {
-          if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
-            vscode.window.showErrorMessage("No workspace open.");
-            return;
-          }
-          const wf = vscode.workspace.workspaceFolders[0];
-          if (wf) {
-            dirPath = vscode.Uri.joinPath(wf.uri, ".addi", "public").fsPath;
-          } else {
-            return;
-          }
-        } else if (scope.startsWith("Workspace Private")) {
-          if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
-            vscode.window.showErrorMessage("No workspace open.");
-            return;
-          }
-          const wf = vscode.workspace.workspaceFolders[0];
-          if (wf) {
-            dirPath = vscode.Uri.joinPath(wf.uri, ".addi", "private").fsPath;
-          } else {
-            return;
-          }
+      let dirPath = "";
+      if (scope.startsWith("Workspace Public")) {
+        if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+          vscode.window.showErrorMessage("No workspace open.");
+          return;
+        }
+        const wf = vscode.workspace.workspaceFolders[0];
+        if (wf) {
+          dirPath = vscode.Uri.joinPath(wf.uri, ".addi", "public").fsPath;
         } else {
-          const os = require('os');
-          const path = require('path');
-          dirPath = path.join(os.homedir(), ".addi");
+          return;
         }
-
-        const fs = require('fs');
-        if (!fs.existsSync(dirPath)) {
-            fs.mkdirSync(dirPath, { recursive: true });
+      } else if (scope.startsWith("Workspace Private")) {
+        if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+          vscode.window.showErrorMessage("No workspace open.");
+          return;
         }
+        const wf = vscode.workspace.workspaceFolders[0];
+        if (wf) {
+          dirPath = vscode.Uri.joinPath(wf.uri, ".addi", "private").fsPath;
+        } else {
+          return;
+        }
+      } else {
+        const os = require("os");
+        const path = require("path");
+        dirPath = path.join(os.homedir(), ".addi");
+      }
 
-        const filePath = `${dirPath}/${name}.yaml`;
-        
-        let content = "";
-        if (type === "command") {
-            content = `name: ${name}
+      const fs = require("fs");
+      if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+      }
+
+      const filePath = `${dirPath}/${name}.yaml`;
+
+      let content = "";
+      if (type === "command") {
+        content = `name: ${name}
 description: Description of what this tool does
-# Simplified inputs definition
 inputs:
   arg1:
     description: Argument description
     default: "value"
-# Steps to execute
-steps:
-  - name: print
-    run: echo \${arg1}
+runs:
+  using: "composite"
+  steps:
+    - name: print
+      run: echo \${{ inputs.arg1 }}
+      shell: bash
 `;
-        } else {
-            content = `name: ${name}
+      } else {
+        content = `name: ${name}
 description: Description of what this tool does
-# Simplified inputs definition
 inputs:
   query:
     description: Search query
-# Steps to execute
-steps:
-  - name: fetch
-    http:
-      url: https://api.example.com/search?q=\${query}
-      method: GET
-      headers:
-        Content-Type: application/json
+runs:
+  using: "composite"
+  steps:
+    - name: fetch
+      run: curl -s "https://api.example.com/search?q=\${{ inputs.query }}"
+      shell: bash
 `;
-        }
+      }
 
-        if (!fs.existsSync(dirPath)) {
-          fs.mkdirSync(dirPath, { recursive: true });
-        }
-        fs.writeFileSync(filePath, content);
-        const doc = await vscode.workspace.openTextDocument(filePath);
-        await vscode.window.showTextDocument(doc);
+      if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+      }
+      fs.writeFileSync(filePath, content);
+      const doc = await vscode.workspace.openTextDocument(filePath);
+      await vscode.window.showTextDocument(doc);
     })
   );
 
   // Info button: show tip and open .gitignore when requested
   context.subscriptions.push(
-    vscode.commands.registerCommand('addi.gitIgnoreInfo', async () => {
+    vscode.commands.registerCommand("addi.gitIgnoreInfo", async () => {
       if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
-        vscode.window.showInformationMessage('Open a workspace to manage .gitignore for Addi tools.');
+        vscode.window.showInformationMessage("Open a workspace to manage .gitignore for Addi tools.");
         return;
       }
       const wf = vscode.workspace.workspaceFolders![0]!;
-      const path = require('path');
-      const fs = require('fs');
-      const gitignorePath = path.join(wf.uri.fsPath, '.gitignore');
-      const open = await vscode.window.showInformationMessage('Private tools are best kept out of the repo. Click Open to edit .gitignore.', 'Open', 'Cancel');
-      if (open === 'Open') {
+      const path = require("path");
+      const fs = require("fs");
+      const gitignorePath = path.join(wf.uri.fsPath, ".gitignore");
+      const open = await vscode.window.showInformationMessage("Private tools are best kept out of the repo. Click Open to edit .gitignore.", "Open", "Cancel");
+      if (open === "Open") {
         if (!fs.existsSync(gitignorePath)) {
           try {
-            fs.writeFileSync(gitignorePath, '.addi/*.ignore.yaml\n', 'utf8');
+            fs.writeFileSync(gitignorePath, ".addi/*.ignore.yaml\n", "utf8");
           } catch (e) {
-            vscode.window.showErrorMessage('Failed to create .gitignore');
+            vscode.window.showErrorMessage("Failed to create .gitignore");
             return;
           }
         }
@@ -308,129 +390,135 @@ steps:
 
   context.subscriptions.push(
     vscode.commands.registerCommand("addi.deleteTool", async (item: ToolTreeItem) => {
-        if (item && item.tool && item.tool.fileName) {
-            const confirm = await vscode.window.showWarningMessage(`Delete tool file "${item.tool.fileName}"?`, "Yes", "No");
-            if (confirm === "Yes") {
-                const fs = require('fs');
-                const path = require('path');
-                const os = require('os');
-                
-                let filePath = "";
-                if (item.tool.source === 'global') {
-                    filePath = path.join(os.homedir(), '.addi', item.tool.fileName);
-                } else if (item.tool.source === 'workspace') {
-                     if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-                         const wf = vscode.workspace.workspaceFolders[0];
-                         if (wf) {
-                            // Check visibility to determine subfolder
-                            const subfolder = item.tool.visibility === 'private' ? 'private' : 'public';
-                            filePath = path.join(wf.uri.fsPath, '.addi', subfolder, item.tool.fileName);
-                            
-                            // Fallback check for legacy .vscode/addi location if not found
-                            if (!fs.existsSync(filePath)) {
-                                 const legacyPath = path.join(wf.uri.fsPath, '.vscode', 'addi', item.tool.fileName);
-                                 if (fs.existsSync(legacyPath)) {
-                                     filePath = legacyPath;
-                                 }
-                            }
-                         }
-                     }
-                }
-
-                if (filePath && fs.existsSync(filePath)) {
-                  fs.unlinkSync(filePath);
-                  vscode.window.showInformationMessage(`Deleted ${item.tool.fileName}`);
-                  // Refresh will happen automatically via watcher
-                } else {
-                  vscode.window.showErrorMessage(`Could not find file for tool: ${item.tool.fileName}`);
-                }
-            }
-        }
-    })
-  );
-  
-  context.subscriptions.push(
-      vscode.commands.registerCommand("addi.refreshTools", () => {
-          toolTreeDataProvider.refresh();
-      })
-  );
-
-  context.subscriptions.push(
-      vscode.commands.registerCommand("addi.editTool", async (item: ToolTreeItem) => {
-          if (!item || !item.tool || !item.tool.fileName) {
-              return;
-          }
-
-          const path = require('path');
-          const os = require('os');
-          const fs = require('fs');
+      if (item && item.tool && item.tool.fileName) {
+        const confirm = await vscode.window.showWarningMessage(`Delete tool file "${item.tool.fileName}"?`, "Yes", "No");
+        if (confirm === "Yes") {
+          const fs = require("fs");
+          const path = require("path");
+          const os = require("os");
 
           let filePath = "";
-          if (item.tool.source === 'global') {
-              filePath = path.join(os.homedir(), '.addi', item.tool.fileName);
-          } else if (item.tool.source === 'workspace') {
-                if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-                    const wf = vscode.workspace.workspaceFolders[0];
-                    if (wf) {
-                        // Check visibility to determine subfolder
-                        const subfolder = item.tool.visibility === 'private' ? 'private' : 'public';
-                        filePath = path.join(wf.uri.fsPath, '.addi', subfolder, item.tool.fileName);
-                        
-                        // Fallback check for legacy .vscode/addi location if not found
-                        if (!fs.existsSync(filePath)) {
-                             const legacyPath = path.join(wf.uri.fsPath, '.vscode', 'addi', item.tool.fileName);
-                             if (fs.existsSync(legacyPath)) {
-                                 filePath = legacyPath;
-                             }
-                        }
-                    }
+          if (item.tool.source === "global") {
+            filePath = path.join(os.homedir(), ".addi", item.tool.fileName);
+          } else if (item.tool.source === "workspace") {
+            if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+              const wf = vscode.workspace.workspaceFolders[0];
+              if (wf) {
+                // Check visibility to determine subfolder
+                const subfolder = item.tool.visibility === "private" ? "private" : "public";
+                filePath = path.join(wf.uri.fsPath, ".addi", subfolder, item.tool.fileName);
+
+                // Fallback check for legacy .vscode/addi location if not found
+                if (!fs.existsSync(filePath)) {
+                  const legacyPath = path.join(wf.uri.fsPath, ".vscode", "addi", item.tool.fileName);
+                  if (fs.existsSync(legacyPath)) {
+                    filePath = legacyPath;
+                  }
                 }
+              }
+            }
           }
 
           if (filePath && fs.existsSync(filePath)) {
-              const doc = await vscode.workspace.openTextDocument(filePath);
-              await vscode.window.showTextDocument(doc);
+            fs.unlinkSync(filePath);
+            vscode.window.showInformationMessage(`Deleted ${item.tool.fileName}`);
+            // Refresh will happen automatically via watcher
           } else {
-              vscode.window.showErrorMessage(`Could not find file for tool: ${item.tool.fileName}`);
+            vscode.window.showErrorMessage(`Could not find file for tool: ${item.tool.fileName}`);
           }
-      })
+        }
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("addi.editTool", async (item: ToolTreeItem) => {
+      if (!item || !item.tool || !item.tool.fileName) {
+        return;
+      }
+
+      const path = require("path");
+      const os = require("os");
+      const fs = require("fs");
+
+      let filePath = "";
+      if (item.tool.source === "global") {
+        filePath = path.join(os.homedir(), ".addi", item.tool.fileName);
+      } else if (item.tool.source === "workspace") {
+        if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+          const wf = vscode.workspace.workspaceFolders[0];
+          if (wf) {
+            // Check visibility to determine subfolder
+            const subfolder = item.tool.visibility === "private" ? "private" : "public";
+            filePath = path.join(wf.uri.fsPath, ".addi", subfolder, item.tool.fileName);
+
+            // Fallback check for legacy .vscode/addi location if not found
+            if (!fs.existsSync(filePath)) {
+              const legacyPath = path.join(wf.uri.fsPath, ".vscode", "addi", item.tool.fileName);
+              if (fs.existsSync(legacyPath)) {
+                filePath = legacyPath;
+              }
+            }
+          }
+        }
+      }
+
+      if (filePath && fs.existsSync(filePath)) {
+        const doc = await vscode.workspace.openTextDocument(filePath);
+        await vscode.window.showTextDocument(doc);
+      } else {
+        vscode.window.showErrorMessage(`Could not find file for tool: ${item.tool.fileName}`);
+      }
+    })
   );
 
   // Copy tool command
-  context.subscriptions.push(vscode.commands.registerCommand('addi.copyTool', async (item: ToolTreeItem) => {
-    if (!item || !item.tool || !item.tool.fileName) { return; }
-    const fs = require('fs');
-    const path = require('path');
-    const os = require('os');
+  context.subscriptions.push(
+    vscode.commands.registerCommand("addi.copyTool", async (item: ToolTreeItem) => {
+      if (!item || !item.tool || !item.tool.fileName) {
+        return;
+      }
+      const fs = require("fs");
+      const path = require("path");
+      const os = require("os");
 
-    let src = '';
-    if (item.tool.source === 'global') {
-      src = path.join(os.homedir(), '.addi', item.tool.fileName);
-    } else {
-      if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) { return; }
-      const wf = vscode.workspace.workspaceFolders[0];
-      if (!wf) { return; }
-      const vis = (item.tool as any).visibility || 'public';
-      src = path.join(wf.uri.fsPath, '.addi', vis === 'private' ? 'private' : 'public', item.tool.fileName);
-    }
+      let src = "";
+      if (item.tool.source === "global") {
+        src = path.join(os.homedir(), ".addi", item.tool.fileName);
+      } else {
+        if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+          return;
+        }
+        const wf = vscode.workspace.workspaceFolders[0];
+        if (!wf) {
+          return;
+        }
+        const vis = (item.tool as any).visibility || "public";
+        src = path.join(wf.uri.fsPath, ".addi", vis === "private" ? "private" : "public", item.tool.fileName);
+      }
 
-    if (!fs.existsSync(src)) { vscode.window.showErrorMessage('Tool file not found: ' + src); return; }
-    const parsed = path.parse(item.tool.fileName);
-    const destName = parsed.name + '-copy' + parsed.ext;
-    let dest = '';
-    if (item.tool.source === 'global') {
-      dest = path.join(os.homedir(), '.addi', destName);
-    } else {
-      const wf = vscode.workspace.workspaceFolders![0];
-      if (!wf) { return; }
-      const vis = (item.tool as any).visibility || 'public';
-      dest = path.join(wf.uri.fsPath, '.addi', vis === 'private' ? 'private' : 'public', destName);
-    }
-    fs.copyFileSync(src, dest);
-    const doc = await vscode.workspace.openTextDocument(dest);
-    await vscode.window.showTextDocument(doc);
-  }));
-
+      if (!fs.existsSync(src)) {
+        vscode.window.showErrorMessage("Tool file not found: " + src);
+        return;
+      }
+      const parsed = path.parse(item.tool.fileName);
+      const destName = parsed.name + "-copy" + parsed.ext;
+      let dest = "";
+      if (item.tool.source === "global") {
+        dest = path.join(os.homedir(), ".addi", destName);
+      } else {
+        const wf = vscode.workspace.workspaceFolders![0];
+        if (!wf) {
+          return;
+        }
+        const vis = (item.tool as any).visibility || "public";
+        dest = path.join(wf.uri.fsPath, ".addi", vis === "private" ? "private" : "public", destName);
+      }
+      fs.copyFileSync(src, dest);
+      const doc = await vscode.workspace.openTextDocument(dest);
+      await vscode.window.showTextDocument(doc);
+    })
+  );
 }
 
 export function deactivate() {}

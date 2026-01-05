@@ -38,6 +38,7 @@
   ],
   "activationEvents": [
     "onLanguageModelChat:addi-provider",
+    "onMcpServerDefinition:addi-mcp-provider-local",
     "onStartupFinished"
   ],
   "enabledApiProposals": [
@@ -46,6 +47,12 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "addi-mcp-provider-local",
+        "label": "Addi MCP Server (Local)"
+      }
+    ],
     "icons": {
       "config-export-icon": {
         "description": "Config Export Icon",
@@ -123,19 +130,19 @@
     "menus": {
       "view/title": [
         {
-          "command": "addi.addProvider",
-          "when": "view == addiProviders",
+          "command": "addi.addTool",
+          "when": "view == addiTools",
+          "group": "navigation@0"
+        },
+        {
+          "command": "addi.restartMcpServer",
+          "when": "view == addiTools",
           "group": "navigation@1"
         },
         {
-          "command": "addi.addTool",
-          "when": "view == addiTools",
-          "group": "navigation"
-        },
-        {
-          "command": "addi.refreshTools",
-          "when": "view == addiTools",
-          "group": "navigation"
+          "command": "addi.addProvider",
+          "when": "view == addiProviders",
+          "group": "navigation@1"
         },
         {
           "command": "addi.importConfig",
@@ -369,6 +376,11 @@
     },
     "commands": [
       {
+        "command": "addi.debug.mcpStatus",
+        "title": "Addi: Check MCP Status",
+        "category": "Addi"
+      },
+      {
         "command": "addi.manage",
         "title": "Provider & Model Management",
         "shortTitle": "Management",
@@ -432,6 +444,13 @@
         "category": "Addi"
       },
       {
+        "command": "addi.restartMcpServer",
+        "title": "Refresh Tools & MCP",
+        "shortTitle": "Refresh",
+        "icon": "$(refresh)",
+        "category": "Addi"
+      },
+      {
         "command": "addi.addTool",
         "title": "Add Tool",
         "shortTitle": "Add",
@@ -457,13 +476,6 @@
         "title": "Delete Tool",
         "shortTitle": "Delete",
         "icon": "$(trash)",
-        "category": "Addi"
-      },
-      {
-        "command": "addi.refreshTools",
-        "title": "Refresh Tools",
-        "shortTitle": "Refresh",
-        "icon": "$(refresh)",
         "category": "Addi"
       },
       {

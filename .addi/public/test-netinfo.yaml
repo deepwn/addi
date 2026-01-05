@@ -2,25 +2,27 @@ name: test_get_netinfo
 # Debug comment to trigger reload
 description: Retrieves network configuration information from the host machine. It first detects the operating system and then runs the appropriate command (ipconfig or ifconfig).
 inputs: {}
-steps:
-  - name: Start Analysis
-    run: echo "Starting network analysis..."
+runs:
+  using: "composite"
+  steps:
+    - name: Start Analysis
+      run: echo "Starting network analysis..."
 
-  - name: Detect OS
-    run: |
-      const os = require('os');
-      console.log('OS Platform: ' + os.platform());
-    shell: bun
+    - name: Detect OS
+      run: |
+        const os = require('os');
+        console.log('OS Platform: ' + os.platform());
+      shell: bun
 
-  - name: Get Network Info
-    run: |
-      const os = require('os');
-      const cp = require('child_process');
-      const cmd = os.platform() === 'win32' ? 'ipconfig /all' : 'ifconfig';
-      console.log('Running: ' + cmd);
-      try {
-        console.log(cp.execSync(cmd).toString());
-      } catch (e) {
-        console.error('Error running ' + cmd + ': ' + e.message);
-      }
-    shell: bun
+    - name: Get Network Info
+      run: |
+        const os = require('os');
+        const cp = require('child_process');
+        const cmd = os.platform() === 'win32' ? 'ipconfig /all' : 'ifconfig';
+        console.log('Running: ' + cmd);
+        try {
+          console.log(cp.execSync(cmd).toString());
+        } catch (e) {
+          console.error('Error running ' + cmd + ': ' + e.message);
+        }
+      shell: bun

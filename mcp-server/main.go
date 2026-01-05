@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/deepwn/addi/mcp-server/runner"
 	"github.com/deepwn/addi/mcp-server/tools"
@@ -15,6 +16,7 @@ import (
 
 func main() {
 	mode := flag.String("mode", "local", "Execution mode: local, docker, or both")
+	dirsFlag := flag.String("dirs", "", "Comma-separated list of directories to scan for tools")
 	versionFlag := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
 
@@ -33,11 +35,17 @@ func main() {
 	s := server.NewMCPServer("addi-mcp-server", "0.0.1")
 
 	// Load tools
-	homeDir, _ := os.UserHomeDir()
-	dirs := []string{
-		filepath.Join(homeDir, ".addi"),
-		".addi/public",
-		".addi/private",
+	var dirs []string
+	if *dirsFlag != "" {
+		// Split by comma
+		dirs = strings.Split(*dirsFlag, ",")
+	} else {
+		homeDir, _ := os.UserHomeDir()
+		dirs = []string{
+			filepath.Join(homeDir, ".addi"),
+			".addi/public",
+			".addi/private",
+		}
 	}
 
 	loadedTools, err := tools.LoadTools(dirs)

@@ -21,6 +21,21 @@ const (
 )
 
 func Execute(ctx context.Context, tool tools.ToolDef, args map[string]interface{}, allowedMode ExecutionMode) (*mcp.CallToolResult, error) {
+	// Fill in default values for inputs
+	if args == nil {
+		args = make(map[string]interface{})
+	}
+	for name, input := range tool.Action.Inputs {
+		if _, ok := args[name]; !ok {
+			if input.Default != "" {
+				args[name] = input.Default
+			} else {
+				// Ensure all inputs are present, even if empty, for substitution
+				args[name] = ""
+			}
+		}
+	}
+
 	using := tool.Action.Runs.Using
 
 	// Validation based on allowedMode
@@ -32,7 +47,7 @@ func Execute(ctx context.Context, tool tools.ToolDef, args map[string]interface{
 	}
 
 	switch using {
-case "docker":
+	case "docker":
 		return executeDocker(ctx, tool, args)
 	case "composite":
 		return executeComposite(ctx, tool, args)
@@ -120,12 +135,19 @@ func executeComposite(ctx context.Context, tool tools.ToolDef, args map[string]i
 			}
 
 			// Simple shell handling
-			if strings.Contains(strings.ToLower(shell), "powershell") {
+			lowerShell := strings.ToLower(shell)
+			if strings.Contains(lowerShell, "powershell") {
 				cmd = exec.CommandContext(ctx, "powershell", "-Command", cmdStr)
-			} else if strings.Contains(strings.ToLower(shell), "bash") {
+			} else if strings.Contains(lowerShell, "bash") {
 				cmd = exec.CommandContext(ctx, "bash", "-c", cmdStr)
-			} else if strings.Contains(strings.ToLower(shell), "cmd") {
+			} else if strings.Contains(lowerShell, "cmd") {
 				cmd = exec.CommandContext(ctx, "cmd", "/C", cmdStr)
+			} else if strings.Contains(lowerShell, "bun") {
+				cmd = exec.CommandContext(ctx, "bun", "-e", cmdStr)
+			} else if strings.Contains(lowerShell, "node") {
+				cmd = exec.CommandContext(ctx, "node", "-e", cmdStr)
+			} else if strings.Contains(lowerShell, "python") {
+				cmd = exec.CommandContext(ctx, "python3", "-c", cmdStr)
 			} else {
 				// Fallback
 				cmd = exec.CommandContext(ctx, "sh", "-c", cmdStr)

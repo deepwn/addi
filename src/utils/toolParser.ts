@@ -11,14 +11,13 @@ export class ToolParser {
 
       // Parse Steps
       const steps: any[] = [];
-      if (data.steps && Array.isArray(data.steps)) {
+      if (data.runs && data.runs.steps && Array.isArray(data.runs.steps)) {
+        // GitHub Actions Composite format
+        steps.push(...data.runs.steps);
+      } else if (data.steps && Array.isArray(data.steps)) {
         steps.push(...data.steps);
       } else if (data.command) {
         // Legacy/Simple format support
-        // We map `command` to `run` string for now, but the normalization loop below will handle it if it's `command` property on step.
-        // Wait, if we push it as `run: data.command`, it will be treated as string script in normalization loop.
-        // But legacy `command` was expected to be split.
-        // So we should push it as `command: data.command` to trigger the legacy splitting logic.
         steps.push({
           name: "default",
           command: data.command,
