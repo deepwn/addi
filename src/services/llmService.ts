@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { streamText, jsonSchema, Tool } from 'ai';
+import { streamText, jsonSchema, Tool, stepCountIs } from 'ai';
 import { Provider, Model } from '../types';
 import { AIProviderRegistry } from './aiRegistry';
 import { MessageConverter } from './messageConverter';
@@ -174,8 +174,9 @@ export class LLMService {
       logger.debug('LLMService: tools registered at call time', { tools: Object.keys(tools) });
       if (Object.keys(tools).length > 0) {
           streamOptions.tools = tools;
-          // maxSteps is deprecated/removed in newer ai-sdk versions (since v5)
-          // Let the SDK manage tool calling limits automatically
+          // Enable multi-step tool calls (required for ai-sdk to execute tools and use results)
+          // In AI SDK v6, maxSteps is replaced by stopWhen: stepCountIs(n)
+          streamOptions.stopWhen = stepCountIs(10);
       }
 
       const result = streamText(streamOptions);
@@ -207,68 +208,42 @@ export class LLMService {
             progress.report(new vscode.LanguageModelTextPart(part.text));
         } else if (part.type === 'tool-call') {
             logger.debug("Tool Call", { toolCallId: part.toolCallId, toolName: part.toolName });
-            // If this is a VS Code provided tool, report to VS Code to execute it.
-            const isProvidedTool = providedTools?.some(t => t.name === part.toolName);
+            // Report the tool call to VS Code (UI)
+            // Whether it's a client-side tool (providedTools) or server-side tool (customTools),
+            // we notify VS Code that a tool is being called.
             const args = (part as any).args ?? (part as any).input;
-
-            if (isProvidedTool) {
-                progress.report(new vscode.LanguageModelToolCallPart(part.toolCallId, part.toolName, args));
-                hasOutput = true;
-                continue;
-            }
-
-            // If we have a custom tool registered in `tools` with an execute function, run it locally
-            const registeredTool = (tools as any)[part.toolName];
-            // Debug: log whether we found the registered tool and if it exposes execute
-            logger.debug('LLMService: tool-call', { toolName: part.toolName, registeredToolExists: !!registeredTool, hasExecute: registeredTool && typeof registeredTool.execute === 'function' });
-            if (registeredTool && typeof registeredTool.execute === 'function') {
-                try {
-                    const execResult = await registeredTool.execute(args ?? {});
-                    // Wrap the result as LanguageModelTextPart inside a LanguageModelToolResultPart
-                    const contentParts: vscode.LanguageModelResponsePart[] = [];
-                    if (typeof execResult === 'string') {
-                        contentParts.push(new vscode.LanguageModelTextPart(execResult));
-                    } else if (execResult instanceof Uint8Array) {
-                        contentParts.push(new vscode.LanguageModelDataPart(execResult, 'application/octet-stream'));
-                    } else if (execResult && typeof execResult === 'object' && execResult.text) {
-                        contentParts.push(new vscode.LanguageModelTextPart(String(execResult.text)));
-                    } else {
-                        contentParts.push(new vscode.LanguageModelTextPart(String(execResult)));
-                    }
-
-                    try {
-                        progress.report(new vscode.LanguageModelToolResultPart(part.toolCallId, contentParts));
-                    } catch (e) {
-                        // Fallback: report as text if ToolResultPart is not constructible in this environment
-                        progress.report(new vscode.LanguageModelTextPart(String(execResult)));
-                    }
-                    hasOutput = true;
-                } catch (e: any) {
-                    logger.error(`Custom tool ${part.toolName} execution failed`, e);
-                    const msg = `Tool \"${part.toolName}\" execution error: ${e && e.message ? e.message : String(e)}`;
-                    // Report error back to model so it can retry or choose another action
-                        // Also send a ToolResultPart containing structured error info so the model
-                        // receives a tool-result (with error) in protocol form. This increases
-                        // the chance the model will re-issue the tool-call or choose another action.
-                        const errorPayload = { error: true, message: e && e.message ? e.message : String(e) };
-                        const contentPartsForToolResult: vscode.LanguageModelResponsePart[] = [];
-                        try {
-                            contentPartsForToolResult.push(new vscode.LanguageModelTextPart(JSON.stringify(errorPayload)));
-                            contentPartsForToolResult.push(new vscode.LanguageModelTextPart(msg));
-                            progress.report(new vscode.LanguageModelToolResultPart(part.toolCallId, contentPartsForToolResult));
-                        } catch (inner) {
-                            // If ToolResultPart can't be constructed in this environment, fall back to text
-                            progress.report(new vscode.LanguageModelTextPart(JSON.stringify(errorPayload)));
-                            progress.report(new vscode.LanguageModelTextPart(msg));
-                        }
-                        hasOutput = true;
-                }
-            } else {
-                logger.error(`Tool call for unknown tool: ${part.toolName}, ignoring. Available tools: ${Object.keys(tools).join(', ')}`);
-            }
+            progress.report(new vscode.LanguageModelToolCallPart(part.toolCallId, part.toolName, args));
+            hasOutput = true;
+            
+            // Note: We do NOT execute the tool manually here anymore.
+            // Since we enabled `stopWhen` (multi-step) and provided `execute` functions for custom tools,
+            // the AI SDK will automatically execute the tool and emit a `tool-result` part later in the stream.
+            
         } else if (part.type === 'tool-result') {
             logger.debug("Tool Result", { toolCallId: part.toolCallId, toolName: part.toolName });
-            // If the tool result contains an error, report a sanitized error back to the model
+            
+            // 1. Report the result to VS Code so it appears in the chat history
+            const result = (part as any).result;
+            if (result !== undefined) {
+                const contentParts: vscode.LanguageModelResponsePart[] = [];
+                if (typeof result === 'string') {
+                    contentParts.push(new vscode.LanguageModelTextPart(result));
+                } else if (result && typeof result === 'object') {
+                    contentParts.push(new vscode.LanguageModelTextPart(JSON.stringify(result)));
+                } else {
+                    contentParts.push(new vscode.LanguageModelTextPart(String(result)));
+                }
+                
+                try {
+                    progress.report(new vscode.LanguageModelToolResultPart(part.toolCallId, contentParts));
+                    hasOutput = true;
+                } catch (e) {
+                    // Fallback if ToolResultPart fails
+                    logger.warn("Failed to report ToolResultPart", e);
+                }
+            }
+
+            // 2. Handle errors (if any)
             const toolErr = (part as any).error ?? (part as any).result?.error ?? null;
             if (toolErr) {
                 // Log full error server-side for debugging

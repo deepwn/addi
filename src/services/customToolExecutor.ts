@@ -17,6 +17,18 @@ export class CustomToolExecutor implements vscode.LanguageModelTool<any> {
     ): Promise<vscode.LanguageModelToolResult> {
         logger.info(`Invoking tool ${this.tool.name}`, options);
         
+        // Apply defaults from schema
+        const input = { ...options.input };
+        const props = this.tool.parameters?.properties;
+        if (props) {
+            for (const key of Object.keys(props)) {
+                const prop = props[key];
+                if (typeof prop === 'object' && prop !== null && 'default' in prop && input[key] === undefined) {
+                    input[key] = prop.default;
+                }
+            }
+        }
+        
         const results: any[] = [];
         
         for (const step of this.tool.steps) {
@@ -26,10 +38,10 @@ export class CustomToolExecutor implements vscode.LanguageModelTool<any> {
             
             try {
                 if (step.run) {
-                    const result = await this.executeRunStep(step, options.input, token);
+                    const result = await this.executeRunStep(step, input, token);
                     results.push(result);
                 } else if (step.http) {
-                    const result = await this.executeHttpStep(step.http, options.input, token);
+                    const result = await this.executeHttpStep(step.http, input, token);
                     results.push(result);
                 }
             } catch (err) {
