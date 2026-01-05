@@ -176,6 +176,7 @@ steps:
 ```
 
 字段说明：
+
 - `name`：工具标识符，会发送给模型作为可调用工具名。
 - `description`：简短描述，帮助模型判断何时调用该工具（会发送给模型）。
 - `inputs` / `parameters`：工具参数定义（简化格式会转换为 JSON Schema）。
@@ -196,6 +197,66 @@ steps:
 
 - 首先将调用转发给 VS Code 提供的工具（如果存在）；
 - 否则在工作区已注册的自定义工具中查找并执行相应步骤，并将命令输出或错误作为 `tool-result` 返回给模型（同时也会附带一条人类可读的错误提示，提升模型自动重试或改用替代策略的概率）。
+
+## 自定义工具 Custom Tools
+
+Addi 支持通过 YAML 文件定义自定义工具，这些工具可以被模型调用以执行本地命令或 HTTP 请求。
+
+### 目录结构
+
+工具文件存放在工作区的 `.addi` 目录下：
+
+- `.addi/public/`: 公共工具，可以提交到版本控制。
+- `.addi/private/`: 私有工具，包含敏感信息，建议在 `.gitignore` 中忽略。
+
+### 工具定义格式
+
+支持简单的单行命令和复杂的脚本执行。
+
+#### 示例 1: 简单命令 (Legacy)
+
+```yaml
+name: my_tool
+description: A simple tool
+steps:
+  - run: echo "Hello World"
+```
+
+#### 示例 2: 多步骤脚本 (New)
+
+支持指定 `shell` (如 `node`, `python`, `bash`, `powershell`) 和环境变量 `env`。
+
+```yaml
+name: get_netinfo
+description: Get network information
+steps:
+  - name: Start
+    run: echo "Starting analysis..."
+
+  - name: Run Script
+    shell: node
+    env:
+      MY_VAR: "some value"
+    run: |
+      const os = require('os');
+      console.log('Platform: ' + os.platform());
+      console.log('Env Var: ' + process.env.MY_VAR);
+```
+
+#### 示例 3: HTTP 请求
+
+```yaml
+name: get_ip
+description: Get public IP
+steps:
+  - http:
+      url: http://ip-api.com/json/{{ip}}
+      method: GET
+```
+
+### 变量替换
+
+支持使用 `{{variable}}` 语法引用输入参数。
 
 安全提示：
 

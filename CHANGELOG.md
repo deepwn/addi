@@ -4,6 +4,24 @@ All notable changes to the "addi" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.0.14] - 2026-01-05
+
+### Added
+- **Script Execution**: Custom tools now support multi-line scripts (Node.js, Python, Shell, etc.) via the `run` property.
+- **Shell Selection**: Added `shell` property to tool steps to specify the execution environment (e.g., `node`, `python`, `bash`, `powershell`).
+- **Environment Variables**: Added `env` property to tool steps for injecting environment variables.
+- **Enhanced Parsing**: `ToolParser` now intelligently handles both legacy simple commands and new structured script steps.
+
+### Changed
+- **Test Architecture**: Completely reorganized the test suite into `unit` and `integration` directories for better maintainability and faster execution.
+- **Tool Execution**: Custom tools are now executed via temporary files for better robustness and compatibility with complex scripts.
+- **Editor View**: Refactored the Editor View to load HTML resources asynchronously.
+
+### Fixed
+- **Tool Management**: Fixed `editTool` and `deleteTool` commands to correctly locate files in `.addi/public` or `.addi/private`.
+- **Provider Refresh**: Fixed an issue where the provider list wouldn't refresh automatically after updates.
+- **Test Imports**: Fixed relative import paths in the test suite.
+
 ## [0.0.13] - 2025-12-29
 
 ### Bun Migration
