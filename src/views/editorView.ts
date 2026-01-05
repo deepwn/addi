@@ -33,6 +33,7 @@ export class EditorViewManager {
         column || vscode.ViewColumn.One,
         {
           enableScripts: true,
+          retainContextWhenHidden: true,
           localResourceRoots: [this._extensionUri],
         }
       );
