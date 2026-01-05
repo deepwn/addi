@@ -52,10 +52,12 @@ export interface ChatMessage {
 export interface ToolStep {
   name?: string;
   id?: string;
-  // `run` is now a structured command with arguments to avoid shell parsing ambiguities.
-  // Use `run.command` and optional `run.args` array. Legacy string forms are still
-  // accepted by the loader and will be normalized.
-  run?: {
+  if?: string;
+  env?: Record<string, string>;
+  shell?: string;
+  // `run` can be a string (script) or a structured command.
+  // If string, it will be executed in a shell.
+  run?: string | {
     command: string;
     args?: string[];
   };

@@ -1,0 +1,13 @@
+name: test_get_remoteip
+description: Returns the public IP address and geolocation information (country, region, city, isp, etc.) of the user or a specified IP address using ip-api.com.
+parameters:
+  type: object
+  properties:
+    ip:
+      type: string
+      description: The IP address to query. Leave empty to query the current IP.
+      default: ""
+steps:
+  - http:
+      url: http://ip-api.com/json/{{ip}}
+      method: GET

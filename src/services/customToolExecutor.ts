@@ -4,6 +4,10 @@ import { logger } from '../logger';
 import * as cp from 'child_process';
 import { ToolUtils } from '../utils/toolUtils';
 
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
 export class CustomToolExecutor implements vscode.LanguageModelTool<any> {
     constructor(private readonly tool: CustomTool) {}
 
@@ -22,7 +26,7 @@ export class CustomToolExecutor implements vscode.LanguageModelTool<any> {
             
             try {
                 if (step.run) {
-                    const result = await this.executeRunStep(step.run, options.input, token);
+                    const result = await this.executeRunStep(step, options.input, token);
                     results.push(result);
                 } else if (step.http) {
                     const result = await this.executeHttpStep(step.http, options.input, token);
@@ -34,8 +38,7 @@ export class CustomToolExecutor implements vscode.LanguageModelTool<any> {
             }
         }
 
-        const lastResult = results.length > 0 ? results[results.length - 1] : "No steps executed";
-        const content = typeof lastResult === 'string' ? lastResult : JSON.stringify(lastResult, null, 2);
+        const content = results.map(r => typeof r === 'string' ? r : JSON.stringify(r, null, 2)).join('\n\n');
         
         return {
             content: [new vscode.LanguageModelTextPart(content)]
@@ -54,14 +57,83 @@ export class CustomToolExecutor implements vscode.LanguageModelTool<any> {
         };
     }
 
-    private async executeRunStep(run: { command: string; args?: string[] }, input: any, token?: vscode.CancellationToken): Promise<string> {
-        const args = run.args?.map(arg => ToolUtils.replacePlaceholders(arg, input)) ?? [];
-        const command = ToolUtils.replacePlaceholders(run.command, input);
+    private async executeRunStep(step: any, input: any, token?: vscode.CancellationToken): Promise<string> {
+        const run = step.run;
+        let command: string;
+        let args: string[] = [];
+        let shell = step.shell;
+        let env = { ...process.env, ...(step.env || {}) };
 
-        logger.debug(`Executing command: ${command} ${args.join(' ')}`);
+        logger.debug(`Executing run step. Shell: ${shell}, Run type: ${typeof run}`);
 
+        // Replace placeholders in env vars
+        for (const key in env) {
+            if (env[key]) {
+                env[key] = ToolUtils.replacePlaceholders(env[key], input);
+            }
+        }
+
+        if (typeof run === 'string') {
+            // Script mode
+            const scriptContent = ToolUtils.replacePlaceholders(run, input);
+            
+            const tmpDir = os.tmpdir();
+            
+            // Determine shell if not provided
+            if (!shell) {
+                shell = os.platform() === 'win32' ? 'powershell' : 'bash';
+            }
+
+            // Determine extension based on shell
+            let ext = os.platform() === 'win32' ? '.ps1' : '.sh';
+            if (shell) {
+                const s = shell.toLowerCase();
+                if (s.includes('node') || s.includes('bun')) {
+                    ext = '.js';
+                } else if (s.includes('python')) {
+                    ext = '.py';
+                } else if (s.includes('powershell') || s.includes('pwsh')) {
+                    ext = '.ps1';
+                } else if (s.includes('bash') || s.includes('sh')) {
+                    ext = '.sh';
+                } else if (s.includes('cmd')) {
+                    ext = '.bat';
+                }
+            }
+
+            const scriptPath = path.join(tmpDir, `addi-script-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+            
+            fs.writeFileSync(scriptPath, scriptContent);
+            
+            command = shell;
+            args = [scriptPath];
+            
+            // For PowerShell, we might need execution policy bypass if not set globally
+            if (shell === 'powershell' || shell === 'pwsh') {
+                args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath];
+            }
+
+            logger.debug(`Executing script via ${shell}: ${scriptPath}`);
+            
+            // Clean up file after execution (in finally block)
+            try {
+                return await this.spawnProcess(command, args, env, token, false, shell, ext);
+            } finally {
+                try { fs.unlinkSync(scriptPath); } catch {}
+            }
+
+        } else {
+            // Structured command mode
+            args = run.args?.map((arg: string) => ToolUtils.replacePlaceholders(arg, input)) ?? [];
+            command = ToolUtils.replacePlaceholders(run.command, input);
+            logger.debug(`Executing command: ${command} ${args.join(' ')}`);
+            return await this.spawnProcess(command, args, env, token, true);
+        }
+    }
+
+    private spawnProcess(command: string, args: string[], env: any, token?: vscode.CancellationToken, useShell = false, debugShell?: string, debugExt?: string): Promise<string> {
         return new Promise((resolve, reject) => {
-            const process = cp.spawn(command, args, { shell: true });
+            const process = cp.spawn(command, args, { shell: useShell, env });
             
             if (token) {
                 token.onCancellationRequested(() => {
@@ -85,7 +157,8 @@ export class CustomToolExecutor implements vscode.LanguageModelTool<any> {
                 if (code === 0) {
                     resolve(stdout.trim());
                 } else {
-                    reject(new Error(`Command failed with code ${code}: ${stderr}`));
+                    const debugInfo = debugShell ? ` (shell: ${debugShell}, ext: ${debugExt})` : '';
+                    reject(new Error(`Command failed with code ${code}${debugInfo}: ${stderr}`));
                 }
             });
             

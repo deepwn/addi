@@ -15,9 +15,13 @@ export class ToolParser {
         steps.push(...data.steps);
       } else if (data.command) {
         // Legacy/Simple format support
+        // We map `command` to `run` string for now, but the normalization loop below will handle it if it's `command` property on step.
+        // Wait, if we push it as `run: data.command`, it will be treated as string script in normalization loop.
+        // But legacy `command` was expected to be split.
+        // So we should push it as `command: data.command` to trigger the legacy splitting logic.
         steps.push({
           name: "default",
-          run: data.command,
+          command: data.command,
         });
       } else if (data.http) {
         // Legacy/Simple format support
@@ -63,19 +67,31 @@ export class ToolParser {
       const normalizedSteps: any[] = [];
       for (const s of steps) {
         const ns: any = { ...s };
-        // If step has `run` as string, split into command + args
-        if (s.run && typeof s.run === 'string') {
-          const tokens = splitArgsRespectingQuotes(s.run);
-          if (tokens.length > 0) {
-            ns.run = { command: tokens[0], args: tokens.slice(1) };
-          }
-        } else if (Array.isArray(s.run)) {
-          // run: ["cmd","arg1"]
+        
+        if (s.shell) {
+            logger.debug(`ToolParser: Found shell property for step ${s.name || 'unnamed'}: ${s.shell}`);
+        } else {
+            logger.debug(`ToolParser: No shell property for step ${s.name || 'unnamed'}`);
+        }
+
+        // If step has `run` as string, we now preserve it as a script string
+        // UNLESS it's a simple one-liner that we might want to split for legacy reasons?
+        // Actually, the new requirement is to support GH Actions style scripts.
+        // So if it's a string, we keep it as a string.
+        // However, to maintain backward compatibility with the "structured" expectation of some parts of the code
+        // (if any remain), we need to be careful.
+        // But CustomToolExecutor will be updated to handle string `run`.
+        
+        // We only normalize if it's the legacy `command` field or array format.
+        // If `run` is already a string, we trust it as a shell script.
+        
+        if (Array.isArray(s.run)) {
+          // run: ["cmd","arg1"] -> { command: "cmd", args: ["arg1"] }
           if (s.run.length > 0) {
             ns.run = { command: String(s.run[0]), args: s.run.slice(1).map(String) };
           }
         } else if (s.command) {
-          // legacy `command` field
+          // legacy `command` field -> { command: "cmd", args: [...] }
           const cmd = String(s.command);
           if (s.args && Array.isArray(s.args)) {
             ns.run = { command: cmd, args: s.args.map(String) };
@@ -84,6 +100,8 @@ export class ToolParser {
             ns.run = tokens.length > 0 ? { command: tokens[0], args: tokens.slice(1) } : undefined;
           }
         }
+        // If s.run is a string, we leave it alone now.
+        // If s.run is an object {command, args}, we leave it alone.
 
         normalizedSteps.push(ns);
       }

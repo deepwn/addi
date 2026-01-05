@@ -27,7 +27,8 @@ suite('ToolParser Unit Tests', () => {
         const result = ToolParser.parse(data, 'complex.yaml', 'global');
         assert.ok(result);
         assert.strictEqual(result?.steps.length, 2);
-        assert.deepStrictEqual(result!.steps[0]!.run, { command: 'echo', args: ['step1'] });
+        // run string is now preserved as-is
+        assert.strictEqual(result!.steps[0]!.run, 'echo step1');
         assert.strictEqual(result!.steps[1]!.http?.url, 'https://example.com');
     });
 
@@ -79,7 +80,11 @@ suite('ToolParser Unit Tests', () => {
         };
         const result = ToolParser.parse(data, 'quote.yaml', 'workspace:public');
         assert.ok(result);
-        const args = result!.steps[0]!.run?.args;
+        const run = result!.steps[0]!.run;
+        if (typeof run === 'string') {
+            assert.fail('Expected structured command');
+        }
+        const args = run?.args;
         assert.deepStrictEqual(args, ['hello world', 'foo bar']);
     });
 
