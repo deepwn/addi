@@ -19,6 +19,7 @@ function readLogLevel(): LogLevel {
   return "warn";
 }
 
+// Trigger rebuild
 export function activate(context: vscode.ExtensionContext) {
   const initialLogLevel = readLogLevel();
   logger.initialize(context, initialLogLevel);

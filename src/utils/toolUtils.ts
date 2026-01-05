@@ -1,6 +1,7 @@
 export class ToolUtils {
     static replacePlaceholders(template: string, values: any): string {
-        return template.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
+        // Match GitHub Actions style: ${{ inputs.key }}
+        return template.replace(/\$\{\{\s*([^}]+)\s*\}\}/g, (match, key) => {
             const keys = key.trim().split('.');
             let value = values;
             for (const k of keys) {

@@ -15,6 +15,7 @@ export class CustomToolManager {
   private tools: CustomTool[] = [];
   private watchers: vscode.FileSystemWatcher[] = [];
   private registeredTools: vscode.Disposable[] = [];
+  public lastUpdated: number = Date.now();
 
   constructor(_context: vscode.ExtensionContext) {
     this.refresh();
@@ -60,6 +61,7 @@ export class CustomToolManager {
   }
 
   async refresh() {
+    this.lastUpdated = Date.now();
     // Dispose existing tools
     this.registeredTools.forEach((t) => t.dispose());
     this.registeredTools = [];

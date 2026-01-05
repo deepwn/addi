@@ -38,9 +38,13 @@ export class LLMService {
           logger.debug('LLMService: customTools from manager', { tools: customTools && customTools.length ? customTools.map((t: any) => t.name) : customTools });
           for (const ct of customTools) {
               try {
+                // Clone and sanitize the schema to ensure compatibility (e.g. DeepSeek requires specific types)
+                const schema = JSON.parse(JSON.stringify(ct.parameters));
+                sanitizeSchema(schema);
+
                 tools[ct.name] = {
                     description: ct.description,
-                    inputSchema: jsonSchema(ct.parameters),
+                    inputSchema: jsonSchema(schema),
                     execute: async (args: any) => {
                         // Log tool execution without sensitive args
                         logger.debug(`Executing custom tool ${ct.name}`, { 

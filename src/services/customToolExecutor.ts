@@ -69,25 +69,31 @@ export class CustomToolExecutor implements vscode.LanguageModelTool<any> {
         };
     }
 
-    private async executeRunStep(step: any, input: any, token?: vscode.CancellationToken): Promise<string> {
+    private async executeRunStep(step: any, rawInput: any, token?: vscode.CancellationToken): Promise<string> {
         const run = step.run;
         let command: string;
         let args: string[] = [];
         let shell = step.shell;
         let env = { ...process.env, ...(step.env || {}) };
 
+        // Prepare context for substitution: inputs, env
+        const context = { 
+            inputs: rawInput,
+            env: env
+        };
+
         logger.debug(`Executing run step. Shell: ${shell}, Run type: ${typeof run}`);
 
         // Replace placeholders in env vars
         for (const key in env) {
             if (env[key]) {
-                env[key] = ToolUtils.replacePlaceholders(env[key], input);
+                env[key] = ToolUtils.replacePlaceholders(env[key], context);
             }
         }
 
         if (typeof run === 'string') {
             // Script mode
-            const scriptContent = ToolUtils.replacePlaceholders(run, input);
+            const scriptContent = ToolUtils.replacePlaceholders(run, context);
             
             const tmpDir = os.tmpdir();
             
@@ -136,8 +142,8 @@ export class CustomToolExecutor implements vscode.LanguageModelTool<any> {
 
         } else {
             // Structured command mode
-            args = run.args?.map((arg: string) => ToolUtils.replacePlaceholders(arg, input)) ?? [];
-            command = ToolUtils.replacePlaceholders(run.command, input);
+            args = run.args?.map((arg: string) => ToolUtils.replacePlaceholders(arg, context)) ?? [];
+            command = ToolUtils.replacePlaceholders(run.command, context);
             logger.debug(`Executing command: ${command} ${args.join(' ')}`);
             return await this.spawnProcess(command, args, env, token, true);
         }
@@ -180,15 +186,24 @@ export class CustomToolExecutor implements vscode.LanguageModelTool<any> {
         });
     }
 
-    private async executeHttpStep(http: { url: string; method?: string; headers?: Record<string, string>; body?: any }, input: any, token?: vscode.CancellationToken): Promise<any> {
-        const url = ToolUtils.replacePlaceholders(http.url, input);
+    private async executeHttpStep(http: { url: string; method?: string; headers?: Record<string, string>; body?: any }, rawInput: any, token?: vscode.CancellationToken): Promise<any> {
+        // Prepare context for substitution: inputs
+        const context = { 
+            inputs: rawInput,
+            // env is not typically available in HTTP step unless we explicitly pass it, 
+            // but for consistency we could pass process.env if needed. 
+            // For now, let's stick to inputs as HTTP steps are usually self-contained.
+        };
+        logger.debug(`Executing HTTP step with input: ${JSON.stringify(context)}`);
+
+        const url = ToolUtils.replacePlaceholders(http.url, context);
         const method = http.method ?? 'GET';
         const headers: Record<string, string> = http.headers ? { ...http.headers } : {};
         
         for (const key in headers) {
             const val = headers[key];
             if (val) {
-                headers[key] = ToolUtils.replacePlaceholders(val, input);
+                headers[key] = ToolUtils.replacePlaceholders(val, context);
             }
         }
 
@@ -196,9 +211,9 @@ export class CustomToolExecutor implements vscode.LanguageModelTool<any> {
         if (body && typeof body === 'object') {
              body = JSON.stringify(body);
              // Also replace in stringified body
-             body = ToolUtils.replacePlaceholders(body, input);
+             body = ToolUtils.replacePlaceholders(body, context);
         } else if (typeof body === 'string') {
-            body = ToolUtils.replacePlaceholders(body, input);
+            body = ToolUtils.replacePlaceholders(body, context);
         }
 
         logger.debug(`Executing HTTP ${method} ${url}`);

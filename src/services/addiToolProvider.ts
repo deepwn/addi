@@ -75,6 +75,7 @@ class AddiListTools implements vscode.LanguageModelTool<any> {
         _token: vscode.CancellationToken
     ): Promise<vscode.LanguageModelToolResult> {
         const tools = this.toolManager.getTools();
+        const lastUpdated = new Date(this.toolManager.lastUpdated).toLocaleString();
         
         const toolDescriptions = tools.map(t => {
             return `Tool: ${t.name}
@@ -83,7 +84,7 @@ Parameters: ${JSON.stringify(t.parameters, null, 2)}
 ---`;
         }).join('\n');
 
-        const content = `Available Addi Custom Tools:\n\n${toolDescriptions || "No custom tools found."}`;
+        const content = `Available Addi Custom Tools (Last Updated: ${lastUpdated}):\n\n${toolDescriptions || "No custom tools found."}`;
 
         return {
             content: [new vscode.LanguageModelTextPart(content)]

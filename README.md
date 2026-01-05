@@ -248,15 +248,19 @@ steps:
 ```yaml
 name: get_ip
 description: Get public IP
+inputs:
+  ip:
+    description: IP address (optional)
+    default: ""
 steps:
   - http:
-      url: http://ip-api.com/json/{{ip}}
+      url: http://ip-api.com/json/${{ inputs.ip }}
       method: GET
 ```
 
 ### 变量替换
 
-支持使用 `{{variable}}` 语法引用输入参数。
+支持使用 `${{ inputs.variable }}` 语法引用输入参数（类似 GitHub Actions）。
 
 安全提示：
 

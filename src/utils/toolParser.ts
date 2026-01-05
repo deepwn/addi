@@ -132,8 +132,8 @@ export class ToolParser {
             prop.default = value.default;
           }
 
-          // Required by default unless explicitly false
-          if (!(value && value.required === false)) {
+          // Required by default unless explicitly false or has a default value
+          if (!(value && value.required === false) && !(value && value.default !== undefined)) {
             required.push(key);
           }
 
