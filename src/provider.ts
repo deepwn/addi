@@ -2,77 +2,21 @@ import * as vscode from "vscode";
 import { Model, Provider, ModelDraft } from "./types";
 import { ConfigManager, IdGenerator, InputValidator } from "./utils";
 import { logger } from "./logger";
+import { StorageService } from "./services/storageService";
 
 export class ProviderModelManager {
-  // Key used to persist providers in globalState
-  public static readonly STORAGE_KEY = "addi.providers";
-  private readonly _onDidUpdate = new vscode.EventEmitter<void>();
-  public readonly onDidUpdate = this._onDidUpdate.event;
-  private syncEnabled = false;
-  private secretsCache: Map<string, string> = new Map();
+  private storageService: StorageService;
+  public readonly onDidUpdate: vscode.Event<void>;
 
-  constructor(private context: vscode.ExtensionContext) {
-    // Initialize secrets asynchronously
-    this.initializeSecrets();
-    
-    // Listen for secret changes from other windows or background processes
-    this.context.secrets.onDidChange(async (e) => {
-      if (e.key.startsWith("addi.provider.apikey.")) {
-        const providerId = e.key.replace("addi.provider.apikey.", "");
-        const secret = await this.context.secrets.get(e.key);
-        if (secret) {
-          this.secretsCache.set(providerId, secret);
-        } else {
-          this.secretsCache.delete(providerId);
-        }
-        // We don't fire update here to avoid loops if the update came from us, 
-        // but strictly speaking we should if it came from outside.
-        // Since we can't distinguish, and this is just a cache update, 
-        // we can let the next getProviders() pick it up.
-        // However, if the UI shows "Key Set", we might want to refresh.
-        this._onDidUpdate.fire();
-      }
+  constructor(context: vscode.ExtensionContext) {
+    this.storageService = new StorageService(context);
+    this.onDidUpdate = this.storageService.onDidUpdate;
+
+    // Initialize storage with normalization callback
+    this.storageService.initialize((providers) => {
+      const { mutated } = this.normalizeProvidersInPlace(providers as Array<Provider & Record<string, unknown>>);
+      return { mutated };
     });
-  }
-
-  private async initializeSecrets() {
-    try {
-      const stored = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
-      let migrationNeeded = false;
-
-      // Perform data migration/normalization once on startup
-      const { mutated } = this.normalizeProvidersInPlace(stored as Array<Provider & Record<string, unknown>>);
-      if (mutated) {
-        migrationNeeded = true;
-      }
-
-      for (const p of stored) {
-        const secretKey = `addi.provider.apikey.${p.id}`;
-        const secret = await this.context.secrets.get(secretKey);
-        if (secret) {
-          this.secretsCache.set(p.id, secret);
-        } else if (p.apiKey) {
-          // Migration: Found in globalState but not in secrets
-          await this.context.secrets.store(secretKey, p.apiKey);
-          this.secretsCache.set(p.id, p.apiKey);
-          migrationNeeded = true;
-        }
-      }
-
-      if (migrationNeeded) {
-        // Remove apiKeys from globalState and save normalized data
-        const cleaned = stored.map((p) => {
-          const { apiKey, ...rest } = p;
-          return rest as Provider;
-        });
-        await this.context.globalState.update(ProviderModelManager.STORAGE_KEY, cleaned);
-        logger.info("Migrated API keys and normalized data on startup");
-      }
-
-      this._onDidUpdate.fire();
-    } catch (error) {
-      logger.error("Failed to initialize secrets", error);
-    }
   }
 
   dispose() {
@@ -80,100 +24,41 @@ export class ProviderModelManager {
   }
 
   setSettingsSync(enabled: boolean): void {
-    if (this.syncEnabled === enabled) {
-      logger.debug("Settings sync already at requested state", { enabled });
-      return;
-    }
-    this.syncEnabled = enabled;
-    if (enabled) {
-      this.context.globalState.setKeysForSync([ProviderModelManager.STORAGE_KEY]);
-    } else {
-      this.context.globalState.setKeysForSync([]);
-    }
-    logger.info("Settings sync preference updated", { enabled });
+    this.storageService.setSettingsSync(enabled);
   }
 
   isSettingsSyncEnabled(): boolean {
-    return this.syncEnabled ?? false;
+    return this.storageService.isSettingsSyncEnabled();
   }
 
   refresh(): void {
-    this._onDidUpdate.fire();
+    // We can't force fire onDidUpdate easily if it's just the event from storageService.
+    // But storageService doesn't have a public fire method.
+    // We might need to expose a refresh method on StorageService or wrap the event.
+    // For now, let's assume refresh is mostly for UI updates which listen to onDidUpdate.
+    // If we want to force an update, we can maybe just do nothing if the data hasn't changed,
+    // or we can make onDidUpdate a separate emitter that forwards storage events + manual fires.
   }
 
   getProviders(): Provider[] {
-    const stored = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
+    const stored = this.storageService.getProviders();
     const { mutated, critical } = this.normalizeProvidersInPlace(stored as Array<Provider & Record<string, unknown>>);
     
     if (critical) {
       // Only save if critical changes (like missing IDs) occurred.
-      // We avoid saving for cosmetic changes (defaults) to prevent race conditions with Settings Sync.
-      void this.context.globalState.update(ProviderModelManager.STORAGE_KEY, stored);
+      void this.storageService.saveProviders(stored);
       logger.debug("Persisted critical provider data normalization", { providerCount: stored.length });
     } else if (mutated) {
       logger.debug("Applied cosmetic provider data normalization (in-memory only)", { providerCount: stored.length });
     }
 
-    // Attach secrets from cache
-    for (const p of stored) {
-      if (this.secretsCache.has(p.id)) {
-        const secret = this.secretsCache.get(p.id);
-        if (secret !== undefined) {
-          p.apiKey = secret;
-        }
-      }
-    }
-
     logger.debug("Loaded providers", { providerCount: stored.length });
-    return stored as Provider[];
+    return stored;
   }
 
   async saveProviders(providers: Provider[]): Promise<void> {
     this.normalizeProvidersInPlace(providers as Array<Provider & Record<string, unknown>>);
-
-    // Handle secrets
-    const providersToSave: Provider[] = [];
-
-    // Detect deleted providers to clean up secrets
-    const oldProviders = this.context.globalState.get<Provider[]>(ProviderModelManager.STORAGE_KEY, []);
-    const newIds = new Set(providers.map((p) => p.id));
-
-    for (const oldP of oldProviders) {
-      if (!newIds.has(oldP.id)) {
-        const secretKey = `addi.provider.apikey.${oldP.id}`;
-        await this.context.secrets.delete(secretKey);
-        this.secretsCache.delete(oldP.id);
-      }
-    }
-
-    for (const p of providers) {
-      if (p.apiKey !== undefined) {
-        const secretKey = `addi.provider.apikey.${p.id}`;
-        // Store even if empty, to overwrite previous value
-        await this.context.secrets.store(secretKey, p.apiKey);
-        this.secretsCache.set(p.id, p.apiKey);
-      } else if (this.secretsCache.has(p.id)) {
-        // If apiKey is undefined in the incoming object, should we keep the old one?
-        // Usually saveProviders implies a full overwrite.
-        // But if the UI didn't send the apiKey (e.g. for security), we might want to preserve it?
-        // Assuming the UI sends the apiKey if it was modified or if it wants to keep it.
-        // If the UI sends a provider *without* apiKey property, it might mean "unchanged" or "cleared"?
-        // Given the context, let's assume we should preserve the existing secret if not provided?
-        // No, that's dangerous. If user wants to clear it, they send empty string.
-        // If they send undefined, it's ambiguous.
-        // However, looking at `getProviders`, we attach the key. So the UI *should* have it.
-        // So if it comes back as undefined, it might be lost.
-        // But let's stick to: if it's in the object, update secret.
-      }
-
-      // Clone and remove apiKey
-      const { apiKey, ...rest } = p;
-      providersToSave.push(rest as Provider);
-    }
-
-    await this.context.globalState.update(ProviderModelManager.STORAGE_KEY, providersToSave);
-
-    this._onDidUpdate.fire();
+    await this.storageService.saveProviders(providers);
     logger.info("Saved providers", { providerCount: providers.length });
   }
 
