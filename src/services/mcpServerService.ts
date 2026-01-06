@@ -9,7 +9,7 @@ import { McpDownloader } from "../utils/mcpDownloader";
 export class McpServerService {
   private static instance: McpServerService;
   // Define the required MCP server version. Update this only when a new binary is released.
-  public static readonly REQUIRED_MCP_VERSION = "0.0.15";
+  public static readonly REQUIRED_MCP_VERSION = "0.0.16";
   
   private _onDidStatusChange = new vscode.EventEmitter<void>();
   public readonly onDidStatusChange = this._onDidStatusChange.event;

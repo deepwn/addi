@@ -4,7 +4,18 @@ All notable changes to the "addi" extension will be documented in this file.
 
 ## [0.0.16] - 2026-01-06
 
+### Added
+
+- **Hot Reloading**: MCP Server now supports watching for file changes (`--watch` mode). Modifying tool definitions (YAML) will automatically reload and register the tool without restarting the server or VS Code.
+- **Tools**: Added `scripts/dev-install.ps1` and `scripts/dev-install.sh` for rapid local development iterations (build, install binary, install vsix, reload).
+- **Network Tools**: Enhanced sample tools `test-remoteip` and `test-netinfo` with cross-platform support (Windows PowerShell optimized, Mac/Linux support).
+
 ### Fixed
+
+- **PowerShell Execution**: Optimized PowerShell command execution in MCP tools by adding `-NoProfile` to prevent loading user profiles, resulting in faster and cleaner execution.
+- **Windows Support**: Improve compatibility for network commands on Windows.
+
+### Fixed (Previous)
 
 - **MCP Server**: Download Fixed an issue in the `Download Addi MCP Server` command where specifying a version did not correctly download the requested version.
 
