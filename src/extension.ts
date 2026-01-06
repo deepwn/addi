@@ -88,13 +88,25 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("addi.downloadMcpServer", () => {
+    vscode.commands.registerCommand("addi.downloadMcpServer", async () => {
+      const defaultVersion = McpServerService.REQUIRED_MCP_VERSION;
+      const version = await vscode.window.showInputBox({
+        title: "Download Addi MCP Server",
+        prompt: "Enter version to download",
+        value: defaultVersion,
+        placeHolder: "e.g. 0.0.15",
+      });
+
+      if (version === undefined) {
+        return;
+      } // User cancelled
+
       mcpService
-        .downloadMcpServer()
+        .downloadMcpServer(version)
         .then(async () => {
           await mcpService.initialize();
           toolManager.refresh();
-          vscode.window.showInformationMessage("MCP Server downloaded and started successfully.");
+          vscode.window.showInformationMessage(`MCP Server (${version}) downloaded and started successfully.`);
         })
         .catch((err) => {
           vscode.window.showErrorMessage(`Failed to download MCP Server: ${err}`);
