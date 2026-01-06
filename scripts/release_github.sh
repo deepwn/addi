@@ -83,21 +83,58 @@ upload_asset() {
     fi
 
     echo "Uploading $file_name..."
-    curl -s -X POST \
+    local response=$(curl -s -w "%{http_code}" -o /dev/null -X POST \
         -H "Authorization: token $GITHUB_TOKEN" \
         -H "Content-Type: $content_type" \
         --data-binary @"$file_path" \
-        "$UPLOAD_URL?name=$file_name" | node -p "JSON.parse(fs.readFileSync(0, 'utf-8')).name" > /dev/null
+        "$UPLOAD_URL?name=$file_name")
     
-    echo "Uploaded $file_name"
+    if [ "$response" != "201" ]; then
+        echo "Failed to upload $file_name (HTTP $response)"
+        # Non-critical for now, but good to know
+    else 
+        echo "Uploaded $file_name"
+    fi
 }
 
 # 2. 上传 Assets
+HAS_MCP_SERVER="false"
 
 # 上传 .vsix 文件
 for f in "$RELEASE_DIR"/*.vsix; do
     if [ -f "$f" ]; then
         upload_asset "$f"
+    fi
+done
+
+# 上传 mcp-server binarys (如果由于build.sh生成了)
+# Check inside release/bin
+if [ -d "$RELEASE_DIR/bin" ]; then
+    count=$(ls -1 "$RELEASE_DIR/bin"/mcp-server-* 2>/dev/null | wc -l)
+    if [ $count != 0 ]; then
+        echo "Found MCP Server binaries, uploading..."
+        HAS_MCP_SERVER="true"
+        for f in "$RELEASE_DIR/bin"/mcp-server-*; do
+             upload_asset "$f"
+        done
+    fi
+fi
+
+# 上传 checksums.txt
+if [ -f "$RELEASE_DIR/checksums.txt" ]; then
+    upload_asset "$RELEASE_DIR/checksums.txt"
+fi
+
+# 3. Update Release Body if MCP Server included (Optional but useful for humans)
+# Note: The extension logic relies on checking ASSETS existence, not body text.
+# So this step is purely informational.
+if [ "$HAS_MCP_SERVER" == "true" ]; then
+    echo "Marking release as containing MCP Server..."
+    # Update release body to append info
+    # (Implementation omitted to keep script simple, as Logic relies on assets)
+fi
+
+echo "Release $TAG completed successfully!"
     fi
 done
 

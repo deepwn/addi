@@ -11,7 +11,7 @@ await rm("./dist", { recursive: true, force: true });
 
 // 执行构建
 const result = await build({
-  entrypoints: ["./src/extension.ts"],
+  entrypoints: ["./src/presentation/extension.ts"],
   outdir: "./dist",
   target: "node",
   format: "cjs",

@@ -163,10 +163,23 @@ function Upload-Asset {
 }
 
 # 2. 上传 Assets
+$HasMcpServer = $false
 
 # 上传 .vsix 文件
 Get-ChildItem -Path $ReleaseDir -Filter '*.vsix' | ForEach-Object {
     Upload-Asset -FilePath $_.FullName
+}
+
+# 上传 mcp-server binarys (如果由于build.sh生成了)
+if (Test-Path $BinDir) {
+    $McpFiles = Get-ChildItem -Path $BinDir | Where-Object { -not $_.PSIsContainer -and $_.Name -like "mcp-server-*" }
+    if ($McpFiles) {
+        Write-Host "Found MCP Server binaries, uploading..." -ForegroundColor Cyan
+        $HasMcpServer = $true
+        $McpFiles | ForEach-Object {
+            Upload-Asset -FilePath $_.FullName
+        }
+    }
 }
 
 # 上传 checksums.txt
@@ -175,13 +188,4 @@ if (Test-Path $ChecksumsFile) {
     Upload-Asset -FilePath $ChecksumsFile
 }
 
-# 上传 binaries (在 bin 目录下)
-if (Test-Path $BinDir) {
-    Get-ChildItem -Path $BinDir | ForEach-Object {
-        if (-not $_.PSIsContainer) {
-            Upload-Asset -FilePath $_.FullName
-        }
-    }
-}
-
-Write-Host 'Release completed successfully!' -ForegroundColor Green
+Write-Host "Release $Tag completed successfully!" -ForegroundColor Green

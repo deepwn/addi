@@ -2,78 +2,108 @@
 
 ## 1. Overview
 
-Addi is a Visual Studio Code extension that enhances the Copilot experience by allowing users to bring their own AI providers (OpenAI, Anthropic, Google, etc.) and models. It also integrates with the Model Context Protocol (MCP) to support custom tools.
+Addi is a Visual Studio Code extension that enhances the Copilot experience by allowing users to bring their own AI providers (OpenAI, Anthropic, Google, etc.) and models. It serves as a bridge between VS Code's Copilot UI and custom AI backends, while also providing a robust local runtime for custom tools via the Model Context Protocol (MCP).
 
-## 2. Architecture
+## 2. Architecture Layers
 
-The project consists of three main components:
-
-1.  **VS Code Extension (TypeScript)**: The main interface and logic.
-2.  **MCP Server (Go)**: A local server that executes custom tools, compliant with the Model Context Protocol.
-3.  **UI/Views**: Tree views and editors for managing providers and models.
-
-### Conceptual Flow
+The project is architected into four distinct layers to ensure separation of concerns and maintainability.
 
 ```mermaid
 graph TD
-    User[User] -->|Commands/UI| Extension
-    User -->|Chat Request| CopilotUI[VS Code Copilot UI]
-
-    subgraph "VS Code Extension"
-        Extension["Extension Entry (activate)"]
-        Extension --> Manager[ProviderModelManager]
-        Extension --> MCPService[McpServerService]
-
-        CopilotUI -->|Invoke| ChatProvider[AddiChatProvider]
-        ChatProvider --> LLM[LLMService]
-
-        LLM -->|Fetch/Stream| AI_SDK[Vercel AI SDK]
-        LLM -->|Tool Call| ToolManager[CustomToolManager]
-
-        ToolManager -->|Execute| MCPService
-
-        Manager -->|Persist| Storage[StorageService]
+    subgraph "Layer 1: Presentation (Frontend)"
+        UI[Views & TreeData]
+        CMD[Commands]
+        Entry[Extension Entry]
     end
 
-    subgraph "External/Local"
-        MCPService -->|Spawns/Connects| MCPServer["MCP Server (Go Binary)"]
-        AI_SDK -->|HTTP API| APIs["External AI APIs (OpenAI/Anthropic/Google)"]
+    subgraph "Layer 2: Core (Middle Bridge)"
+        LLM[LLM Service]
+        Align[Message Converter/Adapter]
+        Registry[Provider & Model Manager]
     end
+
+    subgraph "Layer 3: Infrastructure (Backend Execution)"
+        MCP[MCP Service (Process Mgr)]
+        Tools[Tool Manager]
+        Storage[Storage Service]
+    end
+
+    subgraph "Layer 4: Shared (Utils)"
+        Logger
+        Helpers
+        Types
+    end
+
+    Entry --> CMD
+    CMD --> UI
+    CMD --> Registry
+    
+    UI --> Registry
+    
+    Registry --> Storage
+    
+    Entry --> LLM
+    LLM --> Align
+    LLM --> MCP
+    
+    MCP --> Tools
+    Tools --> Storage
 ```
 
-## 3. Key Components
+### Layer 1: Presentation (Frontend)
+**Responsibility**: controls UI and VS Code related behaviors.
+- **Views**: Tree Data Providers (`ProviderView`, `ToolView`) and Webview Managers (`EditorView`).
+- **Commands**: Handles user interactions from the Command Palette and Context Menus.
+- **Entry**: `extension.ts` serves as the bootstrapper, wiring dependencies together.
 
-### 3.1. Service Layer (`src/services/`)
+### Layer 2: Core (Middle Bridge)
+**Responsibility**: Aligns behaviors between Copilot and the plugin's custom models.
+- **LLMService**: The heart of the chat logic. It creates a standardized interface for `vscode.LanguageModel` to talk to various providers (OpenAI, Anthropic, etc.) via the Vercel AI SDK.
+- **MessageConverter**: Translates VS Code's chat protocol into standard AI SDK messages.
+- **ProviderModelManager**: Manages the domain state (Providers, Models) and business logic for CRUD operations.
 
-- **`ProviderModelManager` (`src/provider.ts`)**: The central repository for AI providers and their models. Handles CRUD operations and persistence.
-- **`LLMService` (`src/services/llmService.ts`)**: Handles the core chat logic. It creates a bridge between VS Code's Chat API and the Vercel AI SDK. It handles message conversion and tool execution.
-- **`McpServerService` (`src/services/mcpServerService.ts`)**: Manages the lifecycle of the external Go-based MCP server. It handles downloading updates (via `McpDownloader`) and ensuring the binary is executable.
-- **`CustomToolManager` (`src/services/customToolManager.ts`)**: Manages the definition of custom tools that can be invoked by the LLM.
-- **`StorageService` (`src/services/storageService.ts`)**: Abstracts the underlying storage (VS Code `globalState` and `secretStorage` for API keys).
+### Layer 3: Infrastructure (Backend)
+**Responsibility**: Managed execution of custom tools and persistence.
+- **McpServerService**: Manages the lifecycle of the external Go-based MCP server. It handles the "physical" execution of tools (Process Management, Binary Downloading).
+- **CustomToolManager**: Watches the file system for tool definitions (YAML) and configures the environment.
+- **StorageService**: Abstracts VS Code's persistence layer (`globalState`, `secretStorage`).
 
-### 3.2. Utils
+### Layer 4: Shared (Utils)
+**Responsibility**: Reusable, standardized utility tools.
+- **Logger**: Standardized logging wrapper.
+- **McpDownloader**: Utility for fetching external binaries.
+- **Parsers & Validators**: Pure functions for data processing.
 
-- **`McpDownloader` (`src/utils/mcpDownloader.ts`)**: robust utility for downloading the MCP server binary from GitHub releases, including checksum verification.
+## 3. Interaction Flow
 
-### 3.3. commands (`src/commands.ts`)
-
-- Handles user interactions from the command palette and tree views.
-- _Refactoring Note_: Currently contains heavy logic for fetching remote models which is being moved to `ProviderModelManager`.
+1.  **Initialization**: Layer 1 (Extension) boots up Layer 3 (MCP Service) and Layer 2 (Provider Manager).
+2.  **User Request**: Copilot invokes Layer 2 (LLM Service).
+3.  **Processing**: Layer 2 converts the request (Converter) and selects the right Provider.
+4.  **Tool Execution**: If a tool is needed, Layer 2 calls into Layer 3 (MCP Service + Tool Manager) to execute it securely.
+5.  **Response**: Results flow back up to Layer 1 for display.
 
 ## 4. external MCP Server (`mcp-server/`)
 
-- Written in Go.
-- Provides a local execution environment for tools.
-- Communicates with the extension via Stdio (Standard Input/Output) adhering to the MCP specification.
+- Written in **Go**.
+- Acts as the robust "Backend" execution engine.
+- Supports File Watching, Docker execution, and Local binary execution.
+- Bridged to Layer 3 via Stdio.
 
-## 5. Security Considerations
+## 5. Directory Structure Vision
 
-- **API Keys**: Stored in VS Code `SecretStorage` via `StorageService`.
-- **Binary Execution**: The extension downloads and executes a binary. Integrity is verified via SHA256 checksums signed in the release.
-- **Tool Execution**: Tools run locally via the MCP server. Users must explicitly enable/install tools.
-
-## 6. Future Improvements
-
-- Decouple `CommandHandler`.
-- Implement more robust update mechanisms for the MCP server.
-- Add support for more provider types dynamically.
+```
+src/
+  presentation/       # Layer 1
+    commands/
+    views/
+    extension.ts (Entry)
+  core/               # Layer 2
+    llm/
+    providers/
+  infrastructure/     # Layer 3
+    mcp/
+    storage/
+  common/             # Layer 4
+    utils/
+    types/
+```

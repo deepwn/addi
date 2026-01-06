@@ -577,9 +577,9 @@
   },
   "scripts": {
     "test": "tsc -p . --outDir out && bun run package && vscode-test",
-    "package": "bun build ./src/extension.ts --outdir ./dist --target node --format cjs --external vscode --sourcemap --minify",
-    "watch": "bun build ./src/extension.ts --outdir ./dist --target node --format cjs --external vscode --sourcemap --watch",
-    "compile": "bun build ./src/extension.ts --outdir ./dist --target node --format cjs --external vscode --sourcemap",
+    "package": "bun build ./src/presentation/extension.ts --outdir ./dist --target node --format cjs --external vscode --sourcemap --minify",
+    "watch": "bun build ./src/presentation/extension.ts --outdir ./dist --target node --format cjs --external vscode --sourcemap --watch",
+    "compile": "bun build ./src/presentation/extension.ts --outdir ./dist --target node --format cjs --external vscode --sourcemap",
     "release": "bun run package && bunx @vscode/vsce package --baseImagesUrl https://raw.githubusercontent.com/deepwn/addi/refs/heads/main/ --no-yarn --no-dependencies",
     "debug": "code --extensionDevelopmentPath=.",
     "clean": "bun scripts/clean.js"
