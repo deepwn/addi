@@ -2,6 +2,29 @@
 
 All notable changes to the "addi" extension will be documented in this file.
 
+## [0.0.16] - 2026-01-06
+
+### Fixed
+
+- **MCP Server**: Download Fixed an issue in the `Download Addi MCP Server` command where specifying a version did not correctly download the requested version.
+
+- **Moved**: `fetchProviderModelsFromApi` and related methods to `ProviderModelManager` for better separation of concerns.
+- **Refactored**: Refactored `McpServerService` to implement a persistent connection, reducing overhead from spawning new processes for each tool call.
+- **Updated**: Updated `AddiChatProvider` and `LLMService` to accept `McpServerService` as a dependency, enhancing modularity and testability.
+- **Removed**: Removed unused interfaces and constants to clean up the codebase.
+- **Enhanced**: Enhanced schema sanitization in `LLMService` to ensure required fields are validated against existing properties.
+
+### Added
+
+- **Manual Version Selection**: The `Download Addi MCP Server` command now allows users to input a specific version to download.
+- **Windows Dev Support**: Added `scripts/build.ps1` for building the MCP server and generating checksums in Windows environments.
+- **Document Of Project Design**: Added project design documentation to reflect architectural changes and future improvement plans.
+
+### Improved
+
+- **Code Organization**: Extracted MCP binary download logic into a dedicated `McpDownloader` utility class.
+- **Dependency Management**: Updated core dependencies including `@ai-sdk/*`, `zod`, and `typescript-eslint`.
+
 ## [0.0.15] - 2026-01-05
 
 > [!WARNING] **Major Breaking Change / 重大破坏性更新**

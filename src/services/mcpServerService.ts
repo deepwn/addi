@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
+import * as cp from "child_process";
 import { logger } from "../logger";
 import { McpDownloader } from "../utils/mcpDownloader";
 
@@ -12,6 +13,11 @@ export class McpServerService {
   
   private _onDidStatusChange = new vscode.EventEmitter<void>();
   public readonly onDidStatusChange = this._onDidStatusChange.event;
+
+  private child: cp.ChildProcess | null = null;
+  private isReady: boolean = false;
+  private pendingRequests = new Map<string, { resolve: (val: any) => void; reject: (err: any) => void }>();
+  private messageBuffer: string = "";
 
   private constructor(_context: vscode.ExtensionContext) {}
 
@@ -54,7 +60,6 @@ export class McpServerService {
 
   private async getBinaryVersion(binaryPath: string): Promise<string | null> {
       return new Promise((resolve) => {
-          const cp = require("child_process");
           // Run binary with --version flag
           cp.exec(`"${binaryPath}" --version`, (err: any, stdout: string) => {
               if (err) {
@@ -68,9 +73,21 @@ export class McpServerService {
   }
 
   public async restart() {
-    // No-op for now as we don't manage the process
-    logger.info("Restarting MCP Server (Managed by VS Code)...");
+    logger.info("Restarting MCP Server...");
+    this.stop();
     this._onDidStatusChange.fire();
+  }
+
+  public stop() {
+    if (this.child) {
+      logger.info("Stopping MCP Server process...");
+      this.child.kill();
+      this.child = null;
+    }
+    this.isReady = false;
+    this.pendingRequests.forEach((p) => p.reject(new Error("Server stopped")));
+    this.pendingRequests.clear();
+    this.messageBuffer = "";
   }
 
   public isBinaryAvailable(): boolean {
@@ -209,95 +226,115 @@ export class McpServerService {
 
 
   public async callTool(toolName: string, args: any): Promise<any> {
+    await this.ensureServerRunning();
+
+    return new Promise((resolve, reject) => {
+      const id = Date.now().toString() + Math.random().toString().slice(2, 5);
+      this.pendingRequests.set(id, { resolve, reject });
+
+      this.send({
+        jsonrpc: "2.0",
+        id,
+        method: "tools/call",
+        params: {
+          name: toolName,
+          arguments: args,
+        },
+      });
+    });
+  }
+
+  private async ensureServerRunning(): Promise<void> {
+    if (this.child && !this.child.killed) {
+      if (this.isReady) {
+        return;
+      }
+      // If child exists but not ready (handshaking), we might want to wait or just proceed if logic handles it.
+      // For simplicity, we assume if child exists, we are either ready or becoming ready.
+      // But we should probably implement a wait for ready state if we want to be robust.
+      // For now, let's just return and let request queue if we were advanced, but here we just rely on happy path or re-init.
+      return;
+    }
+
     const binaryPath = this.getBinaryPath();
     if (!binaryPath) {
       throw new Error("MCP Server binary not found");
     }
 
-    return new Promise((resolve, reject) => {
-      const cp = require("child_process");
-      const os = require("os");
-      const path = require("path");
+    logger.info(`Spawning MCP Server at ${binaryPath}`);
 
-      const dirs: string[] = [];
-      dirs.push(path.join(os.homedir(), ".addi"));
-      if (vscode.workspace.workspaceFolders) {
-        for (const folder of vscode.workspace.workspaceFolders) {
-          dirs.push(path.join(folder.uri.fsPath, ".addi", "public"));
-          dirs.push(path.join(folder.uri.fsPath, ".addi", "private"));
+    const dirs: string[] = [];
+    dirs.push(path.join(os.homedir(), ".addi"));
+    if (vscode.workspace.workspaceFolders) {
+      for (const folder of vscode.workspace.workspaceFolders) {
+        dirs.push(path.join(folder.uri.fsPath, ".addi", "public"));
+        dirs.push(path.join(folder.uri.fsPath, ".addi", "private"));
+      }
+    }
+    const dirsArg = dirs.join(",");
+
+    this.child = cp.spawn(binaryPath, ["--mode", "local", "--dirs", dirsArg], {
+      env: process.env,
+    });
+
+    this.child.stdout?.on("data", (data: Buffer) => {
+      this.messageBuffer += data.toString();
+      const lines = this.messageBuffer.split("\n");
+      if (this.messageBuffer.endsWith("\n")) {
+        this.messageBuffer = "";
+      } else {
+        this.messageBuffer = lines.pop() || "";
+      }
+
+      for (const line of lines) {
+        if (!line.trim()) {
+          continue;
+        }
+        try {
+          const msg = JSON.parse(line);
+          this.handleMessage(msg);
+        } catch (e) {
+          // logger.debug("Non-JSON output from MCP server", { line });
         }
       }
-      const dirsArg = dirs.join(",");
+    });
 
-      const child = cp.spawn(binaryPath, ["--mode", "local", "--dirs", dirsArg], {
-        env: process.env
-      });
+    this.child.stderr?.on("data", (data) => {
+       logger.debug(`MCP Stderr: ${data}`);
+    });
 
-      let buffer = "";
+    this.child.on("error", (err) => {
+      logger.error("MCP Server process error", err);
+      this.stop();
+    });
 
-      const send = (msg: any) => {
-        const str = JSON.stringify(msg) + "\n";
-        child.stdin.write(str);
-      };
+    this.child.on("exit", (code, signal) => {
+      logger.info(`MCP Server exited with code ${code} signal ${signal}`);
+      this.stop();
+    });
 
-      child.stdout.on("data", (data: Buffer) => {
-        buffer += data.toString();
-        const lines = buffer.split("\n");
-        // Keep the last part if it's not a complete line
-        if (buffer.endsWith("\n")) {
-            buffer = "";
-        } else {
-            buffer = lines.pop() || "";
-        }
+    // Queue initialization
+    return new Promise<void>((resolve, reject) => {
+       // We create a temporary listener or request for init
+       const initId = "init-" + Date.now();
+       
+       // Register one-off handler for init response
+       this.pendingRequests.set(initId, {
+           resolve: () => {
+               this.isReady = true;
+               // Send initialized notification
+               this.send({
+                   jsonrpc: "2.0",
+                   method: "notifications/initialized"
+               });
+               resolve();
+           },
+           reject
+       });
 
-        for (const line of lines) {
-          if (!line.trim()) { continue; }
-          try {
-            const msg = JSON.parse(line);
-            
-            if (msg.id === "init") {
-                // Initialize response
-                send({
-                    jsonrpc: "2.0",
-                    method: "notifications/initialized"
-                });
-                
-                // Now call the tool
-                send({
-                    jsonrpc: "2.0",
-                    id: "call-1",
-                    method: "tools/call",
-                    params: {
-                        name: toolName,
-                        arguments: args
-                    }
-                });
-            } else if (msg.id === "call-1") {
-                if (msg.error) {
-                    reject(new Error(msg.error.message));
-                } else {
-                    resolve(msg.result);
-                }
-                child.kill();
-            }
-          } catch (e) {
-            // Ignore non-JSON lines (logs)
-          }
-        }
-      });
-      
-      child.stderr.on("data", (_data: Buffer) => {
-          // logger.debug(`MCP Stderr: ${data}`);
-      });
-
-      child.on("error", (err: Error) => {
-        reject(err);
-      });
-
-      // Start handshake
-      send({
+       this.send({
         jsonrpc: "2.0",
-        id: "init",
+        id: initId,
         method: "initialize",
         params: {
             protocolVersion: "2024-11-05",
@@ -311,7 +348,30 @@ export class McpServerService {
     });
   }
 
+  private send(msg: any) {
+    if (this.child && !this.child.killed && this.child.stdin) {
+      const str = JSON.stringify(msg) + "\n";
+      this.child.stdin.write(str);
+    } else {
+      logger.warn("Attempted to send message to dead MCP server");
+    }
+  }
+
+  private handleMessage(msg: any) {
+    if (msg.id) {
+       const pending = this.pendingRequests.get(msg.id);
+       if (pending) {
+           this.pendingRequests.delete(msg.id);
+           if (msg.error) {
+               pending.reject(new Error(msg.error.message));
+           } else {
+               pending.resolve(msg.result);
+           }
+       }
+    }
+  }
+
   public dispose() {
-    // No cleanup needed
+    this.stop();
   }
 }

@@ -43,14 +43,20 @@ export class ModelTreeItem extends vscode.TreeItem {
 }
 
 import { CustomToolManager } from "./services/customToolManager";
+import { McpServerService } from "./services/mcpServerService"; // Import McpServerService
 
 export class AddiChatProvider implements vscode.LanguageModelChatProvider {
   private llmService: LLMService;
   private readonly _onDidChangeLanguageModelChatInformation = new vscode.EventEmitter<void>();
   public readonly onDidChangeLanguageModelChatInformation = this._onDidChangeLanguageModelChatInformation.event;
 
-  constructor(private repository: ProviderRepository, toolManager?: CustomToolManager, context?: vscode.ExtensionContext) {
-      this.llmService = new LLMService(toolManager, context);
+  constructor(
+      private repository: ProviderRepository, 
+      toolManager?: CustomToolManager, 
+      context?: vscode.ExtensionContext,
+      mcpService?: McpServerService // Add mcpService param
+  ) {
+      this.llmService = new LLMService(toolManager, context, mcpService);
       // Listen for repository updates to refresh the model list in Copilot
       if (this.repository.onDidUpdate) {
           this.repository.onDidUpdate(() => {

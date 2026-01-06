@@ -8,9 +8,30 @@ runs:
   using: "composite"
   steps:
     - run: |
-        if [ -z "${{ inputs.ip }}" ]; then
-          curl -s http://ip-api.com/json/
-        else
-          curl -s http://ip-api.com/json/${{ inputs.ip }}
-        fi
-      shell: bash
+        const os = require('os');
+        const cp = require('child_process');
+        
+        const ip = "${{ inputs.ip }}";
+        const url = ip ? "http://ip-api.com/json/" + ip : "http://ip-api.com/json";
+        const platform = os.platform();
+        
+        console.log("Detect OS: " + platform);
+        
+        let cmd;
+        if (platform === 'win32') {
+          // Windows: use PowerShell
+          cmd = "powershell -NoProfile -Command \"Invoke-RestMethod -Uri '" + url + "' | ConvertTo-Json\"";
+        } else {
+          // Linux/Mac: use curl
+          cmd = "curl -s \"" + url + "\"";
+        }
+        
+        console.log("Running command: " + cmd);
+        try {
+          const stdout = cp.execSync(cmd, { encoding: 'utf8' });
+          console.log(stdout);
+        } catch (err) {
+          console.error("Execution failed: " + err.message);
+          process.exit(1);
+        }
+      shell: bun

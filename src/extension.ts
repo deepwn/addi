@@ -210,7 +210,7 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  vscode.lm.registerLanguageModelChatProvider("addi-provider", new AddiChatProvider(manager, toolManager, context));
+  vscode.lm.registerLanguageModelChatProvider("addi-provider", new AddiChatProvider(manager, toolManager, context, mcpService));
 
   const treeDataProvider = new AddiTreeDataProvider(manager);
   context.subscriptions.push(manager.onDidUpdate(() => treeDataProvider.refresh()));

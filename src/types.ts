@@ -5,6 +5,16 @@ export interface ModelCapabilities {
   toolCalling?: boolean | number;
 }
 
+export interface RemoteModelInfo {
+  id: string;
+  name?: string;
+  description?: string;
+  family?: string;
+  maxInputTokens?: number;
+  maxOutputTokens?: number;
+  capabilities?: ModelCapabilities;
+}
+
 export type ModelDraft = {
   id: string;
   name: string;

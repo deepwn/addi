@@ -137,7 +137,7 @@ func executeComposite(ctx context.Context, tool tools.ToolDef, args map[string]i
 			// Simple shell handling
 			lowerShell := strings.ToLower(shell)
 			if strings.Contains(lowerShell, "powershell") {
-				cmd = exec.CommandContext(ctx, "powershell", "-Command", cmdStr)
+				cmd = exec.CommandContext(ctx, "powershell", "-NoProfile", "-Command", cmdStr)
 			} else if strings.Contains(lowerShell, "bash") {
 				cmd = exec.CommandContext(ctx, "bash", "-c", cmdStr)
 			} else if strings.Contains(lowerShell, "cmd") {

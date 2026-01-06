@@ -9,7 +9,15 @@ import { CustomToolManager } from './customToolManager';
 import { McpServerService } from './mcpServerService';
 
 export class LLMService {
-  constructor(private toolManager?: CustomToolManager, private context?: vscode.ExtensionContext) {}
+  constructor(
+      private toolManager?: CustomToolManager, 
+      context?: vscode.ExtensionContext, // context is used for lazy initialization of mcpService
+      private mcpService?: McpServerService
+  ) {
+      if (context && !mcpService) {
+          this.mcpService = McpServerService.getInstance(context);
+      }
+  }
 
   async chat(
     provider: Provider,
@@ -52,13 +60,12 @@ export class LLMService {
                             paramCount: Object.keys(args || {}).length 
                         });
                         
-                        if (!this.context) {
-                            return "Error: Extension context not available for tool execution.";
+                        if (!this.mcpService) {
+                            return "Error: MCP Service not available for tool execution.";
                         }
 
                         try {
-                            const mcpService = McpServerService.getInstance(this.context);
-                            const result = await mcpService.callTool(ct.name, args);
+                            const result = await this.mcpService.callTool(ct.name, args);
                             
                             // MCP result structure: { content: [{ type: 'text', text: '...' }], isError: boolean }
                             if (result.content && Array.isArray(result.content)) {
@@ -339,6 +346,13 @@ function sanitizeSchema(schema: any) {
     if (schema.type === 'object') {
         if (schema.additionalProperties !== false) {
             schema.additionalProperties = false;
+        }
+        
+        // Ensure required fields exist in properties
+        if (Array.isArray(schema.required)) {
+            schema.required = schema.required.filter((req: string) => {
+                return schema.properties && Object.prototype.hasOwnProperty.call(schema.properties, req);
+            });
         }
     }
 

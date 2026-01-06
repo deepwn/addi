@@ -1,10 +1,11 @@
 import * as vscode from "vscode";
-import { Model, Provider, ModelDraft } from "./types";
+import { Model, Provider, ModelDraft, RemoteModelInfo } from "./types";
 import { ConfigManager, IdGenerator, InputValidator } from "./utils";
 import { logger } from "./logger";
 import { StorageService } from "./services/storageService";
 
 export class ProviderModelManager {
+  private static readonly TOKEN_LIMIT = 1024 * 1024 * 4;
   private storageService: StorageService;
   private _onDidUpdate = new vscode.EventEmitter<void>();
   public readonly onDidUpdate = this._onDidUpdate.event;
@@ -427,6 +428,258 @@ export class ProviderModelManager {
     }
     logger.warn("Model lookup miss", { modelSid });
     return null;
+  }
+
+  // --- Network / Sync Logic ---
+
+  public async fetchProviderModelsFromApi(provider: Provider): Promise<RemoteModelInfo[]> {
+    const endpoint = provider.apiEndpoint?.trim();
+    const apiKey = provider.apiKey?.trim();
+
+    if (!endpoint) {
+      throw new Error("Provider API endpoint is not configured");
+    }
+
+    if (!apiKey) {
+      throw new Error("Provider API key is not configured");
+    }
+
+    const providerType = provider.providerType ?? "generic";
+    logger.debug("fetchProviderModelsFromApi invoked", {
+      provider: logger.sanitizeProvider(provider),
+      providerType,
+    });
+
+    try {
+      switch (providerType) {
+        case "openai":
+        case "generic": {
+          const url = this.resolveModelsUrl(endpoint, "https://api.openai.com/v1");
+          const response = await fetch(url, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error(await this.readResponseError(response));
+          }
+
+          const payload = (await response.json()) as Record<string, unknown>;
+          const entries = Array.isArray(payload["data"]) ? payload["data"] : [];
+          const models: RemoteModelInfo[] = [];
+
+          for (const entry of entries) {
+            if (!entry || typeof entry !== "object") {
+              continue;
+            }
+            const record = entry as Record<string, unknown>;
+            const id = typeof record["id"] === "string" ? record["id"] : undefined;
+            if (!id) {
+              continue;
+            }
+            const displayName = typeof record["display_name"] === "string" ? record["display_name"] : undefined;
+            const ownedBy = typeof record["owned_by"] === "string" ? record["owned_by"] : undefined;
+            const description = typeof record["description"] === "string" ? record["description"] : ownedBy ? `Owner: ${ownedBy}` : undefined;
+            const info: RemoteModelInfo = {
+              id,
+              name: displayName ?? id,
+            };
+            if (description) {
+              info.description = description;
+            }
+            if (ownedBy && ownedBy.trim()) {
+              info.family = ownedBy.trim();
+            }
+            models.push(info);
+          }
+          return models;
+        }
+        case "anthropic": {
+          const baseUrl = this.normalizeBaseUrl(endpoint, "https://api.anthropic.com");
+          const url = this.buildUrl(baseUrl, "/v1/models");
+          const response = await fetch(url, {
+            method: "GET",
+            headers: {
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error(await this.readResponseError(response));
+          }
+
+          const payload = (await response.json()) as Record<string, unknown>;
+          const listSource = Array.isArray(payload["models"]) ? payload["models"] : Array.isArray(payload["data"]) ? payload["data"] : [];
+          const models: RemoteModelInfo[] = [];
+
+          for (const entry of listSource) {
+            if (!entry || typeof entry !== "object") {
+              continue;
+            }
+            const record = entry as Record<string, unknown>;
+            const id = typeof record["id"] === "string" ? record["id"] : typeof record["name"] === "string" ? record["name"] : undefined;
+            if (!id) {
+              continue;
+            }
+            const displayName = typeof record["display_name"] === "string" ? record["display_name"] : undefined;
+            const description = typeof record["description"] === "string" ? record["description"] : undefined;
+            const maxInputTokens = this.coercePositiveInteger(record["input_token_limit"] ?? record["context_length"] ?? record["context_limit"]);
+            const maxOutputTokens = this.coercePositiveInteger(record["output_token_limit"] ?? record["max_output_tokens"]);
+
+            const info: RemoteModelInfo = {
+              id,
+              name: displayName ?? id,
+            };
+            if (description) {
+              info.description = description;
+            }
+            if (maxInputTokens !== undefined) {
+              info.maxInputTokens = maxInputTokens;
+            }
+            if (maxOutputTokens !== undefined) {
+              info.maxOutputTokens = maxOutputTokens;
+            }
+            models.push(info);
+          }
+          return models;
+        }
+        case "google": {
+          const baseUrl = this.normalizeBaseUrl(endpoint, "https://generativelanguage.googleapis.com/v1beta");
+          const url = `${this.buildUrl(baseUrl, "/models")}?key=${encodeURIComponent(apiKey)}`;
+          const response = await fetch(url, {
+            method: "GET",
+          });
+
+          if (!response.ok) {
+            throw new Error(await this.readResponseError(response));
+          }
+
+          const payload = (await response.json()) as Record<string, unknown>;
+          const entries = Array.isArray(payload["models"]) ? payload["models"] : [];
+          const models: RemoteModelInfo[] = [];
+
+          for (const entry of entries) {
+            if (!entry || typeof entry !== "object") {
+              continue;
+            }
+            const record = entry as Record<string, unknown>;
+            const name = typeof record["name"] === "string" ? record["name"] : undefined;
+            if (!name) {
+              continue;
+            }
+            const displayName = typeof record["displayName"] === "string" ? record["displayName"] : undefined;
+            const description = typeof record["description"] === "string" ? record["description"] : undefined;
+            const maxInputTokens = this.coercePositiveInteger(record["inputTokenLimit"]);
+            const maxOutputTokens = this.coercePositiveInteger(record["outputTokenLimit"]);
+
+            let capabilities: Model["capabilities"] | undefined;
+            const modalitiesSource = (record["inputModalities"] ??
+              record["supportedInputModalities"] ??
+              record["allowedInputModalities"] ??
+              record["supportedModalities"]) as unknown;
+            if (Array.isArray(modalitiesSource)) {
+              const hasImage = modalitiesSource.some((value) => typeof value === "string" && value.toUpperCase().includes("IMAGE"));
+              if (hasImage) {
+                capabilities = { imageInput: true };
+              }
+            }
+
+            const info: RemoteModelInfo = {
+              id: name,
+              name: displayName ?? name,
+            };
+            if (description) {
+              info.description = description;
+            }
+            if (maxInputTokens !== undefined) {
+              info.maxInputTokens = maxInputTokens;
+            }
+            if (maxOutputTokens !== undefined) {
+              info.maxOutputTokens = maxOutputTokens;
+            }
+            if (capabilities) {
+              info.capabilities = capabilities;
+            }
+            models.push(info);
+          }
+          return models;
+        }
+        default:
+          return [];
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error("Error fetching provider models", { error: msg });
+      throw new Error(`Failed to fetch models: ${msg}`);
+    }
+  }
+
+  private normalizeBaseUrl(endpoint: string | undefined, fallback: string): string {
+    const base = (endpoint && endpoint.trim()) || fallback;
+    return base.replace(/\/+$/, "");
+  }
+
+  private buildUrl(base: string, path: string): string {
+    const normalizedBase = base.endsWith("/") ? base.slice(0, -1) : base;
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    return `${normalizedBase}${normalizedPath}`;
+  }
+
+  private resolveModelsUrl(endpoint: string, fallback: string): string {
+    const baseUrl = this.normalizeBaseUrl(endpoint, fallback);
+    const [baseWithoutQueryRaw, queryString] = baseUrl.split("?", 2);
+    const baseWithoutQuery = baseWithoutQueryRaw || baseUrl;
+
+    let path = baseWithoutQuery.replace(/\/(?:chat\/)?completions$/i, "");
+    if (/\/openai\/deployments\//i.test(path)) {
+      path = path.replace(/\/openai\/deployments\/[^/]+$/i, "/openai");
+    }
+
+    const modelsUrl = this.buildUrl(path, "/models");
+    return queryString ? `${modelsUrl}?${queryString}` : modelsUrl;
+  }
+
+  private async readResponseError(response: Response): Promise<string> {
+    const statusInfo = `${response.status} ${response.statusText}`;
+    let body: string;
+    try {
+      body = await response.text();
+    } catch (error) {
+      return statusInfo;
+    }
+
+    if (!body) {
+      return statusInfo;
+    }
+
+    try {
+      const parsed = JSON.parse(body);
+      if (typeof parsed?.error === "string") {
+        return `${statusInfo} - ${parsed.error}`;
+      }
+      if (parsed?.error?.message) {
+        return `${statusInfo} - ${parsed.error.message}`;
+      }
+      return `${statusInfo} - ${body}`;
+    } catch {
+      return `${statusInfo} - ${body}`;
+    }
+  }
+
+  private coercePositiveInteger(value: unknown): number | undefined {
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+      return Math.min(Math.floor(value), ProviderModelManager.TOKEN_LIMIT);
+    }
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return Math.min(Math.floor(parsed), ProviderModelManager.TOKEN_LIMIT);
+      }
+    }
+    return undefined;
   }
 }
 

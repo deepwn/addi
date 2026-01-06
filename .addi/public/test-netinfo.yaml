@@ -18,7 +18,15 @@ runs:
       run: |
         const os = require('os');
         const cp = require('child_process');
-        const cmd = os.platform() === 'win32' ? 'ipconfig /all' : 'ifconfig';
+        const platform = os.platform();
+        let cmd = '';
+        if (platform === 'win32') {
+          cmd = 'ipconfig /all';
+        } else if (platform === 'darwin') {
+          cmd = 'ifconfig';
+        } else {
+          cmd = 'ip addr || ifconfig';
+        }
         console.log('Running: ' + cmd);
         try {
           console.log(cp.execSync(cmd).toString());
