@@ -20,7 +20,7 @@ type ToolDef struct {
 
 // LoadTools scans the provided directories for tool YAML files and loads them.
 func LoadTools(dirs []string) ([]ToolDef, error) {
-	var tools []ToolDef
+	toolMap := make(map[string]ToolDef)
 	for _, dir := range dirs {
 		// fmt.Fprintf(os.Stderr, "Scanning directory: %s\n", dir)
 		// walk dir
@@ -45,12 +45,17 @@ func LoadTools(dirs []string) ([]ToolDef, error) {
 				return nil
 			}
 
-			tools = append(tools, *tool)
+			toolMap[tool.Name] = *tool
 			return nil
 		})
 		if err != nil {
 			// log error
 		}
+	}
+
+	var tools []ToolDef
+	for _, t := range toolMap {
+		tools = append(tools, t)
 	}
 	return tools, nil
 }

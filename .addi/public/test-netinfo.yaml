@@ -1,5 +1,4 @@
 name: test_get_netinfo
-# Debug comment to trigger reload
 description: Retrieves network configuration information from the host machine. It first detects the operating system and then runs the appropriate command (ipconfig or ifconfig).
 inputs: {}
 runs:
@@ -8,10 +7,10 @@ runs:
     - name: Start Analysis
       run: echo "Starting network analysis..."
 
-    - name: Detect OS
+    - name: Detect OS Platform
       run: |
         const os = require('os');
-        console.log('OS Platform: ' + os.platform());
+        console.log('Detect OS Platform: ' + os.platform());
       shell: bun
 
     - name: Get Network Info
@@ -19,32 +18,81 @@ runs:
         const os = require('os');
         const cp = require('child_process');
         const platform = os.platform();
-        
+
         console.log('Fetching active network interfaces...');
-        
+
         if (platform === 'win32') {
-          // On Windows, use PowerShell to filter for active adapters
-          // valid status: Up, Connected
-          // V2 Updated: Changed to Select-Object to avoid missing cmdlet
-          console.log('Fetching active network interfaces (v2 - auto reloaded)...');
-          const cmd = 'powershell -NoProfile -Command "Get-NetAdapter | Where-Object { $_.Status -eq \'Up\' } | Select-Object Name, InterfaceDescription, MacAddress, Status | Format-List"';
+          console.log('Fetching active network interfaces with IP addresses (JSON mode)...');
+          // Construct a one-liner script using semicolons carefully
+          const psScript = [
+            '$data = Get-NetAdapter | Where-Object { $_.Status -eq "Up" } | ForEach-Object {',
+            '$adapter = $_;',
+            '$ipConfigs = Get-NetIPAddress -InterfaceIndex $_.InterfaceIndex -ErrorAction SilentlyContinue;',
+            '@{',
+            'Name = $adapter.Name;',
+            'Description = $adapter.Description;',
+            'MacAddress = $adapter.MacAddress;',
+            'Status = $adapter.Status.ToString();',
+            'IPs = @(if ($ipConfigs) { $ipConfigs | Select-Object IPAddress, PrefixLength, AddressFamily } else { @() })',
+            '}',
+            '};',
+            'if ($data) { $data | ConvertTo-Json -Depth 4 -Compress } else { "[]" }'
+          ].join(' ');
+
+          const cmd = `powershell -NoProfile -Command "${psScript.replace(/"/g, '\\"')}"`;
+          
           try {
-             console.log(cp.execSync(cmd).toString());
+             const output = cp.execSync(cmd).toString().trim();
+             // PowerShell might output nothing if array is empty, handle that
+             if (!output) {
+                 console.log("No active interfaces found.");
+             } else {
+                 let interfaces = [];
+                 try {
+                    // Check if output is a single object or array
+                    if (output.startsWith('{')) {
+                        interfaces = [JSON.parse(output)];
+                    } else if (output.startsWith('[')) {
+                        interfaces = JSON.parse(output);
+                    } else {
+                         console.log("Raw output:", output);
+                    }
+                 } catch(e) {
+                     console.log("Failed to parse JSON:", e.message);
+                     console.log("Raw output:", output);
+                 }
+
+                 interfaces.forEach(iface => {
+                    console.log(`Interface: ${iface.Name}`);
+                    console.log(`  Description: ${iface.Description}`);
+                    console.log(`  MAC Address: ${iface.MacAddress}`);
+                    console.log(`  Status: ${iface.Status}`);
+                    
+                    if (iface.IPs && iface.IPs.length > 0) {
+                        iface.IPs.forEach(ip => {
+                            const family = (ip.AddressFamily === 2) ? 'IPv4' : 'IPv6'; // 2 is IPv4
+                            console.log(`  ${family}:`);
+                            console.log(`    Address: ${ip.IPAddress}`);
+                            console.log(`    PrefixLength: ${ip.PrefixLength}`);
+                            if (family === 'IPv4') {
+                                console.log(`    SubnetMask: /${ip.PrefixLength}`);
+                            }
+                        });
+                    }
+                    console.log('');
+                 });
+             }
+             
           } catch(e) {
-             // Fallback if Get-NetAdapter is not available (e.g. older Windows) or fails
-             console.log('PowerShell command failed, falling back to basic ipconfig...');
+             console.log('PowerShell execution failed:', e.message);
+             // Fallback
              console.log(cp.execSync('ipconfig').toString());
           }
         } else {
-           // Mac / Linux
-           // Since 'os.networkInterfaces()' is available in Node/Bun, use that for a cross-platform programmatic approach 
-           // which is cleaner than parsing ifconfig output.
+           // ... existing linux/mac code ...
            const interfaces = os.networkInterfaces();
            for (const name of Object.keys(interfaces)) {
                const iface = interfaces[name];
-               // Filter out internal/loopback and down interfaces if possible (though Node API doesn't strictly show 'up/down' easily without non-internal check)
-               // and usually only shows active ones or all.
-               // Let's filter for non-internal to see "external" connections
                const active = iface.filter(details => !details.internal);
                
                if (active.length > 0) {
@@ -53,6 +101,7 @@ runs:
                        console.log("  Type: " + details.family);
                        console.log("  Address: " + details.address);
                        console.log("  Netmask: " + details.netmask);
+                       console.log("  PrefixLength: " + (details.cidr ? details.cidr.split('/')[1] : active));
                        if (details.mac) console.log("  MAC: " + details.mac);
                        console.log('');
                    });
