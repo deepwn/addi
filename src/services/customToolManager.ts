@@ -7,7 +7,6 @@ import * as yaml from "js-yaml";
 import { CustomTool } from "../types";
 import { logger } from "../logger";
 import { ToolParser } from "../utils/toolParser";
-import { McpServerService } from "./mcpServerService";
 
 export class CustomToolManager {
   private readonly _onDidUpdate = new vscode.EventEmitter<void>();
@@ -16,7 +15,7 @@ export class CustomToolManager {
   private watchers: vscode.FileSystemWatcher[] = [];
   public lastUpdated: number = Date.now();
 
-  constructor(private context: vscode.ExtensionContext) {
+  constructor() {
     this.refresh();
     this.setupWatchers();
   }
@@ -118,7 +117,7 @@ export class CustomToolManager {
     logger.info(`Loaded ${this.tools.length} custom tools`);
     
     // Restart MCP Server to pick up changes
-    McpServerService.getInstance(this.context).restart();
+    // McpServerService.getInstance(this.context).restart();
   }
 
   private loadToolsFromDir(dirPath: string, source: string): CustomTool[] {

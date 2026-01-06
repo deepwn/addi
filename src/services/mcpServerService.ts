@@ -273,7 +273,7 @@ export class McpServerService {
     }
     const dirsArg = dirs.join(",");
 
-    this.child = cp.spawn(binaryPath, ["--mode", "local", "--dirs", dirsArg], {
+    this.child = cp.spawn(binaryPath, ["--mode", "local", "--dirs", dirsArg, "--watch"], {
       env: process.env,
     });
 

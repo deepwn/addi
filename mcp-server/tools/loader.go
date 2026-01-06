@@ -10,6 +10,7 @@ import (
 	"github.com/nektos/act/pkg/model"
 )
 
+// ToolDef represents a parsed tool definition from a YAML file.
 type ToolDef struct {
 	Name        string
 	Description string
@@ -17,6 +18,7 @@ type ToolDef struct {
 	Action      *model.Action
 }
 
+// LoadTools scans the provided directories for tool YAML files and loads them.
 func LoadTools(dirs []string) ([]ToolDef, error) {
 	var tools []ToolDef
 	for _, dir := range dirs {
@@ -37,26 +39,13 @@ func LoadTools(dirs []string) ([]ToolDef, error) {
 
 			// fmt.Fprintf(os.Stderr, "Found potential tool file: %s\n", path)
 
-			f, err := os.Open(path)
-			if err != nil {
-				return nil
-			}
-			defer f.Close()
-
-			action, err := model.ReadAction(f)
+			tool, err := LoadToolFromFile(path)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error reading action from %s: %v\n", path, err)
 				return nil
 			}
 
-			// fmt.Fprintf(os.Stderr, "Loaded tool: %s\n", action.Name)
-
-			tools = append(tools, ToolDef{
-				Name:        action.Name,
-				Description: action.Description,
-				File:        path,
-				Action:      action,
-			})
+			tools = append(tools, *tool)
 			return nil
 		})
 		if err != nil {
@@ -66,6 +55,30 @@ func LoadTools(dirs []string) ([]ToolDef, error) {
 	return tools, nil
 }
 
+// LoadToolFromFile loads a single tool definition from a specific file path.
+func LoadToolFromFile(path string) (*ToolDef, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	action, err := model.ReadAction(f)
+	if err != nil {
+		return nil, err
+	}
+
+	// fmt.Fprintf(os.Stderr, "Loaded tool: %s\n", action.Name)
+
+	return &ToolDef{
+		Name:        action.Name,
+		Description: action.Description,
+		File:        path,
+		Action:      action,
+	}, nil
+}
+
+// ToMCPTool converts the internal ToolDef into an MCP protocol Tool definition.
 func (t *ToolDef) ToMCPTool() mcp.Tool {
 	opts := []mcp.ToolOption{
 		mcp.WithDescription(t.Description),

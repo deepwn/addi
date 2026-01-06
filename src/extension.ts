@@ -70,7 +70,7 @@ export function activate(context: vscode.ExtensionContext) {
           const dirsArg = dirs.join(",");
           logger.info(`MCP Tools directories: ${dirsArg}`);
 
-          return [new vscode.McpStdioServerDefinition("Addi MCP Server", binaryPath, ["--mode", "local", "--dirs", dirsArg], process.env as Record<string, string>)];
+          return [new vscode.McpStdioServerDefinition("Addi MCP Server", binaryPath, ["--mode", "local", "--dirs", dirsArg, "--watch"], process.env as Record<string, string>)];
         },
       })
     );
@@ -192,7 +192,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   // Custom Tools
-  const toolManager = new CustomToolManager(context);
+  const toolManager = new CustomToolManager();
   const toolTreeDataProvider = new ToolTreeDataProvider(toolManager, context);
   vscode.window.registerTreeDataProvider("addiTools", toolTreeDataProvider);
 

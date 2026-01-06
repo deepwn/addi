@@ -12,14 +12,20 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+// ExecutionMode determines how tools are executed (local, docker, or both).
 type ExecutionMode string
 
 const (
-	ModeLocal  ExecutionMode = "local"
+	// ModeLocal allows execution of tools directly on the host machine.
+	ModeLocal ExecutionMode = "local"
+	// ModeDocker allows execution of tools within Docker containers.
 	ModeDocker ExecutionMode = "docker"
-	ModeBoth   ExecutionMode = "both"
+	// ModeBoth allows both local and Docker execution.
+	ModeBoth ExecutionMode = "both"
 )
 
+// Execute runs a tool based on its definition and provided arguments.
+// It creates the runtime environment (shell, docker, etc.) and returns the result.
 func Execute(ctx context.Context, tool tools.ToolDef, args map[string]interface{}, allowedMode ExecutionMode) (*mcp.CallToolResult, error) {
 	// Fill in default values for inputs
 	if args == nil {
