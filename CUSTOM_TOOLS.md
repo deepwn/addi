@@ -19,6 +19,8 @@ Addi 会自动扫描以下目录中的 `.yaml` 或 `.yml` 文件：
    - 适合随项目代码库一起提交的共享工具。
 3. **工作区私有工具**：`./.addi/private/*.yaml` (当前工作区)
    - 适合包含 API Key 或敏感信息的工具。**建议将 `.addi/private` 添加到 `.gitignore`。**
+4. **自定义目录**：通过 MCP Server 启动参数 `--dirs` 指定的其他目录。
+5. **MCP 资源目录**：MCP Server 内置示例工具目录，用户可以在 public/private 目录下创建 `resources` 子目录放置用户提供给工具可查阅的资源文件。
 
 ## 构造方式
 
@@ -27,15 +29,15 @@ Addi 会自动扫描以下目录中的 `.yaml` 或 `.yml` 文件：
 ### 基本结构
 
 ```yaml
-name: "my-tool-name"          # 工具的唯一标识符 (必填)
-description: "工具的功能描述"   # AI 会根据此描述决定何时调用工具 (必填)
-inputs:                       # 输入参数定义 (可选)
+name: "my-tool-name" # 工具的唯一标识符 (必填)
+description: "工具的功能描述" # AI 会根据此描述决定何时调用工具 (必填)
+inputs: # 输入参数定义 (可选)
   arg1:
     description: "参数描述"
     required: true
-runs:                         # 执行逻辑 (必填)
-  using: "composite"          # 目前支持 composite 模式
-  steps:                      # 执行步骤列表
+runs: # 执行逻辑 (必填)
+  using: "composite" # 目前支持 composite 模式
+  steps: # 执行步骤列表
     - run: echo "Hello ${{ inputs.arg1 }}"
       shell: bash
 ```
@@ -43,18 +45,23 @@ runs:                         # 执行逻辑 (必填)
 ### 属性详解
 
 #### `inputs`
+
 定义工具接受的参数。
+
 - `description`: 参数用途的自然语言描述。
 - `required`: 是否必须提供。
 
 #### `runs.steps`
+
 定义执行步骤。每个步骤可以包含：
+
 - `run`: 要执行的脚本命令。支持多行字符串。
 - `shell`: 指定执行环境。支持 `bash`, `sh`, `python`, `node`, `powershell`, `cmd` 等。
   - 如果未指定，默认使用系统默认 shell。
 - `env`: 设置环境变量 map。
 
 ### 变量替换
+
 在 `run` 脚本中，可以使用 `${{ inputs.variableName }}` 来引用输入参数。
 
 ## 示例
@@ -86,7 +93,7 @@ runs:
   steps:
     - run: |
         import sys
-        
+
         def fib(n):
             if n <= 1: return n
             return fib(n-1) + fib(n-2)
@@ -123,10 +130,79 @@ runs:
       shell: node
 ```
 
+### 4. 复杂脚本分离 (推荐模式)
+
+当脚本逻辑较长时，建议将其提取为独立文件，并使用 `${{ github.action_path }}` 引用。
+
+**目录结构:**
+
+```text
+.addi/public/
+  utils/
+    my-complex-script.js
+  my-tool.yaml
+```
+
+**my-tool.yaml:**
+
+```yaml
+name: "complex-tool"
+description: "Executes a complex script located in a subdirectory"
+inputs:
+  target:
+    description: "Target argument"
+runs:
+  using: "composite"
+  steps:
+    - run: node "${{ github.action_path }}/utils/my-complex-script.js"
+      shell: node
+      env:
+        # 推荐使用环境变量传递参数，避免注入风险
+        INPUT_TARGET: ${{ inputs.target }}
+```
+
+## 高级特性 (Advanced Features)
+
+Addi 的工具引擎支持类似 GitHub Actions 的高级功能，使编写跨平台工具更加容易。
+
+### 1. 上下文变量 (Context Variables)
+
+- **`${{ github.action_path }}`**: 当前 YAML 文件所在的目录绝对路径。
+- **`${{ github.workspace }}`**: 当前工作区的根目录。
+- **`${{ runner.os }}`**: 当前操作系统 (`windows`, `linux`, `darwin`)。
+- **`${{ runner.arch }}`**: 架构 (`amd64`, `arm64`).
+- **`${{ runner.temp }}`**: 系统临时目录。
+
+### 2. 条件执行 (Conditional Execution)
+
+可以使用 `if` 字段和表达式来控制步骤的执行。
+
+```yaml
+steps:
+  - name: Windows specific
+    run: Write-Host "Running on Windows"
+    shell: powershell
+    if: ${{ runner.os == 'windows' }}
+
+  - name: Unix specific
+    run: echo "Running on Unix"
+    shell: bash
+    if: ${{ runner.os != 'windows' }}
+```
+
+### 3. 标准 Shell 支持
+
+引擎会自动根据操作系统选择合适的 Shell：
+
+- `shell: bash` -> `bash -c ...`
+- `shell: powershell` -> `powershell -NoProfile -Command ...`
+- `shell: python` -> 自动适配 `python` 或 `python3`
+- `shell: bun` -> `bun -e ...`
+
 ## 运行方式
 
 1. **创建文件**：在上述任意一个支持的目录中创建 `.yaml` 文件。
-2. **刷新**：Addi 会自动监听文件变化并重新加载工具。你也可以在 VS Code 命令面板运行 `Addi: Refresh Tools`。
+2. **刷新**：Addi 会自动监听文件变化并重新加载工具。
 3. **使用**：在 Chat 界面中，你可以直接用自然语言请求 AI 使用这些工具。
    - 例如："帮我查一下现在的公网 IP" (如果定义了 `get-remote-ip`)
    - 例如："计算斐波那契数列的第 10 项" (如果定义了 `fibonacci`)
@@ -134,4 +210,4 @@ runs:
 ## 调试
 
 - 如果工具执行失败，可以在 VS Code 的 "Output" (输出) 面板中选择 "Addi" 频道查看详细日志。
-- 确保你的系统路径中安装了对应的运行时（如 `python`, `node` 等）。
+- 确保你的系统路径中安装了对应的运行时命令（如 `python`, `node` 等）。

@@ -21,11 +21,15 @@ export class McpExtensionIntegration {
   private registerDefinitionProvider(): void {
     const didChangeMcpEmitter = new vscode.EventEmitter<void>();
     this.mcpService.onDidStatusChange(() => didChangeMcpEmitter.fire());
+    this.toolManager.onDidUpdate(() => {
+      logger.info("Tool manager updated, internal MCP definitions refreshing...");
+      didChangeMcpEmitter.fire();
+    });
 
     try {
       // @ts-ignore
       this.context.subscriptions.push(
-        vscode.lm.registerMcpServerDefinitionProvider("addi-mcp-provider-local", {
+        vscode.lm.registerMcpServerDefinitionProvider("addi-mcp-provider", {
           onDidChangeMcpServerDefinitions: didChangeMcpEmitter.event,
           provideMcpServerDefinitions: async () => {
             logger.info("provideMcpServerDefinitions called");
@@ -54,12 +58,16 @@ export class McpExtensionIntegration {
             const dirsArg = dirs.join(",");
             logger.info(`MCP Tools directories: ${dirsArg}`);
 
+            // Use a stable environment to avoid unnecessary server restarts.
+            // Only update the nonce if we explicitly want to force a process restart.
+            const mcpEnv = { ...process.env } as Record<string, string>;
+
             return [
               new vscode.McpStdioServerDefinition(
-                "Addi MCP Server (Local)",
+                "Addi MCP Server",
                 binaryPath,
                 ["--mode", "local", "--dirs", dirsArg, "--watch"],
-                process.env as Record<string, string>
+                mcpEnv
               ),
             ];
           },

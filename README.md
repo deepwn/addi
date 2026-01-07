@@ -2,7 +2,7 @@
   <img src="resources/icon-bg.min.png" width="128" height="128" alt="Addi Logo" />
 
   <h1>Addi — Extend Your VS Code Copilot</h1>
-  <p><b>为 GitHub Copilot 添加自定义 AI 供应商与模型的 VS Code 扩展</b></p>
+  <p><b>为 GitHub Copilot 添加自定义 AI 供应商与模型、快捷构造MCP工具的 VS Code 扩展</b></p>
     <a href="https://github.com/deepwn/addi/releases"><img alt="Release" src="https://img.shields.io/github/v/release/deepwn/addi?logo=github" /></a>
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-green.svg" /></a>
     <a href="https://github.com/deepwn/addi/issues"><img alt="Issues" src="https://img.shields.io/github/issues/deepwn/addi" /></a>
@@ -148,11 +148,17 @@ Provider 节点右侧钥匙图标 → 输入密钥 → 保存。
 
 Copilot 侧边栏 → 模型下拉 → 管理模型 → 选择 Addi → 勾选自定义模型 → 返回选择该模型。
 
-## 自定义工具 Custom Tools
+## 自定义工具 Custom Tools (MCP)
 
-Addi 支持通过 YAML 文件定义自定义工具，让 AI 能够执行本地脚本、HTTP 请求等操作。
+Addi 内置了一个 **Model Context Protocol (MCP)** Server，支持通过 YAML 文件定义自定义工具。这意味着你的本地脚本（Python, Node.js, Shell 等）可以被 AI 像原生函数一样调用。
 
-详细文档请参考：[自定义工具指南 (CUSTOM_TOOLS.md)](CUSTOM_TOOLS.md)
+详细文档与示例：[自定义工具指南 (CUSTOM_TOOLS.md)](CUSTOM_TOOLS.md)
+
+### 核心特性
+
+- **多语言支持**: 支持 PowerShell, Bash, Python, Node.js 等多种运行时。
+- **热重载**: 修改 YAML 文件后自动生效，无需重启 VS Code。
+- **无缝集成**: 兼容 GitHub Actions `composite` 语法。
 
 ### 快速概览
 
@@ -234,16 +240,9 @@ Addi 支持通过 YAML 文件定义自定义工具，让 AI 能够执行本地�
 
 ## 调试游乐场 Debug Playground
 
-提供交互式调试界面，发送消息、调节参数、查看日志。现阶段主要用于测试与调试自定义模型，未来可能集成更多功能。
+提供交互式调试界面，发送消息、调节参数、查看日志。现阶段主要用于测试与调试自定义模型参数。
 
 支持设定参数：Temperature / Top P / Max Output Tokens / Presence Penalty / Frequency Penalty / System Prompt。参数在 workspaceState 中持久化。OpenAI 兼容端点支持 SSE 流式增量输出，可中途取消（AbortController）。不支持流的 Provider 自动回退普通请求。
-
-后续扩展方向：
-
-- 更多 Provider 流式适配（Anthropic / Google 等）
-- Markdown 渲染 + 代码高亮
-- Token 消耗统计与速率提示
-- 多参数 Profile 切换
 
 ## 常见问题 FAQ
 
@@ -279,49 +278,6 @@ MIT © 2025-present [deepwn](https://github.com/deepwn) — 详见 [LICENSE](LIC
 ## 免责声明 Disclaimer
 
 本扩展仅提供客户端功能，使用第三方 / 自建 API 带来的数据与安全风险由使用者自行承担。我们不对直接或间接损失负责。
-
-## 开发 Development
-
-### 环境准备
-
-```powershell
-git clone https://github.com/deepwn/addi.git
-cd addi
-npm install
-```
-
-### 开发命令
-
-```bash
-# 编译
-npm run compile
-
-# 开发模式监听
-npm run watch
-
-# 运行测试
-npm test
-
-# 打包扩展
-npm run package
-
-# 清理缓存和构建文件
-npm run clean
-
-# 快速清理（无详细信息）
-npm run clean:fast
-```
-
-### 清理缓存
-
-项目包含清理命令来节省磁盘空间：
-
-```bash
-npm run clean  # 完整清理，显示详细信息
-npm run clean:fast  # 快速清理
-```
-
-详细说明请参考 [CLEANING.md](CLEANING.md)。
 
 ## 致谢 Thanks
 

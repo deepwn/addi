@@ -40,8 +40,10 @@ export class McpServerService implements IMcpService {
     const binaryPath = await this.getOrDownloadBinary();
     if (binaryPath) {
         await this.checkForUpdate(binaryPath);
-        // Start the private instance for internal use
-        await this.ensureServerRunning();
+        // Optimization: Do not eagerly start the server. 
+        // It will be started on-demand by LLMService (using ensureServerRunning) 
+        // or by VS Code (via McpIntegration definition provider).
+        // await this.ensureServerRunning();
     }
   }
 
@@ -95,11 +97,10 @@ export class McpServerService implements IMcpService {
 
   public async restart() {
     logger.info("Restarting MCP Server...");
-    // 1. Restart private instance
+    // 1. Stop private instance (if running)
     this.stop();
-    await this.ensureServerRunning().catch(e => logger.error("Failed to restart private MCP server", e));
-    
-    // 2. Notify VS Code to restart public instance
+    // 2. Notify listeners (VS Code integration) that server status changed
+    // This triggers a refresh of the MCP Definition Provider
     this._onDidStatusChange.fire();
   }
 
@@ -357,7 +358,7 @@ export class McpServerService implements IMcpService {
         params: {
             protocolVersion: "2024-11-05",
             capabilities: {},
-            clientInfo: { name: "addi-extension-private", version: "0.1.0" }
+            clientInfo: { name: "addi-extension-private", version: this.context.extension.packageJSON.version }
         }
       });
     });
@@ -383,6 +384,9 @@ export class McpServerService implements IMcpService {
                pending.resolve(msg.result);
            }
        }
+    } else if (msg.method === "notifications/tools/list_changed") {
+       logger.info("Private MCP Server notified: tools list changed.");
+       this._onDidStatusChange.fire(); // Trigger refresh in integration layer
     }
   }
 

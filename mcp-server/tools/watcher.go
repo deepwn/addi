@@ -31,9 +31,9 @@ func NewWatcher(dirs []string) (*Watcher, error) {
 }
 
 // Start begins monitoring the directories. The onChange callback is invoked
-// when a tool file (YAML/YML) is created or modified.
-// It runs largely in the background but this method spawns the event loop goroutine.
-func (w *Watcher) Start(onChange func(path string)) {
+// when a tool file (YAML/YML) is created, modified or deleted.
+// action: "add" or "remove"
+func (w *Watcher) Start(onChange func(path string, action string)) {
 	// Add watchers recursively
 	for _, dir := range w.dirs {
 		// Ensure dir exists before walking
@@ -83,6 +83,15 @@ func (w *Watcher) Start(onChange func(path string)) {
 					}
 				}
 
+				// Handle removals explicitly so that deleted tools are propagated to clients
+				if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
+					ext := strings.ToLower(filepath.Ext(event.Name))
+					if ext == ".yaml" || ext == ".yml" {
+						onChange(event.Name, "remove")
+					}
+					continue
+				}
+
 				if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create {
 					ext := strings.ToLower(filepath.Ext(event.Name))
 					if ext == ".yaml" || ext == ".yml" {
@@ -93,11 +102,12 @@ func (w *Watcher) Start(onChange func(path string)) {
 						}
 						path := event.Name
 						timer = time.AfterFunc(200*time.Millisecond, func() {
-							onChange(path)
+							onChange(path, "add")
 						})
 						mu.Unlock()
 					}
 				}
+
 			case err, ok := <-w.watcher.Errors:
 				if !ok {
 					return

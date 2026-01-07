@@ -1,0 +1,11 @@
+name: test_helloworld
+description: "A simple hello tool to test basic variable substitution and default shell behavior"
+inputs:
+  name:
+    description: "The name to greet"
+    default: "Addi User"
+runs:
+  using: "composite"
+  steps:
+    - name: Greet
+      run: echo "Hello, ${{ inputs.name }}! You are running on ${{ runner.os }}."

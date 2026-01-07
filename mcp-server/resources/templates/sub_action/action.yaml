@@ -1,0 +1,11 @@
+name: sub_greeting_action
+description: "A reusable sub-action"
+inputs:
+  who:
+    description: "Name"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - run: echo "    [Sub-Action] Hello, ${{ inputs.who }}! This is running inside a child action."
+      shell: bash

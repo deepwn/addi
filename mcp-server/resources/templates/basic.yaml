@@ -1,0 +1,10 @@
+name: hello_world
+description: A simple hello world tool demonstrating basic variable substitution
+inputs:
+  name:
+    description: The name to greet
+    default: "World"
+runs:
+  using: "composite"
+  steps:
+    - run: echo "Hello ${{ inputs.name }} from ${{ runner.os }}"

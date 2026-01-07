@@ -1,0 +1,10 @@
+name: test_path_quote
+description: "Tests action_path and workspace path handling with quotes"
+runs:
+  using: "composite"
+  steps:
+    - name: Show Paths
+      run: |
+        echo "Action Path: \"${{ github.action_path }}\""
+        echo "Workspace Path: \"${{ github.workspace }}\""
+        echo "Temp Path: \"${{ runner.temp }}\""

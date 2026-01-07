@@ -1,0 +1,22 @@
+name: test_recursive_composite
+description: "Demonstrates recursive Composite Action calls (using locals)"
+inputs:
+  username:
+    description: "Who to greet"
+    default: "Developer"
+runs:
+  using: "composite"
+  steps:
+    - name: Main Step
+      run: echo "Starting Main Action..."
+      shell: bash
+
+    # Call Sub-Action (Location: resources/templates/sub_action)
+    - name: Call Sub Action
+      uses: ./resources/templates/sub_action
+      with:
+        who: ${{ inputs.username }}
+      
+    - name: Finish
+      run: echo "Main Action Completed."
+      shell: bash

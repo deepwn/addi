@@ -1,0 +1,42 @@
+name: advanced_demo
+description: "Demonstrates advanced features: Contexts (runner, github), Expressions, and cross-platform conditional handling."
+inputs:
+  mode:
+    description: "Execution mode (debug/release)"
+    default: "release"
+  target:
+    description: "Target environment"
+    required: false
+runs:
+  using: "composite"
+  steps:
+    # 1. Dump Context Info and Git Metadata
+    - name: Context Info
+      run: |
+        echo "Running on ${{ runner.os }} (${{ runner.arch }})"
+        echo "Action Path: ${{ github.action_path }}"
+        echo "Workspace: ${{ github.workspace }}"
+        echo "Commit SHA: ${{ github.sha }}"
+        echo "Ref: ${{ github.ref }}"
+      shell: bash
+
+    # 2. Output Setting (using ADDI_OUTPUT)
+    - name: Set Outputs
+      id: setup
+      run: |
+        echo "status=configured" >> $ADDI_OUTPUT
+        echo "random_val=42" >> $ADDI_OUTPUT
+      shell: bash
+
+    # 3. Conditional Execution & Check Outputs
+    - name: Windows Check
+      if: ${{ runner.os == 'windows' }}
+      run: |
+        Write-Host "Windows System Detected"
+        Write-Host "Available Output: ${{ steps.setup.outputs.status }}"
+      shell: powershell
+
+    - name: Unix Check
+      if: ${{ runner.os != 'windows' }}
+      run: echo "Unix System Detected. Outputs ${{ steps.setup.outputs.status }}"
+      shell: bash

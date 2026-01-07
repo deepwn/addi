@@ -1,0 +1,42 @@
+name: test_python_math
+description: "Demonstrates shell: python support and environment variables"
+inputs:
+  a:
+    description: "First Number"
+    default: "10"
+  b:
+    description: "Second Number"
+    default: "20"
+runs:
+  using: "composite"
+  steps:
+    - name: Calculate
+      id: math
+      run: |
+        import os
+        
+        # Inputs are injected as strings
+        str_a = "${{ inputs.a }}"
+        str_b = "${{ inputs.b }}"
+        
+        print(f"Received inputs: a={str_a}, b={str_b}")
+        
+        val_a = int(str_a)
+        val_b = int(str_b)
+        res = val_a + val_b
+        
+        print(f"Calculation Result: {res}")
+        
+        # Write to Output
+        # The env var ADDI_OUTPUT contains the path to the output file
+        outfile = os.environ.get("ADDI_OUTPUT")
+        if outfile:
+            with open(outfile, "a", encoding="utf-8") as f:
+                f.write(f"sum={res}\n")
+        else:
+            print("Error: ADDI_OUTPUT env var not found")
+      shell: python
+
+    - name: Verify Output
+      run: echo "The calculated sum is ${{ steps.math.outputs.sum }}"
+      shell: bash

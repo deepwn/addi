@@ -2,6 +2,41 @@
 
 All notable changes to the "addi" extension will be documented in this file.
 
+## [0.0.17] - 2026-01-07
+
+> [!NOTE]
+> This release provides necessary updates and fixes. We are postponing the 0.1.0 release to strictly address stability issues with the MCP auto-update mechanism.
+
+### Added
+
+- **Advanced Tool Runner (Composite Actions)**:
+    - Fully implemented a local runner compatible with **GitHub Actions Composite Action** syntax.
+    - **Context Support**: Added support for `${{ runner.os }}`, `${{ github.workspace }}`, `${{ inputs.* }}`, and `${{ steps.*.outputs }}` contexts.
+    - **Expression Evaluation**: Support for basic expressions in `if` conditions and `run` scripts.
+    - **Cross-Platform Shells**: Automatic resolution of `bash`, `powershell`, `python`, `node`, `bun`, and `cmd`.
+    - **recursive Calls**: Tools can now reference other local tools using `uses: ./path/to/action`.
+- **Tool Context Resources**:
+    - MCP Server now scans for a `resources` subdirectory in tool directories.
+    - Files in these directories are exposed as MCP Resources (URI `file:///...`), allowing AI models to read documentation or templates directly.
+    - Added `addi_server_info` built-in tool to inspect server state, version, and loaded tools.
+- **Embedded Documentation**: The MCP Server binary now embeds reference documentation and templates (accessible via specific internal URIs or `addi_server_info`), helping users learn syntax without leaving the editor.
+- **Improved Watcher**: The file watcher now correctly handles file deletions (`remove` events) and instantly notifies clients to refresh the tool list.
+
+### Improved
+
+- **Documentation**:
+    - Major update to `CUSTOM_TOOLS.md`: Added detailed guides on "Advanced Features" (Contexts, Conditionals), "Complex Script Separation", and updated directory structure recommendations.
+    - Added comprehensive reference docs (`create-composite-action.md`, `metadata-syntax.md`, `workflow-syntax.md`) internally for context.
+- **Developer Experience**:
+    - `McpServerService` now dynamically syncs its reported client version with the extension version.
+    - Refined `mcpIntegration` to ensure stable environment variables, reducing unnecessary server restarts.
+
+### Fixed
+
+- **Docker Compatibility**: Explicitly disabled mismatched execution modes (prevented Docker actions from failing obscurely in local mode).
+
+
+
 ## [0.0.16] - 2026-01-06
 
 ### Added

@@ -3,8 +3,10 @@ module github.com/deepwn/addi/mcp-server
 go 1.25.4
 
 require (
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/mark3labs/mcp-go v0.43.2
 	github.com/nektos/act v0.2.84
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -18,7 +20,6 @@ require (
 	github.com/cyphar/filepath-securejoin v0.5.1 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect
-	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.6.2 // indirect
 	github.com/go-git/go-git/v5 v5.16.2 // indirect
@@ -49,5 +50,4 @@ require (
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
