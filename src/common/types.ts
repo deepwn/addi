@@ -87,12 +87,6 @@ export interface ToolStep {
     command: string;
     args?: string[];
   };
-  http?: {
-    url: string;
-    method?: string;
-    headers?: Record<string, string>;
-    body?: any;
-  };
 }
 
 export interface CustomTool {

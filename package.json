@@ -25,14 +25,13 @@
     "GPT-3.5",
     "LLM",
     "Language Model",
-    "Machine Learning",
     "Custom",
-    "OAI"
+    "OAI",
+    "MCP"
   ],
   "categories": [
     "AI",
     "Chat",
-    "Programming Languages",
     "Machine Learning",
     "Other"
   ],

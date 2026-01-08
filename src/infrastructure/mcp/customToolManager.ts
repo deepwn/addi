@@ -26,18 +26,8 @@ export class CustomToolManager implements IToolManager {
   }
 
   private setupWatchers() {
-    // Watch workspace .addi/public and .addi/private
-    const publicWatcher = vscode.workspace.createFileSystemWatcher("**/.addi/public/*.{yml,yaml}");
-    publicWatcher.onDidChange(() => this.refresh());
-    publicWatcher.onDidCreate(() => this.refresh());
-    publicWatcher.onDidDelete(() => this.refresh());
-    this.watchers.push(publicWatcher);
-
-    const privateWatcher = vscode.workspace.createFileSystemWatcher("**/.addi/private/*.{yml,yaml}");
-    privateWatcher.onDidChange(() => this.refresh());
-    privateWatcher.onDidCreate(() => this.refresh());
-    privateWatcher.onDidDelete(() => this.refresh());
-    this.watchers.push(privateWatcher);
+    this.watchers.forEach(w => w.dispose());
+    this.watchers = [];
 
     // Watch global ~/.addi/*.yaml
     const globalDir = path.join(os.homedir(), ".addi");
@@ -45,13 +35,45 @@ export class CustomToolManager implements IToolManager {
       try {
         fs.watch(globalDir, (_eventType, filename) => {
           if (filename && (filename.endsWith(".yaml") || filename.endsWith(".yml"))) {
-            this.refresh();
+            this.refreshDebounced();
           }
         });
       } catch (e) {
         logger.warn("Failed to watch global addi directory", e);
       }
     }
+
+    if (!vscode.workspace.workspaceFolders) {
+        return;
+    }
+
+    // Watch each workspace folder specifically
+    for (const folder of vscode.workspace.workspaceFolders) {
+        const publicPattern = new vscode.RelativePattern(folder, ".addi/public/*.{yml,yaml}");
+        const publicWatcher = vscode.workspace.createFileSystemWatcher(publicPattern);
+        publicWatcher.onDidChange(() => this.refreshDebounced());
+        publicWatcher.onDidCreate(() => this.refreshDebounced());
+        publicWatcher.onDidDelete(() => this.refreshDebounced());
+        this.watchers.push(publicWatcher);
+
+        const privatePattern = new vscode.RelativePattern(folder, ".addi/private/*.{yml,yaml}");
+        const privateWatcher = vscode.workspace.createFileSystemWatcher(privatePattern);
+        privateWatcher.onDidChange(() => this.refreshDebounced());
+        privateWatcher.onDidCreate(() => this.refreshDebounced());
+        privateWatcher.onDidDelete(() => this.refreshDebounced());
+        this.watchers.push(privateWatcher);
+    }
+  }
+
+  private refreshTimer: NodeJS.Timeout | undefined;
+  
+  private refreshDebounced() {
+      if (this.refreshTimer) {
+          clearTimeout(this.refreshTimer);
+      }
+      this.refreshTimer = setTimeout(() => {
+          this.refresh();
+      }, 500); // Wait 500ms for file operations to settle
   }
 
   getTools(): CustomTool[] {

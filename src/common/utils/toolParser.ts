@@ -22,12 +22,6 @@ export class ToolParser {
           name: "default",
           command: data.command,
         });
-      } else if (data.http) {
-        // Legacy/Simple format support
-        steps.push({
-          name: "default",
-          http: data.http,
-        });
       }
 
       if (steps.length === 0) {

@@ -4,6 +4,8 @@ import { logger } from "../common/logger";
 import { CustomToolManager } from "../infrastructure/mcp/customToolManager";
 
 export class McpExtensionIntegration {
+  private _versionNonce = String(Date.now());
+
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly mcpService: McpServerService,
@@ -21,9 +23,12 @@ export class McpExtensionIntegration {
   private registerDefinitionProvider(): void {
     const didChangeMcpEmitter = new vscode.EventEmitter<void>();
     this.mcpService.onDidStatusChange(() => didChangeMcpEmitter.fire());
+    
+    // We do NOT trigger a VS Code MCP refresh here on tool updates anymore.
+    // The MCP Server (Go binary) monitors files and sends `notifications/tools/list_changed`
+    // which VS Code handles natively without needing a process restart.
     this.toolManager.onDidUpdate(() => {
-      logger.info("Tool manager updated, internal MCP definitions refreshing...");
-      didChangeMcpEmitter.fire();
+      logger.info("Tool manager updated. Relying on MCP Server 'list_changed' notification to refresh VS Code UI.");
     });
 
     try {
@@ -60,11 +65,14 @@ export class McpExtensionIntegration {
 
             // Use a stable environment to avoid unnecessary server restarts.
             // Only update the nonce if we explicitly want to force a process restart.
-            const mcpEnv = { ...process.env } as Record<string, string>;
+            const mcpEnv = { 
+              ...process.env,
+              MCP_NONCE: String(this._versionNonce)
+            } as Record<string, string>;
 
             return [
               new vscode.McpStdioServerDefinition(
-                "Addi MCP Server",
+                "Addi Custom Tools",
                 binaryPath,
                 ["--mode", "local", "--dirs", dirsArg, "--watch"],
                 mcpEnv
@@ -84,6 +92,7 @@ export class McpExtensionIntegration {
 
     context.subscriptions.push(
       vscode.commands.registerCommand("addi.restartMcpServer", async () => {
+        this._versionNonce = String(Date.now());
         await mcpService.restart();
         toolManager.refresh();
         vscode.window.showInformationMessage("MCP Server definitions refreshed.");

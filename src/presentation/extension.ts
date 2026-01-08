@@ -202,11 +202,6 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("addi.addTool", async () => {
       // Create a template file
-      const type = await vscode.window.showQuickPick(["command", "http"], { placeHolder: "Tool Type" });
-      if (!type) {
-        return;
-      }
-
       const name = await vscode.window.showInputBox({ prompt: "Tool Name (filename)", placeHolder: "my-tool" });
       if (!name) {
         return;
@@ -255,9 +250,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       const filePath = `${dirPath}/${name}.yaml`;
 
-      let content = "";
-      if (type === "command") {
-        content = `name: ${name}
+      const content = `name: ${name}
 description: Description of what this tool does
 inputs:
   arg1:
@@ -270,20 +263,6 @@ runs:
       run: echo \${{ inputs.arg1 }}
       shell: bash
 `;
-      } else {
-        content = `name: ${name}
-description: Description of what this tool does
-inputs:
-  query:
-    description: Search query
-runs:
-  using: "composite"
-  steps:
-    - name: fetch
-      run: curl -s "https://api.example.com/search?q=\${{ inputs.query }}"
-      shell: bash
-`;
-      }
 
       if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });

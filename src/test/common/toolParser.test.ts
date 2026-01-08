@@ -20,16 +20,14 @@ suite('ToolParser Unit Tests', () => {
             name: 'complex-tool',
             description: 'Complex tool',
             steps: [
-                { run: 'echo step1' },
-                { http: { url: 'https://example.com' } }
+                { run: 'echo step1' }
             ]
         };
         const result = ToolParser.parse(data, 'complex.yaml', 'global');
         assert.ok(result);
-        assert.strictEqual(result?.steps.length, 2);
+        assert.strictEqual(result?.steps.length, 1);
         // run string is now preserved as-is
         assert.strictEqual(result!.steps[0]!.run, 'echo step1');
-        assert.strictEqual(result!.steps[1]!.http?.url, 'https://example.com');
     });
 
     test('should convert inputs to parameters schema', () => {
