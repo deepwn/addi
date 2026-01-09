@@ -49,7 +49,7 @@
 
 ## 简介 Introduction
 
-Addi 让你在 VS Code 中为 GitHub Copilot 添加自定义 / 第三方 / 自建 **AI Provider 与模型**，并在 Copilot 原生模型选择器中一键切换。它既是一个**模型管理器**，也是一个**交互式调试 Playground**。
+Addi 让你在 VS Code 中为 GitHub Copilot 添加自定义 / 第三方 / 自建 **AI Provider 与模型**，并在 Copilot 原生模型选择器中一键切换。它既是一个**模型管理器**，也是一个**交互式调试 Playground**，同时还是一个**快捷构造 MCP 工具**微服务。
 
 > [!Tip]
 > 虽然 vscode 官方有支持自定义模型的计划，但目前仍未开放给大众用户，Addi 作为一个临时解决方案，可以帮助你快速上手并测试各种模型。详见 [Bring Your Own Language Model](https://code.visualstudio.com/docs/copilot/customization/language-models#_bring-your-own-language-model-key) 以及 [Use an OpenAI-Compatible Model](https://code.visualstudio.com/docs/copilot/customization/language-models#_use-an-openaicompatible-model)。
@@ -102,9 +102,8 @@ code --install-extension addi.vsix
 
 Activity Bar 中的 Addi 图标 → 展开树：
 
-- Provider 节点：右侧 ＋ 图标可快速添加模型 / 编辑密钥
-- Model 节点：右键 “Use Model” 在 Copilot 中启用
-- 顶部视图标题按钮：Add Provider / Export / Import / Settings
+- Provider：可快速添加模型 / 编辑密钥 / 管理模型
+- Custom Tools：添加 / 管理 MCP 自定义工具
 
 > [!Warning]
 > 完整利用自定义模型的 Edit / Agent 模式可能需要 GitHub Copilot Pro 级别订阅；Free 版本目前测试仅支持用于 Ask 模式使用自定义模型。请确保账户权限满足需求。
@@ -133,24 +132,18 @@ Activity Bar 中的 Addi 图标 → 展开树：
 - **Token 限制**：自动探测并填充 Max Input / Output Tokens (使用二分查找与参数估算，不消耗真实 Token)
 
 > [!Tip]
-> 如果不确定模型的 Token 限制，可以将 `Max Input Tokens` 和 `Max Output Tokens` 留空（或设为`?`），点击 Verify & Detect 后 Addi 会自动探测并填入建议值。
+> 如果不确定模型的 Token 限制，可以将 `Max Input Tokens` 和 `Max Output Tokens` 留空（或设为`?`），点击 Verify & Detect 后 Addi 会自动探测并填入建议值。如果检测不准确，请参照官方模型文档手动设置。
 > 所有附属能力（视觉 / 工具调用）也会在验证过程中自动测试并更新勾选（不适配则会自动去除勾选）。
 
 ### 快速编辑 Edit API Key
 
 Provider 节点右侧钥匙图标 → 输入密钥 → 保存。
 
-### 复制 Copy
-
-在 Provider 或 Model 节点上右键点击 **"Copy"**，可以快速复制一份配置（名称会自动添加 "Copy" 后缀），便于快速创建相似配置。
-
-### 切换模型 Switch Model
-
-Copilot 侧边栏 → 模型下拉 → 管理模型 → 选择 Addi → 勾选自定义模型 → 返回选择该模型。
-
 ## 自定义工具 Custom Tools (MCP)
 
-Addi 内置了一个 **Model Context Protocol (MCP)** Server，支持通过 YAML 文件定义自定义工具。这意味着你的本地脚本（Python, Node.js, Shell 等）可以被 AI 像原生函数一样调用。
+Addi 内置了一个 **Model Context Protocol (MCP)** Server，支持通过 YAML 文件定义自定义工具。这意味着你的本地脚本可以被 AI 像原生函数一样调用。
+
+并且为了方便用户理解与编辑，Addi 的自定义工具语法完全兼容 GitHub Actions 的 `composite` 语法规范，使用优秀的开源本地化 actions 运行项目 `nektos/act` 作为模板解析引擎。
 
 详细文档与示例：[自定义工具指南 (CUSTOM_TOOLS.md)](CUSTOM_TOOLS.md)
 
@@ -159,6 +152,10 @@ Addi 内置了一个 **Model Context Protocol (MCP)** Server，支持通过 YAML
 - **多语言支持**: 支持 PowerShell, Bash, Python, Node.js 等多种运行时。
 - **热重载**: 修改 YAML 文件后自动生效，无需重启 VS Code。
 - **无缝集成**: 兼容 GitHub Actions `composite` 语法。
+
+> [!Tip]
+> 自定义工具的 YAML 文件支持热重载，修改后会自动生效，无需重启 VS Code 或手动处置 Addi MCP Server 进程。
+> 但因 VS Code 资源按需运行的基本原则，修改 yaml 模板文件后的 Copilot 工具列表将只会在 Chat 触发服务启动时发出 `list_tool` 并更新 UI 中显示的工具。或您可尝试通过命令面板执行 `MCP: List Server` 选中并手动启动服务来同步刚增加修改或删除的工具列表。
 
 ### 快速概览
 
@@ -195,8 +192,8 @@ Addi 内置了一个 **Model Context Protocol (MCP)** Server，支持通过 YAML
 
 | Setting                         | 默认    | 说明                                                |
 | ------------------------------- | ------- | --------------------------------------------------- |
-| `addi.defaultMaxInputTokens`    | 65535   | 默认最大输入 tokens                                 |
-| `addi.defaultMaxOutputTokens`   | 65535   | 默认最大输出 tokens                                 |
+| `addi.defaultMaxInputTokens`    | 4028    | 默认最大输入 tokens                                 |
+| `addi.defaultMaxOutputTokens`   | 1024    | 默认最大输出 tokens                                 |
 | `addi.defaultModelFamily`       | "Addi"  | 默认模型 family                                     |
 | `addi.defaultModelVersion`      | "1.0.0" | 默认模型 version                                    |
 | `addi.saveConfigToSettingsSync` | true    | 是否保存到 VSCode Settings Sync 云端                |
@@ -256,20 +253,31 @@ A: 请确保：
 
 ### Q: 如何知道我的模型是否正在使用中？
 
-A: 当您成功切换模型后，会收到确认消息。此外，您可以在 Copilot 聊天界面的模型选择器中查看当前选中的模型。
+A: 您可以在 Copilot 聊天界面的模型选择器中查看当前选中的模型。
 
 ### Q: 我可以添加多少个供应商和模型？
 
 A: 扩展对供应商和模型数量没有硬性限制，但建议根据您的实际需求合理添加。
 
+### Q: 我的自定义工具没有显示在 Copilot 的工具列表中？
+
+A: 请确保：
+
+1. 自定义工具的 YAML 文件位于正确的目录（`.addi/public/` 或 `.addi/private/`）。
+2. 文件格式符合规范且无语法错误。
+3. MCP 服务器已启动（修改 YAML 文件后，发起一次对话，或可通过执行 `MCP: Start Server` 命令手动启动）。
+
 ## 故障排除 Troubleshooting
 
-| 问题         | 排查步骤                                              |
-| ------------ | ----------------------------------------------------- |
-| 无法切换模型 | 重启 VS Code / 确认 Provider Key / 重新勾选模型       |
-| 请求失败     | 查看 Addi 输出日志 & 控制台 / 校验 API Endpoint & Key |
-| 流式不工作   | Provider 是否支持 SSE；禁用流后重试                   |
-| 配置未同步   | 检查 `addi.saveConfigToSettingsSync` 设置             |
+| 问题                  | 排查步骤                                                           |
+| --------------------- | ------------------------------------------------------------------ |
+| 无法切换模型          | 重启 VS Code / 确认 Provider Key / 在模型管理面板勾选显示模型      |
+| 无法在 Agent 模式使用 | 确认 Copilot 订阅等级 / 检查模型支持情况（官方要求需支持工具调用） |
+| 新增的工具不显示      | 确认 YAML 语法正确 / 检查文件路径 / 确认 MCP 服务器已在运行        |
+| 工具列表重复显示      | 重启 VS Code / 确认没有自编译版本的 Addi 插件及 MCP 服务正在运行   |
+| 请求失败              | 查看 Addi 输出日志 & 控制台 / 校验 API Endpoint & Key              |
+| 流式不工作            | Provider 是否支持 SSE；禁用流后重试                                |
+| 配置未同步            | 检查 `addi.saveConfigToSettingsSync` 设置                          |
 
 ## 许可证 License
 
