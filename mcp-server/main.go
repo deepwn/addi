@@ -92,6 +92,34 @@ func main() {
 		})
 	}
 
+	// Register internal tool: addi_tool_verify
+	verifyTool := mcp.NewTool("addi_tool_verify",
+		mcp.WithDescription("Verify if a provided YAML string or file is a valid Addi/Action tool definition. Validates using 'act' action schema."),
+		mcp.WithString("yaml_content", mcp.Description("The content of the YAML file to verify. Optional if file_path is provided.")),
+		mcp.WithString("file_path", mcp.Description("The path to the YAML file to verify. Optional if yaml_content is provided.")),
+	)
+
+	s.AddTool(verifyTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args, ok := request.Params.Arguments.(map[string]interface{})
+		if !ok {
+			return mcp.NewToolResultError("Invalid arguments"), nil
+		}
+
+		var err error
+		if content, ok := args["yaml_content"].(string); ok && content != "" {
+			err = tools.VerifyToolContent(content)
+		} else if path, ok := args["file_path"].(string); ok && path != "" {
+			_, err = tools.LoadToolFromFile(path)
+		} else {
+			return mcp.NewToolResultError("Either yaml_content or file_path must be provided"), nil
+		}
+
+		if err != nil {
+			return mcp.NewToolResultText(fmt.Sprintf("Invalid tool definition: %v", err)), nil
+		}
+		return mcp.NewToolResultText("Valid tool definition"), nil
+	})
+
 	// Load tools
 	var dirs []string
 	if *dirsFlag != "" {
@@ -106,7 +134,20 @@ func main() {
 		}
 	}
 
-	loadedTools, err := tools.LoadTools(dirs)
+	loadedTools, err := tools.LoadTools(dirs, func(path string, err error) {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to load tool from %s: %v\n", path, err)
+
+		notification := mcp.NewLoggingMessageNotification(
+			mcp.LoggingLevelWarning,
+			"tool-loader",
+			fmt.Sprintf("Failed to load tool from %s: %v", path, err),
+		)
+		paramsMap := make(map[string]interface{})
+		paramsMap["level"] = notification.Params.Level
+		paramsMap["logger"] = notification.Params.Logger
+		paramsMap["data"] = notification.Params.Data
+		s.SendNotificationToAllClients("notifications/message", paramsMap)
+	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading tools: %v\n", err)
 	}
@@ -154,7 +195,7 @@ func main() {
 			Mode          string   `json:"mode"`
 			Directories   []string `json:"watched_directories"`
 			LoadedCount   int      `json:"loaded_tools_count"`
-			YamlTemplate  string   `json:"tool_yaml_template"`
+			YamlTemplate  string   `json:"addi_tool_template"`
 			ReferenceDocs []string `json:"reference_docs"`
 		}{
 			Version:       Version,

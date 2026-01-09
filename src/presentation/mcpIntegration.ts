@@ -91,15 +91,6 @@ export class McpExtensionIntegration {
     const { context, mcpService, toolManager } = this;
 
     context.subscriptions.push(
-      vscode.commands.registerCommand("addi.restartMcpServer", async () => {
-        this._versionNonce = String(Date.now());
-        await mcpService.restart();
-        toolManager.refresh();
-        vscode.window.showInformationMessage("MCP Server definitions refreshed.");
-      })
-    );
-
-    context.subscriptions.push(
       vscode.commands.registerCommand("addi.downloadMcpServer", async () => {
         const extension = vscode.extensions.getExtension("deepwn.addi");
         const defaultVersion = extension?.packageJSON?.version || "latest";

@@ -2,6 +2,18 @@
 
 All notable changes to the "addi" extension will be documented in this file.
 
+## [0.0.18] - 2026-01-09
+
+### Added
+
+- **Tool Verification**: 
+    - Added `tool_yaml_verify` tool to validate tool YAML definitions against the schema.
+    - Added automatic validation during tool loading: malformed YAML files are now ignored with a warning notification sent to the client instead of silently failing or crashing.
+
+### Changed
+
+- **UI**: Removed the manual "Refresh" button from the Custom Tools view. Tool lists now update automatically via the file watcher and MCP notifications.
+
 ## [0.0.17] - 2026-01-07
 
 > [!NOTE]

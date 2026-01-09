@@ -3,7 +3,7 @@
   "icon": "resources/icon-bg.min.png",
   "displayName": "Addi",
   "description": "add more custom AI providers and models for your copilot",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "publisher": "deepwn",
   "repository": {
     "type": "git",
@@ -132,11 +132,6 @@
           "command": "addi.addTool",
           "when": "view == addiTools",
           "group": "navigation@0"
-        },
-        {
-          "command": "addi.restartMcpServer",
-          "when": "view == addiTools",
-          "group": "navigation@1"
         },
         {
           "command": "addi.addProvider",
@@ -440,13 +435,6 @@
         "title": "Copy Model",
         "shortTitle": "Copy",
         "icon": "$(copy)",
-        "category": "Addi"
-      },
-      {
-        "command": "addi.restartMcpServer",
-        "title": "Refresh Tools & MCP",
-        "shortTitle": "Refresh",
-        "icon": "$(refresh)",
         "category": "Addi"
       },
       {

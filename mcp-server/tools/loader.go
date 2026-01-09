@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,8 +17,16 @@ type ToolDef struct {
 	Action      *model.Action
 }
 
+// VerifyToolContent checks if the provided YAML content is a valid tool definition.
+func VerifyToolContent(content string) error {
+	reader := strings.NewReader(content)
+	_, err := model.ReadAction(reader)
+	return err
+}
+
 // LoadTools scans the provided directories for tool YAML files and loads them.
-func LoadTools(dirs []string) ([]ToolDef, error) {
+// It accepts an optional warningCallback that processes (filePath, error) when loading fails.
+func LoadTools(dirs []string, warningCallback func(string, error)) ([]ToolDef, error) {
 	toolMap := make(map[string]ToolDef)
 	for _, dir := range dirs {
 		// fmt.Fprintf(os.Stderr, "Scanning directory: %s\n", dir)
@@ -41,7 +48,10 @@ func LoadTools(dirs []string) ([]ToolDef, error) {
 
 			tool, err := LoadToolFromFile(path)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error reading action from %s: %v\n", path, err)
+				if warningCallback != nil {
+					warningCallback(path, err)
+				}
+				// fmt.Fprintf(os.Stderr, "Error reading action from %s: %v\n", path, err)
 				return nil
 			}
 
