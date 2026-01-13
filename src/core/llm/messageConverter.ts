@@ -28,8 +28,17 @@ export class MessageConverter {
 
         // 1. 先处理 Tool Results (作为单独的 Tool Message)
         if (toolResults.length > 0) {
-          const toolContent: ToolContent = toolResults.map((tr) => {
+          const toolContent: ToolContent = [];
+
+          for (const tr of toolResults) {
             const toolName = this.findToolName(messages, tr.callId);
+
+            // If we can't find the tool name, it means the tool call message is missing from history.
+            // We should skip this result to avoid confusing the AI model or causing errors (like "text part not found" from ai-sdk).
+            if (toolName === "unknown") {
+              logger.warn(`Dropping orphan tool result for callId: ${tr.callId} (No matching tool call found in history)`);
+              continue;
+            }
 
             // Check for images or mixed content
             const hasImage = tr.content.some((c) => c instanceof vscode.LanguageModelDataPart);
@@ -66,10 +75,6 @@ export class MessageConverter {
                 })
                 .join("");
 
-              if (toolName === "unknown") {
-                logger.warn(`Could not find tool name for callId: ${tr.callId}`);
-              }
-
               // Log result length
               logger.debug(`Tool Result for ${toolName} (${tr.callId}): ${resultText.length} chars`);
 
@@ -88,14 +93,17 @@ export class MessageConverter {
               }
             }
 
-            return {
+            toolContent.push({
               type: "tool-result",
               toolCallId: tr.callId,
               toolName: toolName,
               output: output,
-            } as any;
-          });
-          coreMessages.push({ role: "tool", content: toolContent });
+            } as any);
+          }
+
+          if (toolContent.length > 0) {
+            coreMessages.push({ role: "tool", content: toolContent });
+          }
         }
 
         // 2. 再处理 User Content (Text/Image)
