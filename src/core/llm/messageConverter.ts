@@ -6,6 +6,18 @@ export class MessageConverter {
   static async toAiCoreMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): Promise<ModelMessage[]> {
     const coreMessages: ModelMessage[] = [];
 
+    // Optimization: Build a map of toolCallId -> toolName once to avoid O(N*M) lookups
+    const toolCallMap = new Map<string, string>();
+    for (const msg of messages) {
+      if (msg.role === vscode.LanguageModelChatMessageRole.Assistant) {
+        for (const part of msg.content) {
+          if (part instanceof vscode.LanguageModelToolCallPart) {
+            toolCallMap.set(part.callId, part.name);
+          }
+        }
+      }
+    }
+
     for (const msg of messages) {
       if (msg.role === vscode.LanguageModelChatMessageRole.User) {
         const userContent: UserContent = [];
@@ -31,7 +43,7 @@ export class MessageConverter {
           const toolContent: ToolContent = [];
 
           for (const tr of toolResults) {
-            const toolName = this.findToolName(messages, tr.callId);
+            const toolName = toolCallMap.get(tr.callId) || "unknown";
 
             // If we can't find the tool name, it means the tool call message is missing from history.
             // We should skip this result to avoid confusing the AI model or causing errors (like "text part not found" from ai-sdk).
@@ -151,19 +163,6 @@ export class MessageConverter {
     );
 
     return coreMessages;
-  }
-
-  private static findToolName(messages: readonly vscode.LanguageModelChatRequestMessage[], callId: string): string {
-    for (const msg of messages) {
-      if (msg.role === vscode.LanguageModelChatMessageRole.Assistant) {
-        for (const part of msg.content) {
-          if (part instanceof vscode.LanguageModelToolCallPart && part.callId === callId) {
-            return part.name;
-          }
-        }
-      }
-    }
-    return "unknown";
   }
 
   static mapChatRole(role: vscode.LanguageModelChatMessageRole): string {
