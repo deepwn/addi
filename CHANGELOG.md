@@ -2,6 +2,22 @@
 
 All notable changes to the "addi" extension will be documented in this file.
 
+## [0.0.19] - 2026-01-14
+
+### Added
+
+- **Formatting**: added ESLint and Prettier configurations for consistent code style.
+
+### Changed
+
+- llmService: remove `stopWhen` to give more flexibility to tool calling logic.
+- refactor logging mechanism and remove log level configuration.
+- enforce object schema for LLM tool inputs and sanitize properties.
+
+### Fixed
+
+- Optimization: Build a map of toolCallId -> toolName once to avoid O(N\*M) lookups when processing tool calls.
+
 ## [0.0.18] - 2026-01-09
 
 ### Added
