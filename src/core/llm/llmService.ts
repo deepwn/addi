@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { streamText, jsonSchema, Tool, stepCountIs } from "ai";
+import { streamText, jsonSchema, Tool } from "ai";
 import { Provider, Model } from "../../common/types";
 import { IToolManager, IMcpService } from "../../common/interfaces";
 import { AIProviderRegistry } from "./aiRegistry";
@@ -195,7 +195,8 @@ export class LLMService {
         streamOptions.tools = tools;
         // Enable multi-step tool calls (required for ai-sdk to execute tools and use results)
         // In AI SDK v6, maxSteps is replaced by stopWhen: stepCountIs(n)
-        streamOptions.stopWhen = stepCountIs(10);
+        // remove stopWhen limit for now to allow more steps handling by VS Code side
+        // streamOptions.stopWhen = stepCountIs(10);
       }
 
       const result = streamText(streamOptions);
