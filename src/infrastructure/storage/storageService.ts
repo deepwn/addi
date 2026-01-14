@@ -1,10 +1,10 @@
-import * as vscode from "vscode";
-import { Provider } from "../../common/types";
-import { IStorageService } from "../../common/interfaces";
-import { logger } from "../../common/logger";
+import * as vscode from 'vscode';
+import { Provider } from '../../common/types';
+import { IStorageService } from '../../common/interfaces';
+import { logger } from '../../common/logger';
 
 export class StorageService implements IStorageService {
-  private static readonly STORAGE_KEY = "addi.providers";
+  private static readonly STORAGE_KEY = 'addi.providers';
   private secretsCache: Map<string, string> = new Map();
   private syncEnabled = false;
   private readonly _onDidUpdate = new vscode.EventEmitter<void>();
@@ -13,8 +13,8 @@ export class StorageService implements IStorageService {
   constructor(private context: vscode.ExtensionContext) {
     // Listen for secret changes from other windows or background processes
     this.context.secrets.onDidChange(async (e) => {
-      if (e.key.startsWith("addi.provider.apikey.")) {
-        const providerId = e.key.replace("addi.provider.apikey.", "");
+      if (e.key.startsWith('addi.provider.apikey.')) {
+        const providerId = e.key.replace('addi.provider.apikey.', '');
         const secret = await this.context.secrets.get(e.key);
         if (secret) {
           this.secretsCache.set(providerId, secret);
@@ -64,18 +64,18 @@ export class StorageService implements IStorageService {
           return rest as Provider;
         });
         await this.context.globalState.update(StorageService.STORAGE_KEY, cleaned);
-        logger.info("Migrated API keys and normalized data on startup");
+        logger.info('Migrated API keys and normalized data on startup');
       }
 
       this._onDidUpdate.fire();
     } catch (error) {
-      logger.error("Failed to initialize secrets", error);
+      logger.error('Failed to initialize secrets', error);
     }
   }
 
   setSettingsSync(enabled: boolean): void {
     if (this.syncEnabled === enabled) {
-      logger.debug("Settings sync already at requested state", { enabled });
+      logger.debug('Settings sync already at requested state', { enabled });
       return;
     }
     this.syncEnabled = enabled;
@@ -84,7 +84,7 @@ export class StorageService implements IStorageService {
     } else {
       this.context.globalState.setKeysForSync([]);
     }
-    logger.info("Settings sync preference updated", { enabled });
+    logger.info('Settings sync preference updated', { enabled });
   }
 
   isSettingsSyncEnabled(): boolean {
@@ -97,7 +97,7 @@ export class StorageService implements IStorageService {
    */
   getProviders(): Provider[] {
     const stored = this.context.globalState.get<Provider[]>(StorageService.STORAGE_KEY, []);
-    
+
     // Attach secrets from cache
     for (const p of stored) {
       if (this.secretsCache.has(p.id)) {
@@ -139,7 +139,7 @@ export class StorageService implements IStorageService {
         this.secretsCache.set(p.id, p.apiKey);
       } else if (this.secretsCache.has(p.id)) {
         // Preserve existing secret if not provided in the update object
-        // (This logic depends on how the update object is constructed. 
+        // (This logic depends on how the update object is constructed.
         // If the caller passes the full object from getProviders, it has the key.
         // If it passes a partial object without key, we might lose it if we don't handle it carefully.
         // But here we iterate over `providers` which are the *new* state.

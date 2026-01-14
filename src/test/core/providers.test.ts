@@ -1,7 +1,7 @@
-import * as assert from "assert";
-import * as vscode from "vscode";
-import { ProviderModelManager } from "../../core/providers/ProviderModelManager";
-import { MockStorageService } from "../mocks";
+import * as assert from 'assert';
+import * as vscode from 'vscode';
+import { ProviderModelManager } from '../../core/providers/ProviderModelManager';
+import { MockStorageService } from '../mocks';
 
 // 模拟vscode.workspace
 const mockWorkspace = {
@@ -19,15 +19,15 @@ const mockWorkspace = {
 
 // 设置模拟：仅在属性可配置或尚未定义时重写
 try {
-  const desc = Object.getOwnPropertyDescriptor(vscode, "workspace");
+  const desc = Object.getOwnPropertyDescriptor(vscode, 'workspace');
   if (!desc || desc.configurable) {
-    Object.defineProperty(vscode, "workspace", { value: mockWorkspace, configurable: true });
+    Object.defineProperty(vscode, 'workspace', { value: mockWorkspace, configurable: true });
   }
 } catch {
   /* ignore override issues in real host */
 }
 
-suite("ProviderModelManager Test Suite", () => {
+suite('ProviderModelManager Test Suite', () => {
   let manager: ProviderModelManager;
 
   setup(() => {
@@ -40,56 +40,56 @@ suite("ProviderModelManager Test Suite", () => {
     manager.dispose();
   });
 
-  test("should add provider", async () => {
+  test('should add provider', async () => {
     const provider = await manager.addProvider({
-      name: "Test Provider",
-      providerType: "generic",
-      description: "Test Description",
-      website: "https://example.com",
-      apiEndpoint: "https://api.example.com",
-      apiKey: "test-api-key",
+      name: 'Test Provider',
+      providerType: 'generic',
+      description: 'Test Description',
+      website: 'https://example.com',
+      apiEndpoint: 'https://api.example.com',
+      apiKey: 'test-api-key',
     });
-    assert.strictEqual(provider.name, "Test Provider");
-    assert.strictEqual(provider.description, "Test Description");
-    assert.strictEqual(provider.website, "https://example.com");
-    assert.strictEqual(provider.apiEndpoint, "https://api.example.com");
-    assert.strictEqual(provider.apiKey, "test-api-key");
+    assert.strictEqual(provider.name, 'Test Provider');
+    assert.strictEqual(provider.description, 'Test Description');
+    assert.strictEqual(provider.website, 'https://example.com');
+    assert.strictEqual(provider.apiEndpoint, 'https://api.example.com');
+    assert.strictEqual(provider.apiKey, 'test-api-key');
     assert.strictEqual(provider.models.length, 0);
 
     const providers = manager.getProviders();
     assert.strictEqual(providers.length, 1);
-    assert.strictEqual(providers[0]?.name, "Test Provider");
+    assert.strictEqual(providers[0]?.name, 'Test Provider');
   });
 
-  test("should update provider", async () => {
+  test('should update provider', async () => {
     const provider = await manager.addProvider({
-      name: "Test Provider",
-      providerType: "generic",
-      description: "Test Description",
-      website: "https://example.com",
-      apiEndpoint: "https://api.example.com",
-      apiKey: "test-api-key",
+      name: 'Test Provider',
+      providerType: 'generic',
+      description: 'Test Description',
+      website: 'https://example.com',
+      apiEndpoint: 'https://api.example.com',
+      apiKey: 'test-api-key',
     });
     const success = await manager.updateProvider(provider.id, {
-      name: "Updated Provider",
-      description: "Updated Description",
+      name: 'Updated Provider',
+      description: 'Updated Description',
     });
     assert.strictEqual(success, true);
 
     const providers = manager.getProviders();
-    assert.strictEqual(providers[0]?.name, "Updated Provider");
-    assert.strictEqual(providers[0]?.description, "Updated Description");
-    assert.strictEqual(providers[0]?.website, "https://example.com");
+    assert.strictEqual(providers[0]?.name, 'Updated Provider');
+    assert.strictEqual(providers[0]?.description, 'Updated Description');
+    assert.strictEqual(providers[0]?.website, 'https://example.com');
   });
 
-  test("should delete provider", async () => {
+  test('should delete provider', async () => {
     const provider = await manager.addProvider({
-      name: "Test Provider",
-      providerType: "generic",
-      description: "Test Description",
-      website: "https://example.com",
-      apiEndpoint: "https://api.example.com",
-      apiKey: "test-api-key",
+      name: 'Test Provider',
+      providerType: 'generic',
+      description: 'Test Description',
+      website: 'https://example.com',
+      apiEndpoint: 'https://api.example.com',
+      apiKey: 'test-api-key',
     });
     const success = await manager.deleteProvider(provider.id);
     assert.strictEqual(success, true);
@@ -98,20 +98,20 @@ suite("ProviderModelManager Test Suite", () => {
     assert.strictEqual(providers.length, 0);
   });
 
-  test("should add model to provider", async () => {
+  test('should add model to provider', async () => {
     const provider = await manager.addProvider({
-      name: "Test Provider",
-      providerType: "generic",
-      description: "Test Description",
-      website: "https://example.com",
-      apiEndpoint: "https://api.example.com",
-      apiKey: "test-api-key",
+      name: 'Test Provider',
+      providerType: 'generic',
+      description: 'Test Description',
+      website: 'https://example.com',
+      apiEndpoint: 'https://api.example.com',
+      apiKey: 'test-api-key',
     });
     const model = await manager.addModel(provider.id, {
-      id: "test-model",
-      name: "Test Model",
-      family: "Test Family",
-      version: "1.0.0",
+      id: 'test-model',
+      name: 'Test Model',
+      family: 'Test Family',
+      version: '1.0.0',
       maxInputTokens: 4096,
       maxOutputTokens: 1024,
       capabilities: {
@@ -122,28 +122,28 @@ suite("ProviderModelManager Test Suite", () => {
 
     assert.notStrictEqual(model, null);
     if (model) {
-      assert.strictEqual(model.name, "Test Model");
-      assert.strictEqual(model.family, "Test Family");
+      assert.strictEqual(model.name, 'Test Model');
+      assert.strictEqual(model.family, 'Test Family');
     }
 
     const providers = manager.getProviders();
     assert.strictEqual(providers[0]?.models.length, 1);
   });
 
-  test("should update model", async () => {
+  test('should update model', async () => {
     const provider = await manager.addProvider({
-      name: "Test Provider",
-      providerType: "generic",
-      description: "Test Description",
-      website: "https://example.com",
-      apiEndpoint: "https://api.example.com",
-      apiKey: "test-api-key",
+      name: 'Test Provider',
+      providerType: 'generic',
+      description: 'Test Description',
+      website: 'https://example.com',
+      apiEndpoint: 'https://api.example.com',
+      apiKey: 'test-api-key',
     });
     const model = await manager.addModel(provider.id, {
-      id: "test-model",
-      name: "Test Model",
-      family: "Test Family",
-      version: "1.0.0",
+      id: 'test-model',
+      name: 'Test Model',
+      family: 'Test Family',
+      version: '1.0.0',
       maxInputTokens: 4096,
       maxOutputTokens: 1024,
       capabilities: {
@@ -155,29 +155,29 @@ suite("ProviderModelManager Test Suite", () => {
     assert.notStrictEqual(model, null);
     if (model) {
       const success = await manager.updateModel(provider.id, model.sid, {
-        name: "Updated Model",
+        name: 'Updated Model',
       });
       assert.strictEqual(success, true);
 
       const providers = manager.getProviders();
-      assert.strictEqual(providers[0]?.models[0]?.name, "Updated Model");
+      assert.strictEqual(providers[0]?.models[0]?.name, 'Updated Model');
     }
   });
 
-  test("should delete model", async () => {
+  test('should delete model', async () => {
     const provider = await manager.addProvider({
-      name: "Test Provider",
-      providerType: "generic",
-      description: "Test Description",
-      website: "https://example.com",
-      apiEndpoint: "https://api.example.com",
-      apiKey: "test-api-key",
+      name: 'Test Provider',
+      providerType: 'generic',
+      description: 'Test Description',
+      website: 'https://example.com',
+      apiEndpoint: 'https://api.example.com',
+      apiKey: 'test-api-key',
     });
     const model = await manager.addModel(provider.id, {
-      id: "test-model",
-      name: "Test Model",
-      family: "Test Family",
-      version: "1.0.0",
+      id: 'test-model',
+      name: 'Test Model',
+      family: 'Test Family',
+      version: '1.0.0',
       maxInputTokens: 4096,
       maxOutputTokens: 1024,
       capabilities: {
@@ -196,20 +196,20 @@ suite("ProviderModelManager Test Suite", () => {
     }
   });
 
-  test("should find model", async () => {
+  test('should find model', async () => {
     const provider = await manager.addProvider({
-      name: "Test Provider",
-      providerType: "generic",
-      description: "Test Description",
-      website: "https://example.com",
-      apiEndpoint: "https://api.example.com",
-      apiKey: "test-api-key",
+      name: 'Test Provider',
+      providerType: 'generic',
+      description: 'Test Description',
+      website: 'https://example.com',
+      apiEndpoint: 'https://api.example.com',
+      apiKey: 'test-api-key',
     });
     const model = await manager.addModel(provider.id, {
-      id: "test-model",
-      name: "Test Model",
-      family: "Test Family",
-      version: "1.0.0",
+      id: 'test-model',
+      name: 'Test Model',
+      family: 'Test Family',
+      version: '1.0.0',
       maxInputTokens: 4096,
       maxOutputTokens: 1024,
       capabilities: {
@@ -223,25 +223,25 @@ suite("ProviderModelManager Test Suite", () => {
       const result = manager.findModel(model.sid);
       assert.notStrictEqual(result, null);
       if (result) {
-        assert.strictEqual(result.model.name, "Test Model");
-        assert.strictEqual(result.provider.name, "Test Provider");
+        assert.strictEqual(result.model.name, 'Test Model');
+        assert.strictEqual(result.provider.name, 'Test Provider');
       }
     }
   });
 
-  test("should normalize legacy model fields on import (imageInput/toolCalling)", async () => {
+  test('should normalize legacy model fields on import (imageInput/toolCalling)', async () => {
     // Manually inject legacy data
     const legacyProvider = {
-      id: "legacy-p",
-      name: "Legacy Provider",
-      providerType: "generic",
+      id: 'legacy-p',
+      name: 'Legacy Provider',
+      providerType: 'generic',
       models: [
         {
-          sid: "m1",
-          id: "m1",
-          name: "Legacy Model",
-          family: "Legacy",
-          version: "1.0",
+          sid: 'm1',
+          id: 'm1',
+          name: 'Legacy Model',
+          family: 'Legacy',
+          version: '1.0',
           maxInputTokens: 1000,
           maxOutputTokens: 1000,
           imageInput: true, // Legacy field
@@ -261,7 +261,7 @@ suite("ProviderModelManager Test Suite", () => {
     assert.strictEqual((model as any).toolCalling, undefined);
   });
 
-  test("should fire onDidUpdate when refresh is called", (done) => {
+  test('should fire onDidUpdate when refresh is called', (done) => {
     const disposable = manager.onDidUpdate(() => {
       disposable.dispose();
       done();
@@ -269,39 +269,39 @@ suite("ProviderModelManager Test Suite", () => {
     manager.refresh();
   });
 
-  test("should validate provider name", async () => {
+  test('should validate provider name', async () => {
     await assert.rejects(async () => {
       await manager.addProvider({
-        name: "",
-        providerType: "generic",
-        apiEndpoint: "https://example.com",
+        name: '',
+        providerType: 'generic',
+        apiEndpoint: 'https://example.com',
       });
     }, /Provider name is required/);
   });
 
-  test("should validate generic provider endpoint", async () => {
+  test('should validate generic provider endpoint', async () => {
     await assert.rejects(async () => {
       await manager.addProvider({
-        name: "Test",
-        providerType: "generic",
-        apiEndpoint: "",
+        name: 'Test',
+        providerType: 'generic',
+        apiEndpoint: '',
       });
     }, /API Endpoint is required/);
   });
 
-  test("should validate model name", async () => {
+  test('should validate model name', async () => {
     const provider = await manager.addProvider({
-      name: "Test Provider",
-      providerType: "generic",
-      apiEndpoint: "https://example.com",
+      name: 'Test Provider',
+      providerType: 'generic',
+      apiEndpoint: 'https://example.com',
     });
 
     await assert.rejects(async () => {
       await manager.addModel(provider.id, {
-        name: "",
-        id: "test-model",
-        family: "test",
-        version: "1.0",
+        name: '',
+        id: 'test-model',
+        family: 'test',
+        version: '1.0',
         maxInputTokens: 100,
         maxOutputTokens: 100,
         capabilities: {},
@@ -309,19 +309,19 @@ suite("ProviderModelManager Test Suite", () => {
     }, /Model name is required/);
   });
 
-  test("should validate model id", async () => {
+  test('should validate model id', async () => {
     const provider = await manager.addProvider({
-      name: "Test Provider",
-      providerType: "generic",
-      apiEndpoint: "https://example.com",
+      name: 'Test Provider',
+      providerType: 'generic',
+      apiEndpoint: 'https://example.com',
     });
 
     await assert.rejects(async () => {
       await manager.addModel(provider.id, {
-        name: "Test Model",
-        id: "",
-        family: "test",
-        version: "1.0",
+        name: 'Test Model',
+        id: '',
+        family: 'test',
+        version: '1.0',
         maxInputTokens: 100,
         maxOutputTokens: 100,
         capabilities: {},

@@ -1,5 +1,5 @@
-import { CustomTool, Provider } from "./types";
-import { Disposable } from "vscode";
+import { CustomTool, Provider } from './types';
+import { Disposable } from 'vscode';
 
 /**
  * Interface for Tool Management (Core -> Infra)

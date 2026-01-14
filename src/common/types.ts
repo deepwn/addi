@@ -32,15 +32,15 @@ export type ModelDraft = {
 /**
  * Represents a specific AI model configuration.
  */
-export interface Model extends Omit<ModelDraft, "sid"> {
-  /** 
-   * Internal unique identifier (UUID) for this model instance. 
-   * Distinct from `id` which is the provider-specific model identifier (e.g. 'gpt-4'). 
+export interface Model extends Omit<ModelDraft, 'sid'> {
+  /**
+   * Internal unique identifier (UUID) for this model instance.
+   * Distinct from `id` which is the provider-specific model identifier (e.g. 'gpt-4').
    */
   sid: string;
 }
 
-export type ProviderType = "openai" | "anthropic" | "google" | "deepseek" | "generic";
+export type ProviderType = 'openai' | 'anthropic' | 'google' | 'deepseek' | 'generic';
 
 /**
  * Represents an AI Provider (e.g. OpenAI, DeepSeek, or a custom OAI-compatible provider).
@@ -68,7 +68,7 @@ export interface ProviderRepository {
   onDidUpdate?: (listener: () => any) => any;
 }
 
-export type ChatMessageRole = "system" | "user" | "assistant";
+export type ChatMessageRole = 'system' | 'user' | 'assistant';
 
 export interface ChatMessage {
   role: ChatMessageRole;
@@ -83,10 +83,12 @@ export interface ToolStep {
   shell?: string;
   // `run` can be a string (script) or a structured command.
   // If string, it will be executed in a shell.
-  run?: string | {
-    command: string;
-    args?: string[];
-  };
+  run?:
+    | string
+    | {
+        command: string;
+        args?: string[];
+      };
 }
 
 export interface CustomTool {

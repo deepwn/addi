@@ -26,3 +26,7 @@ mcp-server/**
 .addi/**
 release/**
 bin/**
+.lintstagedrc.json
+.prettierignore
+.prettierrc
+*.lock

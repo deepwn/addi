@@ -1,5 +1,5 @@
-import { CustomTool } from "../types";
-import { logger } from "../logger";
+import { CustomTool } from '../types';
+import { logger } from '../logger';
 
 export class ToolParser {
   static parse(data: any, fileName: string, source: string): CustomTool | null {
@@ -19,7 +19,7 @@ export class ToolParser {
       } else if (data.command) {
         // Legacy/Simple format support
         steps.push({
-          name: "default",
+          name: 'default',
           command: data.command,
         });
       }
@@ -53,18 +53,22 @@ export class ToolParser {
           }
           current += ch;
         }
-        if (current.length > 0) { parts.push(current); }
+        if (current.length > 0) {
+          parts.push(current);
+        }
         return parts;
       };
 
       const normalizedSteps: any[] = [];
       for (const s of steps) {
         const ns: any = { ...s };
-        
+
         if (s.shell) {
-            logger.debug(`ToolParser: Found shell property for step ${s.name || 'unnamed'}: ${s.shell}`);
+          logger.debug(
+            `ToolParser: Found shell property for step ${s.name || 'unnamed'}: ${s.shell}`
+          );
         } else {
-            logger.debug(`ToolParser: No shell property for step ${s.name || 'unnamed'}`);
+          logger.debug(`ToolParser: No shell property for step ${s.name || 'unnamed'}`);
         }
 
         // If step has `run` as string, we now preserve it as a script string
@@ -74,10 +78,10 @@ export class ToolParser {
         // However, to maintain backward compatibility with the "structured" expectation of some parts of the code
         // (if any remain), we need to be careful.
         // But CustomToolExecutor will be updated to handle string `run`.
-        
+
         // We only normalize if it's the legacy `command` field or array format.
         // If `run` is already a string, we trust it as a shell script.
-        
+
         if (Array.isArray(s.run)) {
           // run: ["cmd","arg1"] -> { command: "cmd", args: ["arg1"] }
           if (s.run.length > 0) {
@@ -146,12 +150,19 @@ export class ToolParser {
         parameters.additionalProperties = false;
       }
 
-      const visibility = source === 'global' ? 'global' : (source.indexOf('public') >= 0 ? 'public' : (source.indexOf('private') >= 0 ? 'private' : 'public'));
+      const visibility =
+        source === 'global'
+          ? 'global'
+          : source.indexOf('public') >= 0
+            ? 'public'
+            : source.indexOf('private') >= 0
+              ? 'private'
+              : 'public';
       return {
         id: `${source}:${fileName}:${data.name}`,
         name: data.name,
         description: data.description,
-        parameters: parameters || { type: "object", properties: {} },
+        parameters: parameters || { type: 'object', properties: {} },
         steps: finalSteps,
         source: source === 'global' ? 'global' : 'workspace',
         visibility,

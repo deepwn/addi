@@ -43,9 +43,9 @@ export class MockStorageService implements IStorageService {
   setSettingsSync(_enabled: boolean): void {
     // noop
   }
-  
+
   initialize(_transform?: (providers: unknown[]) => { mutated: boolean }): void {
-     // noop
+    // noop
   }
 }
 
@@ -73,7 +73,7 @@ export class MockMcpService implements IMcpService {
   async callTool(_name: string, _args: Record<string, unknown>): Promise<any> {
     return {};
   }
-  
+
   isBinaryAvailable(): boolean {
     return true;
   }
@@ -102,7 +102,7 @@ export class MockExtensionContext {
   extensionUri = vscode.Uri.file('test');
   environmentVariableCollection = {} as any;
   extensionMode = vscode.ExtensionMode.Test;
-  
+
   asExtensionContext(): vscode.ExtensionContext {
     return this as unknown as vscode.ExtensionContext;
   }

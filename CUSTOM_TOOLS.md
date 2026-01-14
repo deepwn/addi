@@ -29,14 +29,14 @@ Addi 会自动扫描以下目录中的 `.yaml` 或 `.yml` 文件：
 ### 基本结构
 
 ```yaml
-name: "my-tool-name" # 工具的唯一标识符 (必填)
-description: "工具的功能描述" # AI 会根据此描述决定何时调用工具 (必填)
+name: 'my-tool-name' # 工具的唯一标识符 (必填)
+description: '工具的功能描述' # AI 会根据此描述决定何时调用工具 (必填)
 inputs: # 输入参数定义 (可选)
   arg1:
-    description: "参数描述"
+    description: '参数描述'
     required: true
 runs: # 执行逻辑 (必填)
-  using: "composite" # 目前支持 composite 模式
+  using: 'composite' # 目前支持 composite 模式
   steps: # 执行步骤列表
     - run: echo "Hello ${{ inputs.arg1 }}"
       shell: bash
@@ -69,10 +69,10 @@ runs: # 执行逻辑 (必填)
 ### 1. 简单的 Shell 脚本 (获取公网 IP)
 
 ```yaml
-name: "get-remote-ip"
-description: "Get the public IP address and geolocation info"
+name: 'get-remote-ip'
+description: 'Get the public IP address and geolocation info'
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - run: |
         curl -s http://ip-api.com/json/
@@ -82,14 +82,14 @@ runs:
 ### 2. Python 脚本 (计算斐波那契数列)
 
 ```yaml
-name: "fibonacci"
-description: "Calculate the Nth Fibonacci number"
+name: 'fibonacci'
+description: 'Calculate the Nth Fibonacci number'
 inputs:
   n:
-    description: "The position in the Fibonacci sequence"
+    description: 'The position in the Fibonacci sequence'
     required: true
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - run: |
         import sys
@@ -109,17 +109,17 @@ runs:
 ### 3. Node.js 脚本 (使用环境变量)
 
 ```yaml
-name: "check-env"
-description: "Check if a specific environment variable is set"
+name: 'check-env'
+description: 'Check if a specific environment variable is set'
 inputs:
   varName:
-    description: "The name of the environment variable to check"
+    description: 'The name of the environment variable to check'
     required: true
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - env:
-        MY_SECRET: "some-secret-value"
+        MY_SECRET: 'some-secret-value'
       run: |
         const varName = "${{ inputs.varName }}";
         const val = process.env[varName];
@@ -146,13 +146,13 @@ runs:
 **my-tool.yaml:**
 
 ```yaml
-name: "complex-tool"
-description: "Executes a complex script located in a subdirectory"
+name: 'complex-tool'
+description: 'Executes a complex script located in a subdirectory'
 inputs:
   target:
-    description: "Target argument"
+    description: 'Target argument'
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - run: node "${{ github.action_path }}/utils/my-complex-script.js"
       shell: node

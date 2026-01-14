@@ -1,4 +1,4 @@
-import * as vscode from "vscode";
+import * as vscode from 'vscode';
 
 function maskSecret(value: string | undefined | null): string | undefined {
   if (!value) {
@@ -6,7 +6,7 @@ function maskSecret(value: string | undefined | null): string | undefined {
   }
   const trimmed = value.trim();
   if (trimmed.length <= 4) {
-    return "***";
+    return '***';
   }
   const prefix = trimmed.slice(0, 3);
   const suffix = trimmed.slice(-2);
@@ -21,7 +21,7 @@ export class AddiLogger {
    */
   initialize(context: vscode.ExtensionContext): void {
     if (!this.channel) {
-      this.channel = vscode.window.createOutputChannel("Addi", { log: true });
+      this.channel = vscode.window.createOutputChannel('Addi', { log: true });
       context.subscriptions.push(this.channel);
     }
   }
@@ -49,25 +49,30 @@ export class AddiLogger {
   }
 
   warn(message: string, metadata?: unknown, scope?: string): void {
-    this.log("warn", message, metadata, scope);
+    this.log('warn', message, metadata, scope);
   }
 
   info(message: string, metadata?: unknown, scope?: string): void {
-    this.log("info", message, metadata, scope);
+    this.log('info', message, metadata, scope);
   }
 
   debug(message: string, metadata?: unknown, scope?: string): void {
-    this.log("debug", message, metadata, scope);
+    this.log('debug', message, metadata, scope);
   }
 
   trace(message: string, metadata?: unknown, scope?: string): void {
-    this.log("trace", message, metadata, scope);
+    this.log('trace', message, metadata, scope);
   }
 
-  private log(level: "warn" | "info" | "debug" | "trace", message: string, metadata?: unknown, scope?: string): void {
+  private log(
+    level: 'warn' | 'info' | 'debug' | 'trace',
+    message: string,
+    metadata?: unknown,
+    scope?: string
+  ): void {
     const channel = this.getChannel();
     const formattedMessage = this.formatMessage(message, scope);
-    
+
     if (metadata !== undefined) {
       channel[level](formattedMessage, metadata);
     } else {
@@ -81,7 +86,7 @@ export class AddiLogger {
 
   private getChannel(): vscode.LogOutputChannel {
     if (!this.channel) {
-      this.channel = vscode.window.createOutputChannel("Addi", { log: true });
+      this.channel = vscode.window.createOutputChannel('Addi', { log: true });
     }
     return this.channel;
   }
@@ -111,7 +116,13 @@ export class AddiLogger {
   /**
    * Sanitize model info for logging.
    */
-  sanitizeModel(model?: { sid?: string; id?: string; name?: string; family?: string; version?: string }): Record<string, unknown> | undefined {
+  sanitizeModel(model?: {
+    sid?: string;
+    id?: string;
+    name?: string;
+    family?: string;
+    version?: string;
+  }): Record<string, unknown> | undefined {
     if (!model) {
       return undefined;
     }

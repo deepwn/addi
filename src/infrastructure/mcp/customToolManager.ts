@@ -1,13 +1,13 @@
-import * as vscode from "vscode";
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
-import * as yaml from "js-yaml";
+import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import * as yaml from 'js-yaml';
 // zod removed for direct JSON Schema generation
-import { CustomTool } from "../../common/types";
-import { IToolManager } from "../../common/interfaces";
-import { logger } from "../../common/logger";
-import { ToolParser } from "../../common/utils/toolParser";
+import { CustomTool } from '../../common/types';
+import { IToolManager } from '../../common/interfaces';
+import { logger } from '../../common/logger';
+import { ToolParser } from '../../common/utils/toolParser';
 
 export class CustomToolManager implements IToolManager {
   private readonly _onDidUpdate = new vscode.EventEmitter<void>();
@@ -26,54 +26,54 @@ export class CustomToolManager implements IToolManager {
   }
 
   private setupWatchers() {
-    this.watchers.forEach(w => w.dispose());
+    this.watchers.forEach((w) => w.dispose());
     this.watchers = [];
 
     // Watch global ~/.addi/*.yaml
-    const globalDir = path.join(os.homedir(), ".addi");
+    const globalDir = path.join(os.homedir(), '.addi');
     if (fs.existsSync(globalDir)) {
       try {
         fs.watch(globalDir, (_eventType, filename) => {
-          if (filename && (filename.endsWith(".yaml") || filename.endsWith(".yml"))) {
+          if (filename && (filename.endsWith('.yaml') || filename.endsWith('.yml'))) {
             this.refreshDebounced();
           }
         });
       } catch (e) {
-        logger.warn("Failed to watch global addi directory", e);
+        logger.warn('Failed to watch global addi directory', e);
       }
     }
 
     if (!vscode.workspace.workspaceFolders) {
-        return;
+      return;
     }
 
     // Watch each workspace folder specifically
     for (const folder of vscode.workspace.workspaceFolders) {
-        const publicPattern = new vscode.RelativePattern(folder, ".addi/public/*.{yml,yaml}");
-        const publicWatcher = vscode.workspace.createFileSystemWatcher(publicPattern);
-        publicWatcher.onDidChange(() => this.refreshDebounced());
-        publicWatcher.onDidCreate(() => this.refreshDebounced());
-        publicWatcher.onDidDelete(() => this.refreshDebounced());
-        this.watchers.push(publicWatcher);
+      const publicPattern = new vscode.RelativePattern(folder, '.addi/public/*.{yml,yaml}');
+      const publicWatcher = vscode.workspace.createFileSystemWatcher(publicPattern);
+      publicWatcher.onDidChange(() => this.refreshDebounced());
+      publicWatcher.onDidCreate(() => this.refreshDebounced());
+      publicWatcher.onDidDelete(() => this.refreshDebounced());
+      this.watchers.push(publicWatcher);
 
-        const privatePattern = new vscode.RelativePattern(folder, ".addi/private/*.{yml,yaml}");
-        const privateWatcher = vscode.workspace.createFileSystemWatcher(privatePattern);
-        privateWatcher.onDidChange(() => this.refreshDebounced());
-        privateWatcher.onDidCreate(() => this.refreshDebounced());
-        privateWatcher.onDidDelete(() => this.refreshDebounced());
-        this.watchers.push(privateWatcher);
+      const privatePattern = new vscode.RelativePattern(folder, '.addi/private/*.{yml,yaml}');
+      const privateWatcher = vscode.workspace.createFileSystemWatcher(privatePattern);
+      privateWatcher.onDidChange(() => this.refreshDebounced());
+      privateWatcher.onDidCreate(() => this.refreshDebounced());
+      privateWatcher.onDidDelete(() => this.refreshDebounced());
+      this.watchers.push(privateWatcher);
     }
   }
 
   private refreshTimer: NodeJS.Timeout | undefined;
-  
+
   private refreshDebounced() {
-      if (this.refreshTimer) {
-          clearTimeout(this.refreshTimer);
-      }
-      this.refreshTimer = setTimeout(() => {
-          this.refresh();
-      }, 500); // Wait 500ms for file operations to settle
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+    }
+    this.refreshTimer = setTimeout(() => {
+      this.refresh();
+    }, 500); // Wait 500ms for file operations to settle
   }
 
   getTools(): CustomTool[] {
@@ -82,20 +82,20 @@ export class CustomToolManager implements IToolManager {
 
   async refresh() {
     this.lastUpdated = Date.now();
-    
+
     const newTools: CustomTool[] = [];
 
     // 1. Load Global Tools (~/.addi/*.yaml)
-    const globalDir = path.join(os.homedir(), ".addi");
-    newTools.push(...this.loadToolsFromDir(globalDir, "global"));
+    const globalDir = path.join(os.homedir(), '.addi');
+    newTools.push(...this.loadToolsFromDir(globalDir, 'global'));
 
     // 2. Load Workspace Tools (.addi/public/*.yaml and .addi/private/*.yaml)
     if (vscode.workspace.workspaceFolders) {
       for (const folder of vscode.workspace.workspaceFolders) {
-        const publicDir = path.join(folder.uri.fsPath, ".addi", "public");
-        const privateDir = path.join(folder.uri.fsPath, ".addi", "private");
-        newTools.push(...this.loadToolsFromDir(publicDir, "workspace:public"));
-        newTools.push(...this.loadToolsFromDir(privateDir, "workspace:private"));
+        const publicDir = path.join(folder.uri.fsPath, '.addi', 'public');
+        const privateDir = path.join(folder.uri.fsPath, '.addi', 'private');
+        newTools.push(...this.loadToolsFromDir(publicDir, 'workspace:public'));
+        newTools.push(...this.loadToolsFromDir(privateDir, 'workspace:private'));
 
         // If privateDir exists and this is a git repo, suggest adding to .gitignore
         try {
@@ -107,22 +107,34 @@ export class CustomToolManager implements IToolManager {
               gitignore = fs.readFileSync(gitignorePath, 'utf8');
             }
             const ignoreEntry = '.addi/private';
-            if (!gitignore.split(/\r?\n/).some(l => l.trim() === ignoreEntry)) {
+            if (!gitignore.split(/\r?\n/).some((l) => l.trim() === ignoreEntry)) {
               // Non-blocking prompt to user
-              vscode.window.showInformationMessage(
-                `Detected ${privateDir}. Add ${ignoreEntry} to .gitignore to avoid committing secrets?`,
-                'Add to .gitignore'
-              ).then(selection => {
-                if (selection === 'Add to .gitignore') {
-                  try {
-                    fs.appendFileSync(gitignorePath, (gitignore.endsWith('\n') || gitignore.length === 0 ? '' : '\n') + ignoreEntry + '\n');
-                    vscode.window.showInformationMessage(`${ignoreEntry} added to .gitignore`);
-                  } catch (e) {
-                    logger.error('Failed to write .gitignore', e);
-                    vscode.window.showErrorMessage('Failed to update .gitignore to ignore .addi/private');
-                  }
-                }
-              }, (e: any) => logger.debug('Gitignore prompt failed', e));
+              vscode.window
+                .showInformationMessage(
+                  `Detected ${privateDir}. Add ${ignoreEntry} to .gitignore to avoid committing secrets?`,
+                  'Add to .gitignore'
+                )
+                .then(
+                  (selection) => {
+                    if (selection === 'Add to .gitignore') {
+                      try {
+                        fs.appendFileSync(
+                          gitignorePath,
+                          (gitignore.endsWith('\n') || gitignore.length === 0 ? '' : '\n') +
+                            ignoreEntry +
+                            '\n'
+                        );
+                        vscode.window.showInformationMessage(`${ignoreEntry} added to .gitignore`);
+                      } catch (e) {
+                        logger.error('Failed to write .gitignore', e);
+                        vscode.window.showErrorMessage(
+                          'Failed to update .gitignore to ignore .addi/private'
+                        );
+                      }
+                    }
+                  },
+                  (e: any) => logger.debug('Gitignore prompt failed', e)
+                );
             }
           }
         } catch (e) {
@@ -135,10 +147,10 @@ export class CustomToolManager implements IToolManager {
 
     // Register tools - NO LONGER NEEDED as we use AddiToolProvider which delegates to MCP
     // But we still keep the list for UI display
-    
+
     this._onDidUpdate.fire();
     logger.info(`Loaded ${this.tools.length} custom tools`);
-    
+
     // Restart MCP Server to pick up changes
     // McpServerService.getInstance(this.context).restart();
   }
@@ -150,10 +162,12 @@ export class CustomToolManager implements IToolManager {
     }
 
     try {
-      const files = fs.readdirSync(dirPath).filter((f) => f.endsWith(".yaml") || f.endsWith(".yml"));
+      const files = fs
+        .readdirSync(dirPath)
+        .filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'));
       for (const file of files) {
         try {
-          const content = fs.readFileSync(path.join(dirPath, file), "utf8");
+          const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
           const parsed = yaml.load(content) as any;
 
           if (parsed && parsed.name) {

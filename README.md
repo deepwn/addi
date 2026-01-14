@@ -162,10 +162,10 @@ Addi 内置了一个 **Model Context Protocol (MCP)** Server，支持通过 YAML
 1. **创建工具文件**：在 `.addi/public/` (共享) 或 `.addi/private/` (私有) 目录下创建 `.yaml` 文件。
 2. **定义工具**：
    ```yaml
-   name: "get-ip"
-   description: "Get public IP"
+   name: 'get-ip'
+   description: 'Get public IP'
    runs:
-     using: "composite"
+     using: 'composite'
      steps:
        - run: curl -s http://ip-api.com/json/
          shell: bash

@@ -1,7 +1,7 @@
-import * as vscode from "vscode";
-import { McpServerService } from "../infrastructure/mcp/mcpServerService";
-import { logger } from "../common/logger";
-import { CustomToolManager } from "../infrastructure/mcp/customToolManager";
+import * as vscode from 'vscode';
+import { McpServerService } from '../infrastructure/mcp/mcpServerService';
+import { logger } from '../common/logger';
+import { CustomToolManager } from '../infrastructure/mcp/customToolManager';
 
 export class McpExtensionIntegration {
   private _versionNonce = String(Date.now());
@@ -23,64 +23,64 @@ export class McpExtensionIntegration {
   private registerDefinitionProvider(): void {
     const didChangeMcpEmitter = new vscode.EventEmitter<void>();
     this.mcpService.onDidStatusChange(() => didChangeMcpEmitter.fire());
-    
+
     this.toolManager.onDidUpdate(() => {
-      logger.debug("Tool manager updated", undefined, "MCP");
+      logger.debug('Tool manager updated', undefined, 'MCP');
     });
 
     try {
       // @ts-ignore
       this.context.subscriptions.push(
-        vscode.lm.registerMcpServerDefinitionProvider("addi-mcp-provider", {
+        vscode.lm.registerMcpServerDefinitionProvider('addi-mcp-provider', {
           onDidChangeMcpServerDefinitions: didChangeMcpEmitter.event,
           provideMcpServerDefinitions: async () => {
-            logger.debug("provideMcpServerDefinitions called", undefined, "MCP");
+            logger.debug('provideMcpServerDefinitions called', undefined, 'MCP');
             const binaryPath = this.mcpService.getBinaryPath();
-            logger.debug("MCP Binary path", { binaryPath }, "MCP");
+            logger.debug('MCP Binary path', { binaryPath }, 'MCP');
 
             if (!binaryPath) {
               return [];
             }
 
             const dirs: string[] = [];
-            const os = require("os");
-            const path = require("path");
+            const os = require('os');
+            const path = require('path');
 
             // Global tools
-            dirs.push(path.join(os.homedir(), ".addi"));
+            dirs.push(path.join(os.homedir(), '.addi'));
 
             // Workspace tools
             if (vscode.workspace.workspaceFolders) {
               for (const folder of vscode.workspace.workspaceFolders) {
-                dirs.push(path.join(folder.uri.fsPath, ".addi", "public"));
-                dirs.push(path.join(folder.uri.fsPath, ".addi", "private"));
+                dirs.push(path.join(folder.uri.fsPath, '.addi', 'public'));
+                dirs.push(path.join(folder.uri.fsPath, '.addi', 'private'));
               }
             }
 
-            const dirsArg = dirs.join(",");
-            logger.debug("MCP Tools directories", { directories: dirsArg }, "MCP");
+            const dirsArg = dirs.join(',');
+            logger.debug('MCP Tools directories', { directories: dirsArg }, 'MCP');
 
             // Use a stable environment to avoid unnecessary server restarts.
             // Only update the nonce if we explicitly want to force a process restart.
-            const mcpEnv = { 
+            const mcpEnv = {
               ...process.env,
-              MCP_NONCE: String(this._versionNonce)
+              MCP_NONCE: String(this._versionNonce),
             } as Record<string, string>;
 
             return [
               new vscode.McpStdioServerDefinition(
-                "Addi Custom Tools",
+                'Addi Custom Tools',
                 binaryPath,
-                ["--mode", "local", "--dirs", dirsArg, "--watch"],
+                ['--mode', 'local', '--dirs', dirsArg, '--watch'],
                 mcpEnv
               ),
             ];
           },
         })
       );
-      logger.info("Registered MCP Server Provider via vscode.lm", undefined, "MCP");
+      logger.info('Registered MCP Server Provider via vscode.lm', undefined, 'MCP');
     } catch (e) {
-      logger.error("Failed to register MCP Server Provider", e, "MCP");
+      logger.error('Failed to register MCP Server Provider', e, 'MCP');
     }
   }
 
@@ -88,15 +88,15 @@ export class McpExtensionIntegration {
     const { context, mcpService, toolManager } = this;
 
     context.subscriptions.push(
-      vscode.commands.registerCommand("addi.downloadMcpServer", async () => {
-        const extension = vscode.extensions.getExtension("deepwn.addi");
-        const defaultVersion = extension?.packageJSON?.version || "latest";
-        
+      vscode.commands.registerCommand('addi.downloadMcpServer', async () => {
+        const extension = vscode.extensions.getExtension('deepwn.addi');
+        const defaultVersion = extension?.packageJSON?.version || 'latest';
+
         const version = await vscode.window.showInputBox({
-          title: "Download Addi MCP Server",
-          prompt: "Enter version to download",
+          title: 'Download Addi MCP Server',
+          prompt: 'Enter version to download',
           value: defaultVersion,
-          placeHolder: "e.g. 0.0.15",
+          placeHolder: 'e.g. 0.0.15',
         });
 
         if (version === undefined) {
@@ -108,7 +108,9 @@ export class McpExtensionIntegration {
           .then(async () => {
             await mcpService.initialize();
             toolManager.refresh();
-            vscode.window.showInformationMessage(`MCP Server (${version}) downloaded and started successfully.`);
+            vscode.window.showInformationMessage(
+              `MCP Server (${version}) downloaded and started successfully.`
+            );
           })
           .catch((err) => {
             vscode.window.showErrorMessage(`Failed to download MCP Server: ${err}`);
@@ -117,23 +119,24 @@ export class McpExtensionIntegration {
     );
 
     context.subscriptions.push(
-      vscode.commands.registerCommand("addi.debug.mcpStatus", async () => {
+      vscode.commands.registerCommand('addi.debug.mcpStatus', async () => {
         const binaryPath = mcpService.getBinaryPath();
         // @ts-ignore
-        const apiAvailable = vscode.lm && typeof vscode.lm.registerMcpServerDefinitionProvider === "function";
+        const apiAvailable =
+          vscode.lm && typeof vscode.lm.registerMcpServerDefinitionProvider === 'function';
 
-        const extension = vscode.extensions.getExtension("deepwn.addi");
-        const version = extension?.packageJSON?.version ?? "unknown";
+        const extension = vscode.extensions.getExtension('deepwn.addi');
+        const version = extension?.packageJSON?.version ?? 'unknown';
 
         const info = [
           `MCP API Available: ${apiAvailable}`,
           `Binary Path: ${binaryPath}`,
-          `Binary Exists: ${binaryPath ? require("fs").existsSync(binaryPath) : false}`,
+          `Binary Exists: ${binaryPath ? require('fs').existsSync(binaryPath) : false}`,
           `Extension Version: ${version}`,
-        ].join("\n");
+        ].join('\n');
 
         vscode.window.showInformationMessage(info, { modal: true });
-        logger.info("MCP Debug Status", { apiAvailable, binaryPath });
+        logger.info('MCP Debug Status', { apiAvailable, binaryPath });
       })
     );
   }

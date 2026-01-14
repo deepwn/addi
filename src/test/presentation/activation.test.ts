@@ -1,12 +1,12 @@
-import * as assert from "assert";
-import * as vscode from "vscode";
-import { ProviderModelManager } from "../../core/providers/ProviderModelManager";
-import { MockStorageService } from "../mocks";
+import * as assert from 'assert';
+import * as vscode from 'vscode';
+import { ProviderModelManager } from '../../core/providers/ProviderModelManager';
+import { MockStorageService } from '../mocks';
 
-suite("Extension Integration Test Suite", () => {
-  vscode.window.showInformationMessage("Start all tests.");
+suite('Extension Integration Test Suite', () => {
+  vscode.window.showInformationMessage('Start all tests.');
 
-  suite("Integration Tests", () => {
+  suite('Integration Tests', () => {
     let manager: ProviderModelManager;
 
     setup(() => {
@@ -15,21 +15,21 @@ suite("Extension Integration Test Suite", () => {
       manager = new ProviderModelManager(storage);
     });
 
-    test("should create provider with models and export/import", async () => {
+    test('should create provider with models and export/import', async () => {
       // 创建供应商和模型
       const provider = await manager.addProvider({
-        name: "Test Provider",
-        providerType: "generic",
-        description: "Test Description",
-        website: "https://example.com",
-        apiEndpoint: "https://api.example.com",
-        apiKey: "test-api-key",
+        name: 'Test Provider',
+        providerType: 'generic',
+        description: 'Test Description',
+        website: 'https://example.com',
+        apiEndpoint: 'https://api.example.com',
+        apiKey: 'test-api-key',
       });
       await manager.addModel(provider.id, {
-        id: "test-model-1",
-        name: "Test Model 1",
-        family: "Test Family",
-        version: "1.0.0",
+        id: 'test-model-1',
+        name: 'Test Model 1',
+        family: 'Test Family',
+        version: '1.0.0',
         maxInputTokens: 4096,
         maxOutputTokens: 1024,
         capabilities: {
@@ -38,10 +38,10 @@ suite("Extension Integration Test Suite", () => {
         },
       });
       await manager.addModel(provider.id, {
-        id: "test-model-2",
-        name: "Test Model 2",
-        family: "Test Family",
-        version: "2.0.0",
+        id: 'test-model-2',
+        name: 'Test Model 2',
+        family: 'Test Family',
+        version: '2.0.0',
         maxInputTokens: 8192,
         maxOutputTokens: 2048,
         capabilities: {
@@ -57,7 +57,7 @@ suite("Extension Integration Test Suite", () => {
 
       // 模拟导出
       const exportedData = JSON.stringify(providers, null, 2);
-      assert.notStrictEqual(exportedData, "");
+      assert.notStrictEqual(exportedData, '');
 
       // 模拟导入
       const importedProviders = JSON.parse(exportedData);
@@ -66,11 +66,11 @@ suite("Extension Integration Test Suite", () => {
       // 验证导入的数据
       providers = manager.getProviders();
       assert.strictEqual(providers.length, 1);
-      assert.strictEqual(providers[0]?.name, "Test Provider");
-      assert.strictEqual(providers[0]?.description, "Test Description");
+      assert.strictEqual(providers[0]?.name, 'Test Provider');
+      assert.strictEqual(providers[0]?.description, 'Test Description');
       assert.strictEqual(providers[0]?.models.length, 2);
-      assert.strictEqual(providers[0]?.models[0]?.name, "Test Model 1");
-      assert.strictEqual(providers[0]?.models[1]?.name, "Test Model 2");
+      assert.strictEqual(providers[0]?.models[0]?.name, 'Test Model 1');
+      assert.strictEqual(providers[0]?.models[1]?.name, 'Test Model 2');
     });
   });
 });

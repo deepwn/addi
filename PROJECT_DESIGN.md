@@ -37,39 +37,47 @@ graph TD
     Entry --> CMD
     CMD --> UI
     CMD --> Registry
-    
+
     UI --> Registry
-    
+
     Registry --> Storage
-    
+
     Entry --> LLM
     LLM --> Align
     LLM --> MCP
-    
+
     MCP --> Tools
     Tools --> Storage
 ```
 
 ### Layer 1: Presentation (Frontend)
+
 **Responsibility**: controls UI and VS Code related behaviors.
+
 - **Views**: Tree Data Providers (`ProviderView`, `ToolView`) and Webview Managers (`EditorView`).
 - **Commands**: Handles user interactions from the Command Palette and Context Menus.
 - **Entry**: `extension.ts` serves as the bootstrapper, wiring dependencies together.
 
 ### Layer 2: Core (Middle Bridge)
+
 **Responsibility**: Aligns behaviors between Copilot and the plugin's custom models.
+
 - **LLMService**: The heart of the chat logic. It creates a standardized interface for `vscode.LanguageModel` to talk to various providers (OpenAI, Anthropic, etc.) via the Vercel AI SDK.
 - **MessageConverter**: Translates VS Code's chat protocol into standard AI SDK messages.
 - **ProviderModelManager**: Manages the domain state (Providers, Models) and business logic for CRUD operations.
 
 ### Layer 3: Infrastructure (Backend)
+
 **Responsibility**: Managed execution of custom tools and persistence.
+
 - **McpServerService**: Manages the lifecycle of the external Go-based MCP server. It handles the "physical" execution of tools (Process Management, Binary Downloading).
 - **CustomToolManager**: Watches the file system for tool definitions (YAML) and configures the environment.
 - **StorageService**: Abstracts VS Code's persistence layer (`globalState`, `secretStorage`).
 
 ### Layer 4: Shared (Utils)
+
 **Responsibility**: Reusable, standardized utility tools.
+
 - **Logger**: Standardized logging wrapper.
 - **McpDownloader**: Utility for fetching external binaries.
 - **Parsers & Validators**: Pure functions for data processing.
