@@ -36,12 +36,12 @@ export class CommandHandler {
   // playground logic moved to PlaygroundManager
 
   async openPlayground(provider: Provider, model: Model | (ModelDraft & { id?: string; name?: string })): Promise<void> {
-    logger.info("Command openPlayground invoked", {
+    logger.debug("Opening playground", {
       provider: logger.sanitizeProvider(provider),
       model: logger.sanitizeModel(model as Model),
-    });
+    }, "Commands");
     if (!this.context) {
-      logger.error("openPlayground missing extension context");
+      logger.error("openPlayground missing extension context", undefined, "Commands");
       throw new Error("No extension context");
     }
     const mgr = new PlaygroundManager(this.context);
@@ -51,7 +51,7 @@ export class CommandHandler {
   }
 
   async addProvider(): Promise<void> {
-    logger.info("Command addProvider invoked");
+    logger.debug("Executing addProvider", undefined, "Commands");
     if (this.editorViewManager) {
       this.editorViewManager.openEditor(undefined, 'create');
     } else {
@@ -60,7 +60,7 @@ export class CommandHandler {
   }
 
   async editProvider(item: ProviderTreeItem): Promise<void> {
-    logger.info("Command editProvider invoked", logger.sanitizeProvider(item.provider));
+    logger.debug("Executing editProvider", logger.sanitizeProvider(item.provider), "Commands");
     if (this.editorViewManager) {
       this.editorViewManager.openEditor(item, 'edit');
     } else {
@@ -69,7 +69,7 @@ export class CommandHandler {
   }
 
   async deleteProvider(item: ProviderTreeItem): Promise<void> {
-    logger.info("Command deleteProvider invoked", logger.sanitizeProvider(item.provider));
+    logger.debug("Executing deleteProvider", logger.sanitizeProvider(item.provider), "Commands");
     
     if (ConfigManager.getConfirmDelete()) {
       const deleteOption: vscode.MessageItem = { title: "Delete" };
@@ -103,20 +103,20 @@ export class CommandHandler {
           // If we were editing this provider, we might want to close the editor, but for now we just leave it or let the user close it.
           // Or we could expose a close method on EditorViewManager.
           UserFeedback.showInfo(`Provider "${item.provider.name}" deleted`);
-          logger.info("Provider deleted", logger.sanitizeProvider(item.provider));
+          logger.info("Provider deleted", item.provider.id, "Commands");
         } else {
           UserFeedback.showError("Failed to delete provider");
-          logger.warn("deleteProvider manager returned false", logger.sanitizeProvider(item.provider));
+          logger.warn("deleteProvider manager returned false", item.provider.id, "Commands");
         }
       });
     } catch (error) {
       UserFeedback.showError(`Failed to delete provider: ${error instanceof Error ? error.message : "Unknown error"}`);
-      logger.error("deleteProvider failed", { error: error instanceof Error ? error.message : String(error) });
+      logger.error("deleteProvider failed", error, "Commands");
     }
   }
 
   async editApiKey(item: ProviderTreeItem): Promise<void> {
-    logger.info("Command editApiKey invoked", logger.sanitizeProvider(item.provider));
+    logger.debug("Executing editApiKey", item.provider.id, "Commands");
     const currentApiKey = item.provider.apiKey || "";
 
     const newApiKey = await UserFeedback.showInputBox({

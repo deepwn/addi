@@ -4,22 +4,13 @@ import { ProviderModelManager } from "../core/providers/ProviderModelManager";
 import { LLMService } from "../core/llm/llmService";
 import { AddiTreeDataProvider, ProviderTreeItem } from "./views/providerView";
 import { CommandHandler } from "./commands";
-import { logger, LogLevel } from "../common/logger";
+import { logger } from "../common/logger";
 import { EditorViewManager } from "./views/editorView";
 import { CustomToolManager } from "../infrastructure/mcp/customToolManager";
 import { ToolTreeDataProvider, ToolTreeItem } from "./views/toolView";
 import { McpServerService } from "../infrastructure/mcp/mcpServerService";
 import { McpExtensionIntegration } from "./mcpIntegration";
 import { StorageService } from "../infrastructure/storage/storageService";
-
-function readLogLevel(): LogLevel {
-  const config = vscode.workspace.getConfiguration("addi");
-  const raw = (config.get<string>("logLevel") ?? "warn").toLowerCase();
-  if (raw === "off" || raw === "error" || raw === "warn" || raw === "info" || raw === "debug") {
-    return raw;
-  }
-  return "warn";
-}
 
 /**
  * Composition Root & Entry Point.
@@ -31,11 +22,10 @@ function readLogLevel(): LogLevel {
  * 4. Register VS Code UI Components (Commands, Views, MCP Integration).
  */
 export function activate(context: vscode.ExtensionContext) {
-  const initialLogLevel = readLogLevel();
-  logger.initialize(context, initialLogLevel);
+  logger.initialize(context);
   const extension = vscode.extensions.getExtension("deepwn.addi");
   const version = extension?.packageJSON?.version ?? "unknown";
-  logger.info(`Extension activation start (v${version})`);
+  logger.info(`Extension activated (v${version})`, undefined, "Extension");
 
   // Initialize Services (Infrastructure)
   const storageService = new StorageService(context);
@@ -43,7 +33,7 @@ export function activate(context: vscode.ExtensionContext) {
   const toolManager = new CustomToolManager();
 
   context.subscriptions.push(new vscode.Disposable(() => mcpService.dispose()));
-  mcpService.initialize().catch((err) => logger.error("Failed to initialize MCP Server", err));
+  mcpService.initialize().catch((err) => logger.error("Failed to initialize MCP Server", err, "MCP"));
 
   // Initialize Core Managers with Dependencies
   const manager = new ProviderModelManager(storageService);
@@ -67,10 +57,6 @@ export function activate(context: vscode.ExtensionContext) {
       if (event.affectsConfiguration("addi.saveConfigToSettingsSync")) {
         applySettingsSyncPreference();
       }
-      if (event.affectsConfiguration("addi.logLevel")) {
-        const nextLevel = readLogLevel();
-        logger.setLevel(nextLevel);
-      }
       if (event.affectsConfiguration("addi.sortRule") || event.affectsConfiguration("addi.sortTarget")) {
         treeDataProvider.refresh();
       }
@@ -79,36 +65,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("addi.showLogs", () => {
-      logger.info("Show logs command executed");
       logger.show();
-    })
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand("addi.setLogLevel", async () => {
-      const currentLevel = logger.getLevel();
-      const selection = await vscode.window.showQuickPick(
-        [
-          { label: "Off", value: "off" },
-          { label: "Error", value: "error" },
-          { label: "Warn", value: "warn" },
-          { label: "Info", value: "info" },
-          { label: "Debug", value: "debug" },
-        ],
-        {
-          placeHolder: "Select Addi log level",
-          canPickMany: false,
-          title: "Addi Log Level",
-          ignoreFocusOut: true,
-        }
-      );
-      if (!selection) {
-        return;
-      }
-      const config = vscode.workspace.getConfiguration("addi");
-      await config.update("logLevel", selection.value, vscode.ConfigurationTarget.Global);
-      logger.setLevel(selection.value as LogLevel);
-      logger.info("Log level changed via command", { previous: currentLevel, next: selection.value });
     })
   );
 

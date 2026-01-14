@@ -207,7 +207,7 @@ export class LLMService {
         modelId: model.id,
         messageCount: coreMessages.length,
         toolCount: Object.keys(tools).length,
-      });
+      }, "LLM");
 
       let hasOutput = false;
       for await (const part of result.fullStream) {
@@ -227,11 +227,11 @@ export class LLMService {
           // We'll just stream it. Users can distinguish contextually.
           progress.report(new vscode.LanguageModelTextPart(part.text));
         } else if (part.type === "tool-call") {
-          logger.debug("Tool Call", { toolCallId: part.toolCallId, toolName: part.toolName });
+          const args = (part as any).args ?? (part as any).input;
+          logger.trace("Tool Call received", { toolCallId: part.toolCallId, toolName: part.toolName, args }, "LLM");
           // Report the tool call to VS Code (UI)
           // Whether it's a client-side tool (providedTools) or server-side tool (customTools),
           // we notify VS Code that a tool is being called.
-          const args = (part as any).args ?? (part as any).input;
           progress.report(new vscode.LanguageModelToolCallPart(part.toolCallId, part.toolName, args));
           hasOutput = true;
 
@@ -239,10 +239,10 @@ export class LLMService {
           // Since we enabled `stopWhen` (multi-step) and provided `execute` functions for custom tools,
           // the AI SDK will automatically execute the tool and emit a `tool-result` part later in the stream.
         } else if (part.type === "tool-result") {
-          logger.debug("Tool Result", { toolCallId: part.toolCallId, toolName: part.toolName });
+          const result = (part as any).result;
+          logger.trace("Tool Result received", { toolCallId: part.toolCallId, toolName: part.toolName, result }, "LLM");
 
           // 1. Report the result to VS Code so it appears in the chat history
-          const result = (part as any).result;
           if (result !== undefined) {
             const contentParts: vscode.LanguageModelResponsePart[] = [];
             if (typeof result === "string") {

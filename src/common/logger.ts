@@ -1,31 +1,5 @@
 import * as vscode from "vscode";
 
-export type LogLevel = "off" | "error" | "warn" | "info" | "debug";
-
-const LEVEL_WEIGHT: Record<LogLevel, number> = {
-  off: 0,
-  error: 1,
-  warn: 2,
-  info: 3,
-  debug: 4,
-};
-
-function now(): string {
-  const date = new Date();
-  return `${date.toISOString()}`;
-}
-
-function formatMetadata(metadata: unknown): string {
-  if (metadata === undefined || metadata === null) {
-    return "";
-  }
-  try {
-    return typeof metadata === "string" ? metadata : JSON.stringify(metadata, null, 2);
-  } catch {
-    return String(metadata);
-  }
-}
-
 function maskSecret(value: string | undefined | null): string | undefined {
   if (!value) {
     return value ?? undefined;
@@ -40,67 +14,81 @@ function maskSecret(value: string | undefined | null): string | undefined {
 }
 
 export class AddiLogger {
-  private channel: vscode.OutputChannel | undefined;
-  private level: LogLevel = "warn";
+  private channel: vscode.LogOutputChannel | undefined;
 
-  initialize(context: vscode.ExtensionContext, level: LogLevel): void {
+  /**
+   * Initialize the logger with the extension context.
+   */
+  initialize(context: vscode.ExtensionContext): void {
     if (!this.channel) {
       this.channel = vscode.window.createOutputChannel("Addi", { log: true });
       context.subscriptions.push(this.channel);
     }
-    this.setLevel(level);
-    this.appendRaw(`[${now()}] [INFO] Logger initialized at level ${level}`);
-  }
-
-  setLevel(level: LogLevel): void {
-    const previous = this.level;
-    this.level = level;
-    this.appendRaw(`[${now()}] [INFO] Log level set to ${level} (previous: ${previous})`);
-  }
-
-  getLevel(): LogLevel {
-    return this.level;
   }
 
   show(): void {
     this.channel?.show(true);
   }
 
-  error(message: string, metadata?: unknown): void {
-    this.log("error", message, metadata);
-  }
-
-  warn(message: string, metadata?: unknown): void {
-    this.log("warn", message, metadata);
-  }
-
-  info(message: string, metadata?: unknown): void {
-    this.log("info", message, metadata);
-  }
-
-  debug(message: string, metadata?: unknown): void {
-    this.log("debug", message, metadata);
-  }
-
-  log(level: LogLevel, message: string, metadata?: unknown): void {
-    if (LEVEL_WEIGHT[level] === undefined || LEVEL_WEIGHT[this.level] === undefined) {
-      return;
+  /**
+   * Log an error message.
+   * @param message Main message
+   * @param error Error object or metadata
+   * @param scope Optional component scope (e.g., 'Provider', 'MCP')
+   */
+  error(message: string, error?: unknown, scope?: string): void {
+    const formatted = this.formatMessage(message, scope);
+    if (error instanceof Error) {
+      // LogOutputChannel handles Error objects well
+      this.getChannel().error(formatted, error);
+    } else if (error !== undefined) {
+      this.getChannel().error(formatted, error);
+    } else {
+      this.getChannel().error(formatted);
     }
-    if (LEVEL_WEIGHT[level] > LEVEL_WEIGHT[this.level]) {
-      return;
-    }
+  }
 
-    const formatted = `[${now()}] [${level.toUpperCase()}] ${message}`;
+  warn(message: string, metadata?: unknown, scope?: string): void {
+    this.log("warn", message, metadata, scope);
+  }
+
+  info(message: string, metadata?: unknown, scope?: string): void {
+    this.log("info", message, metadata, scope);
+  }
+
+  debug(message: string, metadata?: unknown, scope?: string): void {
+    this.log("debug", message, metadata, scope);
+  }
+
+  trace(message: string, metadata?: unknown, scope?: string): void {
+    this.log("trace", message, metadata, scope);
+  }
+
+  private log(level: "warn" | "info" | "debug" | "trace", message: string, metadata?: unknown, scope?: string): void {
+    const channel = this.getChannel();
+    const formattedMessage = this.formatMessage(message, scope);
+    
     if (metadata !== undefined) {
-      const meta = formatMetadata(metadata);
-      if (meta) {
-        this.ensureChannel().appendLine(`${formatted} :: ${meta}`);
-        return;
-      }
+      channel[level](formattedMessage, metadata);
+    } else {
+      channel[level](formattedMessage);
     }
-    this.ensureChannel().appendLine(formatted);
   }
 
+  private formatMessage(message: string, scope?: string): string {
+    return scope ? `[${scope}] ${message}` : message;
+  }
+
+  private getChannel(): vscode.LogOutputChannel {
+    if (!this.channel) {
+      this.channel = vscode.window.createOutputChannel("Addi", { log: true });
+    }
+    return this.channel;
+  }
+
+  /**
+   * Sanitize provider info for logging.
+   */
   sanitizeProvider(provider?: {
     id?: string;
     name?: string;
@@ -120,6 +108,9 @@ export class AddiLogger {
     };
   }
 
+  /**
+   * Sanitize model info for logging.
+   */
   sanitizeModel(model?: { sid?: string; id?: string; name?: string; family?: string; version?: string }): Record<string, unknown> | undefined {
     if (!model) {
       return undefined;
@@ -131,17 +122,6 @@ export class AddiLogger {
       family: model.family,
       version: model.version,
     };
-  }
-
-  private ensureChannel(): vscode.OutputChannel {
-    if (!this.channel) {
-      this.channel = vscode.window.createOutputChannel("Addi", { log: true });
-    }
-    return this.channel;
-  }
-
-  private appendRaw(message: string): void {
-    this.ensureChannel().appendLine(message);
   }
 }
 

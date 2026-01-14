@@ -24,11 +24,8 @@ export class McpExtensionIntegration {
     const didChangeMcpEmitter = new vscode.EventEmitter<void>();
     this.mcpService.onDidStatusChange(() => didChangeMcpEmitter.fire());
     
-    // We do NOT trigger a VS Code MCP refresh here on tool updates anymore.
-    // The MCP Server (Go binary) monitors files and sends `notifications/tools/list_changed`
-    // which VS Code handles natively without needing a process restart.
     this.toolManager.onDidUpdate(() => {
-      logger.info("Tool manager updated. Relying on MCP Server 'list_changed' notification to refresh VS Code UI.");
+      logger.debug("Tool manager updated", undefined, "MCP");
     });
 
     try {
@@ -37,9 +34,9 @@ export class McpExtensionIntegration {
         vscode.lm.registerMcpServerDefinitionProvider("addi-mcp-provider", {
           onDidChangeMcpServerDefinitions: didChangeMcpEmitter.event,
           provideMcpServerDefinitions: async () => {
-            logger.info("provideMcpServerDefinitions called");
+            logger.debug("provideMcpServerDefinitions called", undefined, "MCP");
             const binaryPath = this.mcpService.getBinaryPath();
-            logger.info(`MCP Binary path: ${binaryPath}`);
+            logger.debug("MCP Binary path", { binaryPath }, "MCP");
 
             if (!binaryPath) {
               return [];
@@ -61,7 +58,7 @@ export class McpExtensionIntegration {
             }
 
             const dirsArg = dirs.join(",");
-            logger.info(`MCP Tools directories: ${dirsArg}`);
+            logger.debug("MCP Tools directories", { directories: dirsArg }, "MCP");
 
             // Use a stable environment to avoid unnecessary server restarts.
             // Only update the nonce if we explicitly want to force a process restart.
@@ -81,9 +78,9 @@ export class McpExtensionIntegration {
           },
         })
       );
-      logger.info("Registered MCP Server Provider via vscode.lm");
+      logger.info("Registered MCP Server Provider via vscode.lm", undefined, "MCP");
     } catch (e) {
-      logger.error("Failed to register MCP Server Provider", e);
+      logger.error("Failed to register MCP Server Provider", e, "MCP");
     }
   }
 

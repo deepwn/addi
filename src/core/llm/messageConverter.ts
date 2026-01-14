@@ -48,7 +48,7 @@ export class MessageConverter {
             // If we can't find the tool name, it means the tool call message is missing from history.
             // We should skip this result to avoid confusing the AI model or causing errors (like "text part not found" from ai-sdk).
             if (toolName === "unknown") {
-              logger.warn(`Dropping orphan tool result for callId: ${tr.callId} (No matching tool call found in history)`);
+              logger.warn(`Dropping orphan tool result for callId: ${tr.callId} (No matching tool call found in history)`, undefined, "MessageConverter");
               continue;
             }
 
@@ -88,7 +88,7 @@ export class MessageConverter {
                 .join("");
 
               // Log result length
-              logger.debug(`Tool Result for ${toolName} (${tr.callId}): ${resultText.length} chars`);
+              logger.trace(`Tool Result: ${toolName} (${tr.callId}) -> ${resultText.length} chars`, undefined, "MessageConverter");
 
               output = { type: "text", value: resultText || "Success" };
               // Try to parse as JSON if it looks like JSON (starts with { or [)
@@ -143,23 +143,16 @@ export class MessageConverter {
           // If empty, maybe skip or add placeholder?
           // VS Code might send empty assistant message if it's just a placeholder?
           // Let's log warning
-          logger.warn("Encountered empty assistant message, skipping.");
+          logger.warn("Encountered empty assistant message, skipping.", undefined, "MessageConverter");
         }
       }
     }
 
-    // Log the converted messages for debugging
-    logger.debug(
-      `Converted Messages: ${JSON.stringify(
-        coreMessages,
-        (key, value) => {
-          if (key === "image") {
-            return "[Image Data]";
-          }
-          return value;
-        },
-        2
-      )}`
+    // Log the converted messages for debugging at trace level
+    logger.trace(
+      "Converted Messages count: " + coreMessages.length,
+      coreMessages,
+      "MessageConverter"
     );
 
     return coreMessages;
