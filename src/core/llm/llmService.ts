@@ -53,6 +53,14 @@ export class LLMService {
             const schema = JSON.parse(JSON.stringify(ct.parameters));
             sanitizeSchema(schema);
 
+            // Ensure top-level is object as required by many LLM providers
+            if (schema.type !== "object") {
+              schema.type = "object";
+              if (!schema.properties) {
+                schema.properties = {};
+              }
+            }
+
             tools[ct.name] = {
               description: ct.description,
               inputSchema: jsonSchema(schema),
@@ -105,17 +113,13 @@ export class LLMService {
             schema = { type: "object", properties: {} };
           }
 
-          // Ensure schema is of type object, as required by ai-sdk and DeepSeek
+          // Ensure it's an object schema, which is required for AI SDK tools
           sanitizeSchema(schema);
-
-          // Double check top-level is object
           if (schema.type !== "object") {
-            logger.error(`Tool ${tool.name} has non-object schema type: ${schema.type}. Forcing to object.`);
             schema.type = "object";
-          }
-
-          if (!schema.properties) {
-            schema.properties = {};
+            if (!schema.properties) {
+              schema.properties = {};
+            }
           }
 
           // Create a simplified schema for logging to avoid clutter
@@ -337,18 +341,22 @@ function sanitizeSchema(schema: any) {
     // DeepSeek doesn't like type: null
     schema.type = "string";
   } else if (!schema.type) {
-    // Missing type
+    // Missing type or completely empty schema
     if (schema.properties) {
       schema.type = "object";
     } else if (schema.items) {
       schema.type = "array";
+    } else {
+      // Default to object for tool inputs
+      schema.type = "object";
     }
-    // If no properties/items, leave it undefined?
-    // Some schemas rely on inference, but explicit is better.
   }
 
-  // Enforce additionalProperties: false for objects (OpenAI/DeepSeek requirement)
+  // Enforce additionalProperties: false and ensure properties exists for objects
   if (schema.type === "object") {
+    if (!schema.properties) {
+      schema.properties = {};
+    }
     if (schema.additionalProperties !== false) {
       schema.additionalProperties = false;
     }
