@@ -2,6 +2,32 @@
 
 All notable changes to the "addi" extension will be documented in this file.
 
+## [0.0.20] - 2026-01-16
+
+> [!NOTE]
+> This release introduces significant enhancements to the MCP Server, including HTTP resource serving, authentication, and improved logging. These changes aim to provide a more secure and flexible environment for executing custom tools. Now you can use it as a standalone service over HTTP with proper access controls and shareable for your team. And you can use the `mcp-server` CLI directly with more options as a single tool.
+
+### Added
+
+- **MCP Server (CLI refactor)**: migrated `mcp-server` to `cobra` for consistent CLI handling and added flags: `--host`, `--port`, `--auth`, `--log-limit`, `--base-url`, and `--cors`.
+- **HTTP Resource Serving**: resources can now be exposed over HTTP in HTTP mode. Resource URIs are generated as `http(s)://<base-url>/resources/<dirToken>/<relPath>` when `--port` is set.
+- **Auth & Security**: HTTP mode supports an authentication token (auto-generated if `--auth` is empty). Token may be passed via query param (for EventSource) or `Authorization: Bearer <token>` header.
+
+### Changed
+
+- **Resources refactor**: moved resource discovery/registration code into `mcp-server/resources` and updated `resources.Register` to accept a `buildURI` callback so URIs can be generated for different transport modes.
+- **SSE base URL**: SSE server now publishes a configurable base URL (uses `--base-url` when provided) so clients behind proxies see correct endpoints.
+- **Logging rotation**: replaced ad-hoc logging with `lumberjack` rotator and added `--log-limit` (days) to control retention (old files purged).
+
+### Fixed
+
+- **Path traversal & access control**: HTTP resource handler validates requested paths against registered resource roots and returns `403` for forbidden access.
+- **Build fixes**: resolved minor compile issues (unused variables and signature mismatches) introduced during refactor.
+
+### Notes
+
+- Default CORS behavior: CORS headers are not emitted unless `--cors` is set. If `--cors` is `*`, a startup warning is logged. If `--base-url` is set and `--cors` is not provided, the server will allow the `--base-url` origin by default.
+
 ## [0.0.19] - 2026-01-14
 
 ### Added
