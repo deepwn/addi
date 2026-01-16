@@ -183,8 +183,7 @@ Addi 内置了一个 **Model Context Protocol (MCP)** Server，支持通过 YAML
 
 > **注意**: 导出配置时，如果**不设置密码**，导出的 JSON 文件将**不包含**任何 API Key（为了安全）。如果需要备份或迁移 API Key，请务必设置导出密码，此时文件将以加密格式保存。
 
-`Show Logs` 将在 VS Code 的 **输出 (Output)** 面板中定位 “Addi” 通道，可随时查看调试信息。通过 `Set Log Level` 或在设置中修改 `addi.logLevel`，即可在 `off / error / warn / info / debug` 之间切换输出详细程度。
-日志内容会自动脱敏，并额外记录模型解析、请求选项等关键上下文，便于排查问题。
+`Show Logs` 将在 VS Code 的 **输出 (Output)** 面板中定位 "Addi" 通道，可随时查看调试信息。日志内容会自动脱敏，并额外记录模型解析、请求选项等关键上下文，便于排查问题。
 
 > 这些命令大多通过树视图右键或标题按钮触发，命令面板默认隐藏。
 
@@ -197,7 +196,6 @@ Addi 内置了一个 **Model Context Protocol (MCP)** Server，支持通过 YAML
 | `addi.defaultModelFamily`       | "Addi"  | 默认模型 family                                     |
 | `addi.defaultModelVersion`      | "1.0.0" | 默认模型 version                                    |
 | `addi.saveConfigToSettingsSync` | true    | 是否保存到 VSCode Settings Sync 云端                |
-| `addi.logLevel`                 | warn    | 控制 Addi 输出通道的最低日志级别                    |
 | `addi.sortRule`                 | "none"  | 排序规则 (none/alphabet/input tokens/output tokens) |
 | `addi.sortTarget`               | "both"  | 排序目标 (providers/models/both)                    |
 
@@ -278,10 +276,11 @@ A: 请确保：
 | 请求失败              | 查看 Addi 输出日志 & 控制台 / 校验 API Endpoint & Key              |
 | 流式不工作            | Provider 是否支持 SSE；禁用流后重试                                |
 | 配置未同步            | 检查 `addi.saveConfigToSettingsSync` 设置                          |
+| 接口兼容性问题        | 检查 Provider 类型设置 / 查看日志了解请求细节 / 切换其他类型测试   |
 
 ## 许可证 License
 
-MIT © 2025-present [deepwn](https://github.com/deepwn) — 详见 [LICENSE](LICENSE)。
+MIT © 2026-present [deepwn](https://github.com/deepwn) — 详见 [LICENSE](LICENSE)。
 
 ## 免责声明 Disclaimer
 
