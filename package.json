@@ -352,6 +352,11 @@
           "type": "string",
           "default": "",
           "description": "Path to the Addi MCP Server binary. If empty, defaults to ~/.addi/bin/addi-mcp-server."
+        },
+        "addi.maxToolChainSteps": {
+          "type": "number",
+          "default": 100,
+          "description": "Maximum number of steps for tool calling chains. Individual model settings take precedence."
         }
       }
     },

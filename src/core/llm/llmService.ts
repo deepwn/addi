@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { streamText, jsonSchema, Tool } from 'ai';
+import { streamText, generateText, jsonSchema, Tool } from 'ai';
 import { Provider, Model } from '../../common/types';
 import { IToolManager, IMcpService } from '../../common/interfaces';
 import { AIProviderRegistry } from './aiRegistry';
@@ -208,10 +208,78 @@ export class LLMService {
       logger.debug('LLMService: tools registered at call time', { tools: Object.keys(tools) });
       if (Object.keys(tools).length > 0) {
         streamOptions.tools = tools;
-        // Enable multi-step tool calls (required for ai-sdk to execute tools and use results)
-        // In AI SDK v6, maxSteps is replaced by stopWhen: stepCountIs(n)
-        // remove stopWhen limit for now to allow more steps handling by VS Code side
-        // streamOptions.stopWhen = stepCountIs(10);
+        // Enable multi-step tool calls
+        // Precedence: 1. Model-specific JSON setting, 2. Global setting, 3. Hardcoded safe default 100
+        const globalMaxSteps = vscode.workspace.getConfiguration('addi').get<number | null>('maxToolChainSteps');
+        streamOptions.maxSteps = additionalParams['maxSteps'] ?? globalMaxSteps ?? 100;
+      }
+
+      // Check if non-streaming is explicitly requested
+      const useStreaming = additionalParams['stream'] !== false;
+
+      if (!useStreaming) {
+        logger.info('Using non-streaming request (generateText)', { modelId: model.id });
+        const result = await generateText(streamOptions);
+
+        // 1. Report reasoning and tool calls from each step
+        for (const step of result.steps as any[]) {
+          // reasoning
+          if (step.reasoning) {
+            if (typeof step.reasoning === 'string') {
+              progress.report(new vscode.LanguageModelTextPart(step.reasoning));
+            } else if (Array.isArray(step.reasoning)) {
+              const reasoningText = step.reasoning.map((r: any) => r.text || '').join('');
+              if (reasoningText) {
+                progress.report(new vscode.LanguageModelTextPart(reasoningText));
+              }
+            }
+          }
+
+          // tool calls and results
+          if (step.toolCalls) {
+            for (const toolCall of step.toolCalls) {
+              progress.report(
+                new vscode.LanguageModelToolCallPart(
+                  toolCall.toolCallId,
+                  toolCall.toolName,
+                  toolCall.args || toolCall.input
+                )
+              );
+
+              // find corresponding result in this step
+              const toolResult = step.toolResults?.find(
+                (r: any) => r.toolCallId === toolCall.toolCallId
+              );
+              if (toolResult) {
+                const res = toolResult.result;
+                const contentParts: vscode.LanguageModelResponsePart[] = [];
+                if (typeof res === 'string') {
+                  contentParts.push(new vscode.LanguageModelTextPart(res));
+                } else {
+                  contentParts.push(new vscode.LanguageModelTextPart(JSON.stringify(res)));
+                }
+                progress.report(new vscode.LanguageModelToolResultPart(toolCall.toolCallId, contentParts));
+              }
+            }
+          }
+        }
+
+        // 2. Report final text
+        if (result.text) {
+          if (!firstTokenTime) {
+            firstTokenTime = Date.now();
+          }
+          progress.report(new vscode.LanguageModelTextPart(result.text));
+        }
+
+        if (onStats && result.usage) {
+          onStats({
+            firstTokenTime: firstTokenTime || Date.now(),
+            endTime: Date.now(),
+            tokenCount: result.usage.outputTokens || 0,
+          });
+        }
+        return;
       }
 
       const result = streamText(streamOptions);
