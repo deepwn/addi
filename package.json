@@ -102,6 +102,10 @@
       {
         "view": "addiProviders",
         "contents": "Welcome to Addi!\n\nGet started by adding your first AI provider. Or first check [Docs](https://github.com/deepwn/addi)\n\n[Add Provider](command:addi.addProvider)\n\n[Import Config](command:addi.importConfig)"
+      },
+      {
+        "view": "addiTools",
+        "contents": "Extend your AI with custom internal tools. Check [Custom Tools Guide](https://github.com/deepwn/addi/blob/main/CUSTOM_TOOLS.md) for more details.\n\n[Create Tool](command:addi.addTool)"
       }
     ],
     "views": {

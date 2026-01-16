@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { CustomToolManager } from '../../infrastructure/mcp/customToolManager';
 import { CustomTool } from '../../common/types';
-import { McpServerService } from '../../infrastructure/mcp/mcpServerService';
 
 export class ToolTreeDataProvider implements vscode.TreeDataProvider<ToolTreeItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<ToolTreeItem | undefined | null | void> =
@@ -9,10 +8,7 @@ export class ToolTreeDataProvider implements vscode.TreeDataProvider<ToolTreeIte
   readonly onDidChangeTreeData: vscode.Event<ToolTreeItem | undefined | null | void> =
     this._onDidChangeTreeData.event;
 
-  constructor(
-    private manager: CustomToolManager,
-    private context: vscode.ExtensionContext
-  ) {
+  constructor(private manager: CustomToolManager) {
     this.manager.onDidUpdate(() => this.refresh());
   }
 
@@ -31,24 +27,7 @@ export class ToolTreeDataProvider implements vscode.TreeDataProvider<ToolTreeIte
     const tools = this.manager.getTools();
 
     if (tools.length === 0) {
-      const mcpService = McpServerService.getInstance(this.context);
-      if (!mcpService.isBinaryAvailable()) {
-        return Promise.resolve([
-          new ToolTreeItem(
-            null,
-            'Download MCP Server',
-            'Click to download the required MCP server binary'
-          ),
-        ]);
-      }
-      return Promise.resolve([
-        new ToolTreeItem(
-          null,
-          'No tools found',
-          'Create a .addi/public/*.yaml file to add tools',
-          false
-        ),
-      ]);
+      return Promise.resolve([]);
     }
     return Promise.resolve(tools.map((t) => new ToolTreeItem(t)));
   }
