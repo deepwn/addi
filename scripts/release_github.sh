@@ -135,21 +135,3 @@ if [ "$HAS_MCP_SERVER" == "true" ]; then
 fi
 
 echo "Release $TAG completed successfully!"
-    fi
-done
-
-# 上传 checksums.txt
-if [ -f "$RELEASE_DIR/checksums.txt" ]; then
-    upload_asset "$RELEASE_DIR/checksums.txt"
-fi
-
-# 上传 bin 目录下的所有文件
-if [ -d "$RELEASE_DIR/bin" ]; then
-    for f in "$RELEASE_DIR/bin"/*; do
-        if [ -f "$f" ]; then
-            upload_asset "$f"
-        fi
-    done
-fi
-
-echo "Release $TAG published successfully!"
