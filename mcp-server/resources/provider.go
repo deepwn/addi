@@ -1,9 +1,10 @@
-package main
+package resources
 
 import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log"
 	"mime"
 	"os"
 	"path/filepath"
@@ -13,8 +14,9 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// registerResources scans a directory and registers all files as MCP resources.
-func registerResources(s *server.MCPServer, rootDir string) error {
+// Register scans a directory and registers all files as MCP resources.
+// It accepts a URI builder function to allow flexibility in scheme generation (e.g., http vs file).
+func Register(s *server.MCPServer, rootDir string, buildURI func(relPath string) string) error {
 	absPath, err := filepath.Abs(rootDir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path for resources: %w", err)
@@ -25,7 +27,7 @@ func registerResources(s *server.MCPServer, rootDir string) error {
 		return nil // Gracefully skip if resources directory doesn't exist
 	}
 
-	fmt.Fprintf(os.Stderr, "Scanning resources in: %s\n", absPath)
+	log.Printf("Scanning resources in: %s", absPath)
 
 	var count int
 	err = filepath.WalkDir(absPath, func(path string, d fs.DirEntry, err error) error {
@@ -42,11 +44,16 @@ func registerResources(s *server.MCPServer, rootDir string) error {
 			return nil
 		}
 
-		// Create a consistent URI (e.g., file:///editor.html)
-		// For a real server, you might want a scheme like internal:// or just file://
-		// Here we use the relative path as the key name/uri suffix
+		// Normalize separator to slash for URI usage
 		slashPath := filepath.ToSlash(relPath)
-		uri := fmt.Sprintf("file:///%s", slashPath)
+
+		// Build URI using provided strategy or default to file:///
+		var uri string
+		if buildURI != nil {
+			uri = buildURI(slashPath)
+		} else {
+			uri = fmt.Sprintf("file:///%s", slashPath)
+		}
 
 		mimeType := mime.TypeByExtension(filepath.Ext(path))
 		if mimeType == "" {
@@ -67,6 +74,10 @@ func registerResources(s *server.MCPServer, rootDir string) error {
 				return nil, fmt.Errorf("failed to read resource file: %w", err)
 			}
 
+			// For HTTP-based clients, the "Text" field is useful.
+			// If serving binary files, we should ideally use BlobResourceContents (mcp-go support pending or base64).
+			// Mark3labs mcp-go supports TextResourceContents and BlobResourceContents
+
 			return []mcp.ResourceContents{
 				mcp.TextResourceContents{
 					URI:      request.Params.URI,
@@ -85,15 +96,16 @@ func registerResources(s *server.MCPServer, rootDir string) error {
 	}
 
 	if count > 0 {
-		fmt.Fprintf(os.Stderr, "Registered %d resources\n", count)
+		log.Printf("Registered %d resources", count)
 	}
 	return nil
 }
 
-// registerEmbeddedResources scans an embedded FS and registers files as MCP resources.
+// RegisterEmbedded scans an embedded FS and registers files as MCP resources.
 // It uses internal:/// scheme to distinguish from local files.
-func registerEmbeddedResources(s *server.MCPServer, fsys fs.FS) error {
-	fmt.Fprintf(os.Stderr, "Scanning embedded resources...\n")
+// fsys should be the root of the embedded filesystem you want to scan.
+func RegisterEmbedded(s *server.MCPServer, fsys fs.FS) error {
+	log.Printf("Scanning embedded resources...")
 
 	var count int
 	// Walk the embedded filesystem
@@ -150,7 +162,7 @@ func registerEmbeddedResources(s *server.MCPServer, fsys fs.FS) error {
 	}
 
 	if count > 0 {
-		fmt.Fprintf(os.Stderr, "Registered %d embedded resources\n", count)
+		log.Printf("Registered %d embedded resources", count)
 	}
 	return nil
 }

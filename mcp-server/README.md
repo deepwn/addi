@@ -20,7 +20,7 @@ This is a local Model Context Protocol (MCP) server for Addi. It allows you to d
 
 ## CLI Usage
 
-The server runs over Stdio and supports several flags:
+The server supports several flags and can run over Stdio (default) or HTTP (SSE).
 
 ```bash
 ./mcp-server [flags]
@@ -32,10 +32,35 @@ The server runs over Stdio and supports several flags:
   - `local`: Run tools directly on host (Default).
   - `docker`: Run tools in Docker containers.
   - `both`: Allow both execution modes.
-- `--dirs`: Comma-separated list of directories to scan for tool definitions.
+- `--dirs`: Comma-separated list of directories to scan for tool definitions and resources.
   - Defaults to: `~/.addi`, `.addi/public`, `.addi/private`.
 - `--watch`: Enable file watching. The server will auto-reload tools when YAML files are changed.
+- `--port`: Port to listen on for HTTP (SSE). If `0` (default), uses Stdio mode.
+- `--host`: Host to listen on for HTTP (SSE). Defaults to `127.0.0.1`.
+- `--base-url`: Base URL for resources and SSE endpoints (e.g., `https://api.example.com`). Useful when running behind a proxy.
+- `--cors`: Allowed CORS origin (e.g., `https://client.example.com`). If not set, CORS headers are not emitted.
+- `--auth`: Authentication token for HTTP mode. If empty and running in HTTP mode, a random token is generated.
+- `--log-limit`: Number of days to retain log files in `~/.addi/logs/`. Defaults to `15`.
 - `--version`: Print version information.
+
+## HTTP Mode (SSE)
+
+You can run the MCP server in standalone HTTP mode, enabling it to be used by clients over the network or locally without direct process management.
+
+```bash
+./mcp-server --port 8080 --auth my-secret-token
+```
+
+If no `--auth` token is provided, a random secure token will be generated and printed to stdout/logs.
+
+## Resources
+
+The server automatically scans for a `resources/` subdirectory within any of the configured `--dirs`. Files found in these directories are exposed as MCP Resources.
+
+- **URI Format**: `file:///<relative_path>` (e.g., `file:///docs/guide.md`)
+- **MIME Type**: Automatically detected based on file extension.
+
+Additionally, the server embeds built-in resources (like templates and reference documentation) which are exposed under the `internal:///` scheme.
 
 ## Configuration (MCP Client)
 
