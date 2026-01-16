@@ -210,7 +210,9 @@ export class LLMService {
         streamOptions.tools = tools;
         // Enable multi-step tool calls
         // Precedence: 1. Model-specific JSON setting, 2. Global setting, 3. Hardcoded safe default 100
-        const globalMaxSteps = vscode.workspace.getConfiguration('addi').get<number | null>('maxToolChainSteps');
+        const globalMaxSteps = vscode.workspace
+          .getConfiguration('addi')
+          .get<number | null>('maxToolChainSteps');
         streamOptions.maxSteps = additionalParams['maxSteps'] ?? globalMaxSteps ?? 100;
       }
 
@@ -258,7 +260,9 @@ export class LLMService {
                 } else {
                   contentParts.push(new vscode.LanguageModelTextPart(JSON.stringify(res)));
                 }
-                progress.report(new vscode.LanguageModelToolResultPart(toolCall.toolCallId, contentParts));
+                progress.report(
+                  new vscode.LanguageModelToolResultPart(toolCall.toolCallId, contentParts)
+                );
               }
             }
           }

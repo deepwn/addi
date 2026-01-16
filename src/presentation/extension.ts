@@ -41,6 +41,10 @@ export function activate(context: vscode.ExtensionContext) {
   const manager = new ProviderModelManager(storageService);
   // context.subscriptions.push(new vscode.Disposable(() => manager.dispose())); // Manager no longer needs dispose if it strictly manages logic
 
+  const treeDataProvider = new AddiTreeDataProvider(manager);
+  context.subscriptions.push(manager.onDidUpdate(() => treeDataProvider.refresh()));
+  vscode.window.registerTreeDataProvider('addiProviders', treeDataProvider);
+
   // Register MCP Integration
   const mcpIntegration = new McpExtensionIntegration(context, mcpService, toolManager);
   mcpIntegration.register();
@@ -76,7 +80,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Custom Tools
   // const toolManager = new CustomToolManager(); // Moved to top
-  const toolTreeDataProvider = new ToolTreeDataProvider(toolManager, context);
+  const toolTreeDataProvider = new ToolTreeDataProvider(toolManager);
   vscode.window.registerTreeDataProvider('addiTools', toolTreeDataProvider);
 
   // Register Addi Tool Provider (Bridge for global tools)
@@ -99,10 +103,6 @@ export function activate(context: vscode.ExtensionContext) {
     'addi-provider',
     new AddiChatProvider(manager, new LLMService(toolManager, mcpService))
   );
-
-  const treeDataProvider = new AddiTreeDataProvider(manager);
-  context.subscriptions.push(manager.onDidUpdate(() => treeDataProvider.refresh()));
-  vscode.window.registerTreeDataProvider('addiProviders', treeDataProvider);
 
   const treeView = vscode.window.createTreeView('addiProviders', {
     treeDataProvider,

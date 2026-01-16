@@ -43,43 +43,59 @@ export class McpServerService implements IMcpService {
     const binaryPath = await this.getOrDownloadBinary();
     if (binaryPath) {
       await this.checkForUpdate(binaryPath);
-      // Optimization: Do not eagerly start the server.
-      // It will be started on-demand by LLMService (using ensureServerRunning)
-      // or by VS Code (via McpIntegration definition provider).
-      // await this.ensureServerRunning();
     }
   }
 
+  /**
+   * Checks if an update is available or if the local binary is corrupted.
+   *
+   * Update Logic:
+   * 1. If currently installed version is less than the latest available version -> Prompt Update.
+   * 2. If versions match but local SHA256 doesn't match remote digest -> Prompt Re-download (Integrity Check).
+   * 3. 'dev' versions are ignored for updates.
+   */
   private async checkForUpdate(binaryPath: string) {
-    // Logic:
-    // 1. Get current installed binary version.
-    // 2. Get target version (ideally extension version, or latest released MCP version).
     const extensionVersion = this.context.extension.packageJSON.version;
-
-    // Get binary version
     const currentVersion = await this.getBinaryVersion(binaryPath);
-    if (!currentVersion) {
+    if (!currentVersion || currentVersion === 'dev') {
       return;
     }
 
-    // If current version is "dev", never update automatically
-    if (currentVersion === 'dev') {
-      return;
-    }
-
-    // We simply assume we want to match latest available if current is different?
-    // Or we can check if a better version exists.
-    // For now, let's just trigger download logic if we suspect an update is needed (handled inside getOrDownloadBinary usually?)
-    // But here we are in 'initialize', binary exists.
-    // Let's rely on McpDownloader to find the best version.
     try {
-      const targetVersion = await McpDownloader.resolveBestMcpVersion(extensionVersion);
-      if (targetVersion && currentVersion !== targetVersion) {
-        const selection = await vscode.window.showInformationMessage(
-          `New version of Addi MCP Server is available (Current: ${currentVersion}, Latest: ${targetVersion}). Update now?`,
-          'Update',
-          'Ignore'
-        );
+      // Find the best release (latest version that has a binary)
+      const bestRelease = await McpDownloader.resolveBestRelease(extensionVersion);
+      if (!bestRelease) {
+        return;
+      }
+
+      const targetVersion = bestRelease.version;
+      const isOutdated = this.isVersionLower(currentVersion, targetVersion);
+      let needsUpdate = isOutdated;
+
+      // If version matches but we have a digest, verify integrity of local file
+      if (!needsUpdate && currentVersion === targetVersion && bestRelease.digest) {
+        try {
+          const actualHash = await McpDownloader.calculateFileHash(binaryPath);
+          const parts = bestRelease.digest.split(':');
+          const expectedHash = parts.length > 1 ? parts[1] : parts[0];
+
+          if (actualHash !== expectedHash) {
+            logger.info(
+              `Integrity mismatch for version ${currentVersion}. Redownload recommended.`
+            );
+            needsUpdate = true;
+          }
+        } catch (hashErr) {
+          logger.warn('Failed to verify local binary hash', hashErr);
+        }
+      }
+
+      if (needsUpdate) {
+        const msg = isOutdated
+          ? `New version of Addi MCP Server is available (Current: ${currentVersion}, Latest: ${targetVersion}). Update now?`
+          : `Addi MCP Server Integrity mismatch. Update now?`;
+
+        const selection = await vscode.window.showInformationMessage(msg, 'Update', 'Ignore');
         if (selection === 'Update') {
           await this.downloadBinary(binaryPath, targetVersion);
         }
@@ -87,6 +103,29 @@ export class McpServerService implements IMcpService {
     } catch (e) {
       logger.warn('Failed to check for MCP updates', e);
     }
+  }
+
+  /**
+   * Compares two semantic version strings.
+   * @returns true if current < target
+   */
+  private isVersionLower(current: string, target: string): boolean {
+    const cParts = current.split('.').map((p) => parseInt(p, 10));
+    const tParts = target.split('.').map((p) => parseInt(p, 10));
+    for (let i = 0; i < Math.max(cParts.length, tParts.length); i++) {
+      const c = cParts[i] || 0;
+      const t = tParts[i] || 0;
+      if (isNaN(c) || isNaN(t)) {
+        continue;
+      }
+      if (c < t) {
+        return true;
+      }
+      if (c > t) {
+        return false;
+      }
+    }
+    return false;
   }
 
   private async getBinaryVersion(binaryPath: string): Promise<string | null> {
