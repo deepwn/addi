@@ -370,6 +370,10 @@ export class EditorViewManager {
     }
 
     if (this._viewState.mode === 'create') {
+      // For new models, don't set speedHistory (no history yet)
+      if (this._detectedSpeed) {
+        delete (modelData as any).speedHistory;
+      }
       if (!this._viewState.parentId) {
         vscode.window.showErrorMessage('No parent provider specified for new model.');
         return;
@@ -396,6 +400,14 @@ export class EditorViewManager {
     if (!parentId) {
       vscode.window.showErrorMessage('Could not find parent provider for model.');
       return;
+    }
+
+    // Update model speed separately to preserve speedHistory
+    if (this._detectedSpeed) {
+      await this._manager.updateModelSpeed(parentId, model.sid, this._detectedSpeed);
+      // Remove speedHistory and averageSpeed from modelData to avoid overriding
+      delete (modelData as any).speedHistory;
+      delete (modelData as any).averageSpeed;
     }
 
     const success = await this._manager.updateModel(parentId, model.sid, modelData);
