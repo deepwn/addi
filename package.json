@@ -14,7 +14,7 @@
     "url": "https://github.com/deepwn/addi/issues"
   },
   "engines": {
-    "vscode": "^1.107.0"
+    "vscode": "^1.108.0"
   },
   "keywords": [
     "AI",
@@ -564,7 +564,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/mocha": "^10.0.10",
     "@types/node": "^25.0.9",
-    "@types/vscode": "^1.107.0",
+    "@types/vscode": "^1.108.0",
     "@typescript-eslint/eslint-plugin": "^8.53.0",
     "@typescript-eslint/parser": "^8.53.0",
     "@vscode/test-cli": "^0.0.12",
@@ -573,7 +573,8 @@
     "lint-staged": "^15.5.2",
     "prettier": "^3.8.0",
     "rimraf": "^6.1.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@vscode/vsce": "^3.7.1"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.15",
@@ -581,7 +582,7 @@
     "@ai-sdk/google": "^3.0.10",
     "@ai-sdk/openai": "^3.0.12",
     "@ai-sdk/openai-compatible": "^2.0.13",
-    "ai": "^6.0.38",
+    "ai": "^6.0.39",
     "js-yaml": "^4.1.1",
     "zod": "^4.3.5"
   }
