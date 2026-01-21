@@ -2,10 +2,25 @@
 
 All notable changes to the "addi" extension will be documented in this file.
 
+## [0.0.21] - 2026-01-20
+
+> [!NOTE]
+> This release enhances the configuration synchronization strategy with better security, performance optimization, and improved user experience.
+
+### Changed
+
+- **Configuration Sync Strategy**: Enhanced security by separating sensitive data from synchronized configuration:
+  - **API Keys**: Always stored in VS Code's `SecretStorage` (OS-encrypted) and never synced
+  - **Performance Data**: Local-only storage some like `speedHistory` / `averageSpeed` to `EXTEND_STORAGE_KEY` to avoid frequent sync traffic
+- **Security Enhancement**: Consolidated API key storage in encrypted `SecretStorage` with automatic migration from legacy storage (when import file without API key will migrate local keys if already present).
+- **Performance Optimization**: Reduced Settings Sync traffic by isolating frequently-updated performance metrics
+- **VS Code Version requirement**: Updated minimum VS Code version to `1.108.0`.
+- **Schema handling**: Adopted Zod-based schema conversion (`safeConvertToZod`) and updated `LLMService` to register tools using Zod schemas while retaining compatibility with legacy JSON Schemas.
+
 ## [0.0.20] - 2026-01-16
 
 > [!NOTE]
-> This release introduces significant enhancements to the MCP Server, including HTTP resource serving, authentication, and improved logging. These changes aim to provide a more secure and flexible environment for executing custom tools. Now you can use it as a standalone service over HTTP with proper access controls and shareable for your team. And you can use the `mcp-server` CLI directly with more options as a single tool.
+> This release introduces significant enhancements to the MCP Server, including HTTP resource serving, authentication, and improved logging. These changes aim to provide a secure and flexible environment for executing custom tools. Now you can use it as a standalone service over HTTP with proper access controls and shareable for your team. And you can use the `mcp-server` CLI directly with more options as a single tool.
 
 ### Added
 

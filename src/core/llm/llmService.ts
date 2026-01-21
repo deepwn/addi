@@ -1,10 +1,12 @@
 import * as vscode from 'vscode';
-import { streamText, generateText, jsonSchema, Tool } from 'ai';
+import { streamText, generateText, Tool } from 'ai';
+import { z } from 'zod';
 import { Provider, Model } from '../../common/types';
 import { IToolManager, IMcpService } from '../../common/interfaces';
 import { AIProviderRegistry } from './aiRegistry';
 import { MessageConverter } from './messageConverter';
 import { logger } from '../../common/logger';
+import { safeConvertToZod } from './schemaConverter';
 
 export class LLMService {
   constructor(
@@ -52,21 +54,15 @@ export class LLMService {
         });
         for (const ct of customTools) {
           try {
-            // Clone and sanitize the schema to ensure compatibility (e.g. DeepSeek requires specific types)
-            const schema = JSON.parse(JSON.stringify(ct.parameters));
-            sanitizeSchema(schema);
-
-            // Ensure top-level is object as required by many LLM providers
-            if (schema.type !== 'object') {
-              schema.type = 'object';
-              if (!schema.properties) {
-                schema.properties = {};
-              }
-            }
+            // Convert JSON Schema to Zod Schema following AI SDK best practices
+            const zodSchema = safeConvertToZod(
+              ct.parameters,
+              z.object({}) // Fallback to empty object schema
+            );
 
             tools[ct.name] = {
               description: ct.description,
-              inputSchema: jsonSchema(schema),
+              inputSchema: zodSchema,
               execute: async (args: any) => {
                 // Log tool execution without sensitive args
                 logger.debug(`Executing custom tool ${ct.name}`, {
@@ -121,45 +117,24 @@ export class LLMService {
             schema = { type: 'object', properties: {} };
           }
 
-          // Ensure it's an object schema, which is required for AI SDK tools
-          sanitizeSchema(schema);
-          if (schema.type !== 'object') {
-            schema.type = 'object';
-            if (!schema.properties) {
-              schema.properties = {};
-            }
-          }
+          // Convert JSON Schema to Zod Schema
+          const zodSchema = safeConvertToZod(
+            schema,
+            z.object({}) // Fallback to empty object schema
+          );
 
-          // Create a simplified schema for logging to avoid clutter
-          const logSchema = JSON.parse(JSON.stringify(schema));
-          if (tool.description && tool.description.length > 50) {
-            // We are logging the tool registration, not the tool object itself here,
-            // but the schema might contain descriptions in properties.
-            // Let's just log the tool name and a truncated description.
-          }
-          // Truncate property descriptions in the log schema
-          if (logSchema.properties) {
-            for (const key in logSchema.properties) {
-              const prop = logSchema.properties[key];
-              if (prop.description && prop.description.length > 50) {
-                prop.description = prop.description.substring(0, 50) + '...';
-              }
-            }
-          }
-
-          // Log tool registration without sensitive schema details
+          // Log tool registration
           logger.info(`Registering tool: ${tool.name}`, {
             description:
               tool.description && tool.description.length > 50
                 ? tool.description.substring(0, 50) + '...'
                 : tool.description,
-            propertyCount: logSchema.properties ? Object.keys(logSchema.properties).length : 0,
           });
 
           try {
             tools[tool.name] = {
               description: tool.description,
-              inputSchema: jsonSchema(schema),
+              inputSchema: zodSchema,
             } as any;
           } catch (e) {
             logger.error(`Failed to register provided tool ${tool.name} due to schema error`, e);
@@ -423,86 +398,4 @@ export class LLMService {
       throw error;
     }
   }
-}
-
-function sanitizeSchema(schema: any) {
-  if (!schema || typeof schema !== 'object') {
-    return;
-  }
-
-  // Handle type property
-  if (Array.isArray(schema.type)) {
-    // If type is array (e.g. ["string", "null"]), pick the first non-null type
-    const nonNull = schema.type.find((t: any) => t !== 'null');
-    if (nonNull) {
-      schema.type = nonNull;
-    } else {
-      // If all are null (weird), default to string
-      schema.type = 'string';
-    }
-  } else if (schema.type === 'null') {
-    // DeepSeek doesn't like type: null
-    schema.type = 'string';
-  } else if (!schema.type) {
-    // Missing type or completely empty schema
-    if (schema.properties) {
-      schema.type = 'object';
-    } else if (schema.items) {
-      schema.type = 'array';
-    } else {
-      // Default to object for tool inputs
-      schema.type = 'object';
-    }
-  }
-
-  // Enforce additionalProperties: false and ensure properties exists for objects
-  if (schema.type === 'object') {
-    if (!schema.properties) {
-      schema.properties = {};
-    }
-    if (schema.additionalProperties !== false) {
-      schema.additionalProperties = false;
-    }
-
-    // Ensure required fields exist in properties
-    if (Array.isArray(schema.required)) {
-      schema.required = schema.required.filter((req: string) => {
-        return schema.properties && Object.prototype.hasOwnProperty.call(schema.properties, req);
-      });
-    }
-  }
-
-  // Recursively sanitize properties
-  if (schema.properties) {
-    for (const key in schema.properties) {
-      sanitizeSchema(schema.properties[key]);
-    }
-  }
-
-  // Recursively sanitize array items
-  if (schema.items) {
-    sanitizeSchema(schema.items);
-  }
-
-  // Handle combinators (anyOf, oneOf, allOf)
-  ['anyOf', 'oneOf', 'allOf'].forEach((combinator) => {
-    if (Array.isArray(schema[combinator])) {
-      // Filter out {type: 'null'} options which are common in nullable schemas
-      const originalLength = schema[combinator].length;
-      schema[combinator] = schema[combinator].filter((subSchema: any) => {
-        return subSchema.type !== 'null';
-      });
-
-      // If we filtered everything out (e.g. it was just null), fallback to string
-      if (schema[combinator].length === 0 && originalLength > 0) {
-        delete schema[combinator];
-        if (!schema.type) {
-          schema.type = 'string';
-        }
-      } else {
-        // Recursively sanitize remaining options
-        schema[combinator].forEach((subSchema: any) => sanitizeSchema(subSchema));
-      }
-    }
-  });
 }
