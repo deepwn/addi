@@ -2,10 +2,7 @@
 
 All notable changes to the "addi" extension will be documented in this file.
 
-## [0.0.21] - 2026-01-20
-
-> [!NOTE]
-> This release enhances the configuration synchronization strategy with better security, performance optimization, and improved user experience.
+## [0.0.21] - 2026-01-21
 
 ### Changed
 
@@ -16,6 +13,7 @@ All notable changes to the "addi" extension will be documented in this file.
 - **Performance Optimization**: Reduced Settings Sync traffic by isolating frequently-updated performance metrics
 - **VS Code Version requirement**: Updated minimum VS Code version to `1.108.0`.
 - **Schema handling**: Adopted Zod-based schema conversion (`safeConvertToZod`) and updated `LLMService` to register tools using Zod schemas while retaining compatibility with legacy JSON Schemas.
+- **Disable speed test by default**: The speed test is now disabled by default with `Verify & Detect` in editor view. It's auto tested with every normal chat requests.
 
 ## [0.0.20] - 2026-01-16
 

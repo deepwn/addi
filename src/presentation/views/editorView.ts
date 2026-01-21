@@ -265,7 +265,7 @@ export class EditorViewManager {
               detectOutput: true,
               checkVision: true,
               checkTools: true,
-              checkSpeed: true,
+              checkSpeed: false,
             },
             controller.signal,
             (msg) => {
