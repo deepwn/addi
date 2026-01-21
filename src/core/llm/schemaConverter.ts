@@ -81,7 +81,7 @@ export function jsonSchemaToZod(schema: any): z.ZodTypeAny {
  * Handle array of types (e.g., ["string", "null"])
  */
 function handleArrayType(types: string[]): z.ZodTypeAny {
-  const nonNullTypes = types.filter(t => t !== 'null');
+  const nonNullTypes = types.filter((t) => t !== 'null');
 
   if (nonNullTypes.length === 0) {
     return z.null();
@@ -94,7 +94,7 @@ function handleArrayType(types: string[]): z.ZodTypeAny {
   }
 
   // If we have multiple non-null types, treat as anyOf
-  const schemas = nonNullTypes.map(t => typeToZod(t as string));
+  const schemas = nonNullTypes.map((t) => typeToZod(t as string));
   const defined = schemas.filter(Boolean) as z.ZodTypeAny[];
   if (defined.length === 1) {
     return types.includes('null') ? defined[0]!.nullable() : defined[0]!;
@@ -135,7 +135,7 @@ function handleCombinator(schemas: any[], type: 'anyOf' | 'oneOf' | 'allOf'): z.
     return hasNull ? z.null() : z.any();
   }
 
-  const zodSchemas = nonNullSchemas.map(s => jsonSchemaToZod(s));
+  const zodSchemas = nonNullSchemas.map((s) => jsonSchemaToZod(s));
 
   let result: z.ZodTypeAny;
 

@@ -98,10 +98,18 @@ export class StorageService implements IStorageService {
    * This data is NOT synced to avoid frequent sync operations.
    * @returns A map of provider ID to model SID to extended data.
    */
-  private getExtendedData(): Map<string, Map<string, { speedHistory?: number[]; averageSpeed?: number }>> {
-    const stored = this.context.globalState.get<Record<string, Record<string, { speedHistory?: number[]; averageSpeed?: number }>>>(StorageService.EXTEND_STORAGE_KEY, {});
-    const result = new Map<string, Map<string, { speedHistory?: number[]; averageSpeed?: number }>>();
-    
+  private getExtendedData(): Map<
+    string,
+    Map<string, { speedHistory?: number[]; averageSpeed?: number }>
+  > {
+    const stored = this.context.globalState.get<
+      Record<string, Record<string, { speedHistory?: number[]; averageSpeed?: number }>>
+    >(StorageService.EXTEND_STORAGE_KEY, {});
+    const result = new Map<
+      string,
+      Map<string, { speedHistory?: number[]; averageSpeed?: number }>
+    >();
+
     for (const [providerId, models] of Object.entries(stored)) {
       const modelMap = new Map<string, { speedHistory?: number[]; averageSpeed?: number }>();
       for (const [modelSid, extendData] of Object.entries(models)) {
@@ -109,7 +117,7 @@ export class StorageService implements IStorageService {
       }
       result.set(providerId, modelMap);
     }
-    
+
     return result;
   }
 
@@ -120,11 +128,15 @@ export class StorageService implements IStorageService {
    * @param providers The providers to extract extended data from.
    */
   private async saveExtendedData(providers: Provider[]): Promise<void> {
-    const extendData: Record<string, Record<string, { speedHistory?: number[]; averageSpeed?: number }>> = {};
-    
+    const extendData: Record<
+      string,
+      Record<string, { speedHistory?: number[]; averageSpeed?: number }>
+    > = {};
+
     for (const provider of providers) {
-      const providerExtendData: Record<string, { speedHistory?: number[]; averageSpeed?: number }> = {};
-      
+      const providerExtendData: Record<string, { speedHistory?: number[]; averageSpeed?: number }> =
+        {};
+
       for (const model of provider.models) {
         if (model.speedHistory || model.averageSpeed !== undefined) {
           const modelExtendData: { speedHistory?: number[]; averageSpeed?: number } = {};
@@ -137,12 +149,12 @@ export class StorageService implements IStorageService {
           providerExtendData[model.sid] = modelExtendData;
         }
       }
-      
+
       if (Object.keys(providerExtendData).length > 0) {
         extendData[provider.id] = providerExtendData;
       }
     }
-    
+
     await this.context.globalState.update(StorageService.EXTEND_STORAGE_KEY, extendData);
   }
 
@@ -163,7 +175,7 @@ export class StorageService implements IStorageService {
           p.apiKey = secret;
         }
       }
-      
+
       // Merge extended data (speedHistory, averageSpeed) for each model
       const providerExtendData = extendedData.get(p.id);
       if (providerExtendData) {
@@ -215,7 +227,7 @@ export class StorageService implements IStorageService {
 
     for (const p of providers) {
       const secretKey = `addi.provider.apikey.${p.id}`;
-      
+
       if (p.apiKey !== undefined) {
         // Store new API key (even if empty, to overwrite previous value)
         await this.context.secrets.store(secretKey, p.apiKey);
@@ -223,7 +235,7 @@ export class StorageService implements IStorageService {
       } else {
         // No apiKey provided - check if we should preserve existing secret
         let existingSecret: string | undefined;
-        
+
         // First check secretsCache (for updates within the same session)
         if (this.secretsCache.has(p.id)) {
           existingSecret = this.secretsCache.get(p.id);
@@ -231,7 +243,7 @@ export class StorageService implements IStorageService {
           // Then check existingSecrets (for imports from unencrypted configs)
           existingSecret = existingSecrets.get(p.id);
         }
-        
+
         if (existingSecret !== undefined) {
           // Preserve existing secret
           this.secretsCache.set(p.id, existingSecret);
@@ -250,7 +262,7 @@ export class StorageService implements IStorageService {
 
     // Save extended data separately (NOT synced)
     await this.saveExtendedData(providers);
-    
+
     // Save main provider data (synced if enabled)
     await this.context.globalState.update(StorageService.STORAGE_KEY, providersToSave);
     this._onDidUpdate.fire();

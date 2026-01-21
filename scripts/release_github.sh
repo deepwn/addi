@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 
+# 参数解析: 支持 --no-bin 跳过上传 MCP/bin 及相关文件（仅上传 .vsix）
+NO_BIN="false"
+for arg in "$@"; do
+    if [ "$arg" = "--no-bin" ]; then
+        NO_BIN="true"
+    fi
+done
+
 # 获取脚本所在目录的绝对路径
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -108,21 +116,27 @@ for f in "$RELEASE_DIR"/*.vsix; do
 done
 
 # 上传 mcp-server binarys (如果由于build.sh生成了)
-# Check inside release/bin
-if [ -d "$RELEASE_DIR/bin" ]; then
-    count=$(ls -1 "$RELEASE_DIR/bin"/mcp-server-* 2>/dev/null | wc -l)
-    if [ $count != 0 ]; then
-        echo "Found MCP Server binaries, uploading..."
-        HAS_MCP_SERVER="true"
-        for f in "$RELEASE_DIR/bin"/mcp-server-*; do
-             upload_asset "$f"
-        done
+if [ "$NO_BIN" != "true" ]; then
+    # Check inside release/bin
+    if [ -d "$RELEASE_DIR/bin" ]; then
+        count=$(ls -1 "$RELEASE_DIR/bin"/mcp-server-* 2>/dev/null | wc -l)
+        if [ $count != 0 ]; then
+            echo "Found MCP Server binaries, uploading..."
+            HAS_MCP_SERVER="true"
+            for f in "$RELEASE_DIR/bin"/mcp-server-*; do
+                 upload_asset "$f"
+            done
+        fi
     fi
+else
+    echo "--no-bin specified: skipping MCP server binaries and related artifacts."
 fi
 
-# 上传 checksums.txt
-if [ -f "$RELEASE_DIR/checksums.txt" ]; then
-    upload_asset "$RELEASE_DIR/checksums.txt"
+# 上传 checksums.txt（仅当未使用 --no-bin 时）
+if [ "$NO_BIN" != "true" ]; then
+    if [ -f "$RELEASE_DIR/checksums.txt" ]; then
+        upload_asset "$RELEASE_DIR/checksums.txt"
+    fi
 fi
 
 # 3. Update Release Body if MCP Server included (Optional but useful for humans)

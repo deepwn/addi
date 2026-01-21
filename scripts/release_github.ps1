@@ -1,6 +1,12 @@
 # scripts/release_github.ps1
 $ErrorActionPreference = 'Stop'
 
+# 参数解析: 支持 --no-bin 跳过上传 MCP/bin 及相关文件（仅上传 .vsix）
+$NoBin = $false
+foreach ($a in $args) {
+    if ($a -eq '--no-bin') { $NoBin = $true }
+}
+
 # 获取脚本所在目录的绝对路径
 $ScriptDir = $PSScriptRoot
 $ProjectRoot = Split-Path -Parent $ScriptDir
@@ -171,21 +177,27 @@ Get-ChildItem -Path $ReleaseDir -Filter '*.vsix' | ForEach-Object {
 }
 
 # 上传 mcp-server binarys (如果由于build.sh生成了)
-if (Test-Path $BinDir) {
-    $McpFiles = Get-ChildItem -Path $BinDir | Where-Object { -not $_.PSIsContainer -and $_.Name -like "mcp-server-*" }
-    if ($McpFiles) {
-        Write-Host "Found MCP Server binaries, uploading..." -ForegroundColor Cyan
-        $HasMcpServer = $true
-        $McpFiles | ForEach-Object {
-            Upload-Asset -FilePath $_.FullName
+if (-not $NoBin) {
+    if (Test-Path $BinDir) {
+        $McpFiles = Get-ChildItem -Path $BinDir | Where-Object { -not $_.PSIsContainer -and $_.Name -like "mcp-server-*" }
+        if ($McpFiles) {
+            Write-Host "Found MCP Server binaries, uploading..." -ForegroundColor Cyan
+            $HasMcpServer = $true
+            $McpFiles | ForEach-Object {
+                Upload-Asset -FilePath $_.FullName
+            }
         }
     }
+} else {
+    Write-Host "--no-bin specified: skipping MCP server binaries and related artifacts." -ForegroundColor Yellow
 }
 
-# 上传 checksums.txt
-$ChecksumsFile = Join-Path $ReleaseDir 'checksums.txt'
-if (Test-Path $ChecksumsFile) {
-    Upload-Asset -FilePath $ChecksumsFile
+# 上传 checksums.txt（仅当未使用 --no-bin 时）
+if (-not $NoBin) {
+    $ChecksumsFile = Join-Path $ReleaseDir 'checksums.txt'
+    if (Test-Path $ChecksumsFile) {
+        Upload-Asset -FilePath $ChecksumsFile
+    }
 }
 
 Write-Host "Release $Tag completed successfully!" -ForegroundColor Green

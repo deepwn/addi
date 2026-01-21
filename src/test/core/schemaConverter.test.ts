@@ -1,9 +1,6 @@
 import * as assert from 'assert';
 import { z } from 'zod';
-import {
-  jsonSchemaToZod,
-  safeConvertToZod,
-} from '../../core/llm/schemaConverter';
+import { jsonSchemaToZod, safeConvertToZod } from '../../core/llm/schemaConverter';
 
 suite('SchemaConverter Test Suite', () => {
   suite('Basic Types', () => {
@@ -332,10 +329,7 @@ suite('SchemaConverter Test Suite', () => {
 
     test('converts schema with anyOf', () => {
       const jsonSchema = {
-        anyOf: [
-          { type: 'string' },
-          { type: 'number' },
-        ],
+        anyOf: [{ type: 'string' }, { type: 'number' }],
       };
 
       const zodSchema = jsonSchemaToZod(jsonSchema);
@@ -420,11 +414,7 @@ suite('SchemaConverter Test Suite', () => {
 
     test('filters out null from combinators', () => {
       const jsonSchema = {
-        anyOf: [
-          { type: 'string' },
-          { type: 'null' },
-          { type: 'number' },
-        ],
+        anyOf: [{ type: 'string' }, { type: 'null' }, { type: 'number' }],
       };
 
       const zodSchema = jsonSchemaToZod(jsonSchema);
