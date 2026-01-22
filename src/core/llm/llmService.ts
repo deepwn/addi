@@ -238,7 +238,7 @@ export class LLMService {
           }
         }
 
-        if (shouldRetry && retryCount < 1) {
+        if (shouldRetry && retryCount < 3) {
           logger.warn(`Middleware requested retry for ${model.id} (non-streaming).`);
           return this.executeDirect(
             provider,
@@ -251,6 +251,13 @@ export class LLMService {
             options,
             retryCount + 1
           );
+        }
+
+        if (shouldRetry && retryCount >= 3) {
+          vscode.window.showErrorMessage(
+            `Model "${model.name}" is repeatedly outputting unexpected tool calls. Execution stopped after 3 retries.`
+          );
+          return;
         }
 
         if (shouldStop) {
@@ -280,20 +287,28 @@ export class LLMService {
           return;
         }
 
-        if ((part as any)._addiAction === 'retry' && retryCount < 1) {
-          abortController.abort();
-          logger.warn(`Middleware requested retry for ${model.id}.`);
-          return this.executeDirect(
-            provider,
-            model,
-            messages,
-            systemMessage,
-            tools,
-            progress,
-            token,
-            options,
-            retryCount + 1
-          );
+        if ((part as any)._addiAction === 'retry') {
+          if (retryCount < 3) {
+            abortController.abort();
+            logger.warn(`Middleware requested retry for ${model.id} (Attempt ${retryCount + 1}).`);
+            return this.executeDirect(
+              provider,
+              model,
+              messages,
+              systemMessage,
+              tools,
+              progress,
+              token,
+              options,
+              retryCount + 1
+            );
+          } else {
+            abortController.abort();
+            vscode.window.showErrorMessage(
+              `Model "${model.name}" is repeatedly outputting unexpected tool calls. Execution stopped after 3 retries.`
+            );
+            return;
+          }
         }
 
         switch (part.type) {

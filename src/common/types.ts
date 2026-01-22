@@ -66,6 +66,7 @@ export interface ScrubSettings {
   enabled: boolean;
   patterns: string[];
   strategy: ScrubStrategy;
+  flags?: string; // e.g. "gis"
 }
 
 export interface ModelCapabilities {

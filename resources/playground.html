@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -6,10 +6,7 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; script-src 'nonce-PLAYGROUND';"
     />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Addi Playground</title>
     <style>
       :root {
@@ -24,14 +21,22 @@
         --bubble-user: #2f3542;
         --bubble-ai: #1f1f24;
         --radius-lg: 16px;
-        font-family: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+        font-family:
+          'Segoe UI',
+          'Microsoft YaHei',
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          Roboto,
+          sans-serif;
       }
       * {
         box-sizing: border-box;
       }
       body {
         margin: 0;
-        background: radial-gradient(circle at top, rgba(76, 139, 245, 0.12), transparent 55%), var(--bg);
+        background:
+          radial-gradient(circle at top, rgba(76, 139, 245, 0.12), transparent 55%), var(--bg);
         color: var(--fg);
         min-height: 100vh;
         display: flex;
@@ -72,7 +77,12 @@
         padding: 18px 24px 12px;
         -webkit-backdrop-filter: blur(16px);
         backdrop-filter: blur(16px);
-        background: linear-gradient(180deg, rgba(16, 16, 20, 0.95) 0%, rgba(16, 16, 20, 0.82) 60%, transparent 100%);
+        background: linear-gradient(
+          180deg,
+          rgba(16, 16, 20, 0.95) 0%,
+          rgba(16, 16, 20, 0.82) 60%,
+          transparent 100%
+        );
         border-bottom: 1px solid rgba(255, 255, 255, 0.04);
       }
       .brand {
@@ -111,7 +121,9 @@
         align-items: center;
         justify-content: center;
         font-size: 16px;
-        transition: color 0.2s ease, transform 0.2s ease;
+        transition:
+          color 0.2s ease,
+          transform 0.2s ease;
       }
       .icon-btn:hover {
         color: #ffffff;
@@ -137,7 +149,7 @@
         position: relative;
       }
       .reasoning-container::before {
-        content: "Thinking...";
+        content: 'Thinking...';
         display: block;
         font-size: 10px;
         text-transform: uppercase;
@@ -159,7 +171,9 @@
         max-width: 720px;
         text-align: center;
         margin: 72px auto 48px;
-        transition: opacity 0.35s ease, transform 0.35s ease;
+        transition:
+          opacity 0.35s ease,
+          transform 0.35s ease;
       }
       .hero h1 {
         margin: 0 0 14px;
@@ -262,14 +276,14 @@
       }
       .number-input,
       .system-prompt,
-      input[type="range"] {
+      input[type='range'] {
         background: rgba(36, 36, 42, 0.95);
         color: var(--fg);
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 8px;
         padding: 6px 10px;
       }
-      input[type="range"] {
+      input[type='range'] {
         padding: 0;
       }
       .system-prompt {
@@ -327,7 +341,8 @@
         background: rgba(255, 255, 255, 0.04);
         padding: 2px 6px;
         border-radius: 6px;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
         font-size: 12px;
         color: #f8f8f8;
       }
@@ -342,7 +357,8 @@
         padding: 12px;
         border-radius: 10px;
         overflow: auto;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
         font-size: 13px;
         line-height: 1.5;
         margin: 10px 0;
@@ -404,8 +420,16 @@
         display: flex;
         justify-content: center;
         padding: 14px 16px 24px;
-        background: linear-gradient(180deg, transparent 0%, rgba(16, 16, 20, 0.85) 40%, rgba(16, 16, 20, 0.95) 100%);
-        transition: transform 0.35s ease, padding 0.3s ease, background 0.35s ease;
+        background: linear-gradient(
+          180deg,
+          transparent 0%,
+          rgba(16, 16, 20, 0.85) 40%,
+          rgba(16, 16, 20, 0.95) 100%
+        );
+        transition:
+          transform 0.35s ease,
+          padding 0.3s ease,
+          background 0.35s ease;
         -webkit-backdrop-filter: blur(18px);
         backdrop-filter: blur(18px);
         z-index: 25;
@@ -454,7 +478,9 @@
         border-radius: 12px;
         font-weight: 600;
         cursor: pointer;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        transition:
+          transform 0.2s ease,
+          box-shadow 0.2s ease;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -506,36 +532,21 @@
           <span class="brand-title">Addi Playground</span>
         </div>
         <div class="top-actions">
-          <span
-            class="model-chip"
-            id="modelTag"
-          ></span>
-          <button
-            class="icon-btn"
-            id="headerSettings"
-            title="Settings"
-          >
-            ⚙
-          </button>
+          <span class="model-chip" id="modelTag"></span>
+          <button class="icon-btn" id="headerSettings" title="Settings">⚙</button>
         </div>
       </header>
       <main class="chat-shell">
-        <section
-          class="hero"
-          id="hero"
-        >
+        <section class="hero" id="hero">
           <h1>Quickly test your custom models</h1>
-          <p class="subtitle">Type your first prompt and view responses in real time. Use the settings button (top-right) to adjust temperature, Top P, max output tokens and other parameters.</p>
+          <p class="subtitle">
+            Type your first prompt and view responses in real time. Use the settings button
+            (top-right) to adjust temperature, Top P, max output tokens and other parameters.
+          </p>
         </section>
-        <section
-          class="messages"
-          id="messages"
-        ></section>
+        <section class="messages" id="messages"></section>
       </main>
-      <footer
-        class="composer"
-        id="composer"
-      >
+      <footer class="composer" id="composer">
         <div class="composer-shell">
           <textarea
             id="chatInput"
@@ -543,30 +554,13 @@
             placeholder="Type your question... (Ctrl+Enter to send)"
           ></textarea>
           <div class="composer-actions">
-            <button
-              class="send"
-              id="sendBtn"
-            >
-              Send
-            </button>
-            <button
-              class="send cancel"
-              id="cancelBtn"
-            >
-              Cancel
-            </button>
+            <button class="send" id="sendBtn">Send</button>
+            <button class="send cancel" id="cancelBtn">Cancel</button>
           </div>
         </div>
       </footer>
-      <div
-        class="settings-overlay"
-        id="settingsOverlay"
-        aria-hidden="true"
-      >
-        <div
-          class="settings-backdrop"
-          id="settingsBackdrop"
-        ></div>
+      <div class="settings-overlay" id="settingsOverlay" aria-hidden="true">
+        <div class="settings-backdrop" id="settingsBackdrop"></div>
         <aside
           class="settings-drawer"
           role="dialog"
@@ -574,18 +568,8 @@
           aria-labelledby="settingsTitle"
         >
           <div class="settings-header">
-            <span
-              class="settings-title"
-              id="settingsTitle"
-              >Settings</span
-            >
-            <button
-              class="settings-close"
-              id="settingsClose"
-              title="Close settings"
-            >
-              ✕
-            </button>
+            <span class="settings-title" id="settingsTitle">Settings</span>
+            <button class="settings-close" id="settingsClose" title="Close settings">✕</button>
           </div>
           <div class="settings-section">
             <label class="field-group">
@@ -623,85 +607,32 @@
             <div class="settings-grid">
               <label class="field-group">
                 <span class="field-label"
-                  >Temperature
-                  <span
-                    id="tempValue"
-                    class="code-val"
-                    >0.7</span
-                  ></span
+                  >Temperature <span id="tempValue" class="code-val">0.7</span></span
                 >
-                <input
-                  id="temperature"
-                  type="range"
-                  min="0"
-                  max="2"
-                  step="0.1"
-                  value="0.7"
-                />
+                <input id="temperature" type="range" min="0" max="2" step="0.1" value="0.7" />
               </label>
               <label class="field-group">
                 <span class="field-label"
-                  >Top P
-                  <span
-                    id="topPValue"
-                    class="code-val"
-                    >1.0</span
-                  ></span
+                  >Top P <span id="topPValue" class="code-val">1.0</span></span
                 >
-                <input
-                  id="topP"
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value="1"
-                />
+                <input id="topP" type="range" min="0" max="1" step="0.01" value="1" />
               </label>
               <label class="field-group">
                 <span class="field-label"
-                  >Presence Penalty
-                  <span
-                    id="presenceValue"
-                    class="code-val"
-                    >0</span
-                  ></span
+                  >Presence Penalty <span id="presenceValue" class="code-val">0</span></span
                 >
-                <input
-                  id="presencePenalty"
-                  type="range"
-                  min="-2"
-                  max="2"
-                  step="0.1"
-                  value="0"
-                />
+                <input id="presencePenalty" type="range" min="-2" max="2" step="0.1" value="0" />
               </label>
               <label class="field-group">
                 <span class="field-label"
-                  >Frequency Penalty
-                  <span
-                    id="frequencyValue"
-                    class="code-val"
-                    >0</span
-                  ></span
+                  >Frequency Penalty <span id="frequencyValue" class="code-val">0</span></span
                 >
-                <input
-                  id="frequencyPenalty"
-                  type="range"
-                  min="-2"
-                  max="2"
-                  step="0.1"
-                  value="0"
-                />
+                <input id="frequencyPenalty" type="range" min="-2" max="2" step="0.1" value="0" />
               </label>
               <label class="field-group narrow">
                 <span class="field-label">Streaming</span>
                 <div class="inline">
-                  <input
-                    id="useStream"
-                    class="checkbox"
-                    type="checkbox"
-                    checked
-                  />
+                  <input id="useStream" class="checkbox" type="checkbox" checked />
                 </div>
               </label>
             </div>
@@ -711,18 +642,18 @@
     </div>
     <script nonce="PLAYGROUND">
       (function () {
-        const vscode = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : undefined;
+        const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : undefined;
         const root = document.body;
-        const messagesEl = document.getElementById("messages");
-        const chatInput = document.getElementById("chatInput");
-        const sendBtn = document.getElementById("sendBtn");
-        const cancelBtn = document.getElementById("cancelBtn");
-        const modelTag = document.getElementById("modelTag");
-        const chatTitle = document.getElementById("chatTitle");
-        const settingsOverlay = document.getElementById("settingsOverlay");
-        const settingsBackdrop = document.getElementById("settingsBackdrop");
-        const settingsClose = document.getElementById("settingsClose");
-        const headerSettings = document.getElementById("headerSettings");
+        const messagesEl = document.getElementById('messages');
+        const chatInput = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const modelTag = document.getElementById('modelTag');
+        const chatTitle = document.getElementById('chatTitle');
+        const settingsOverlay = document.getElementById('settingsOverlay');
+        const settingsBackdrop = document.getElementById('settingsBackdrop');
+        const settingsClose = document.getElementById('settingsClose');
+        const headerSettings = document.getElementById('headerSettings');
         let busy = false;
         let started = false;
         let focusTimer;
@@ -730,14 +661,14 @@
 
         function parseTokenInput(raw, fallback) {
           if (raw === undefined || raw === null) return fallback;
-          if (typeof raw === "number") {
+          if (typeof raw === 'number') {
             if (!isFinite(raw) || raw <= 0) return fallback;
             return Math.min(Math.max(Math.floor(raw), 1), TOKEN_LIMIT);
           }
           const text = String(raw)
             .trim()
             .toLowerCase()
-            .replace(/[_\s]+/g, "");
+            .replace(/[_\s]+/g, '');
           if (!text) return fallback;
           const match = text.match(/^([0-9]+(?:\.[0-9]+)?)([kmg]?)$/);
           if (!match) return fallback;
@@ -752,11 +683,11 @@
         }
 
         function formatTokenValue(value) {
-          if (!isFinite(value) || value <= 0) return "";
+          if (!isFinite(value) || value <= 0) return '';
           const thresholds = [
-            { suffix: "g", factor: 1024 * 1024 * 1024 },
-            { suffix: "m", factor: 1024 * 1024 },
-            { suffix: "k", factor: 1024 },
+            { suffix: 'g', factor: 1024 * 1024 * 1024 },
+            { suffix: 'm', factor: 1024 * 1024 },
+            { suffix: 'k', factor: 1024 },
           ];
           for (const { suffix, factor } of thresholds) {
             const scaled = value / factor;
@@ -765,8 +696,8 @@
                 ? String(scaled)
                 : scaled
                     .toFixed(scaled >= 10 ? 1 : 2)
-                    .replace(/\.0+$/, "")
-                    .replace(/\.([0-9]*[1-9])0+$/, ".$1");
+                    .replace(/\.0+$/, '')
+                    .replace(/\.([0-9]*[1-9])0+$/, '.$1');
               return `${formatted}${suffix}`;
             }
           }
@@ -774,7 +705,7 @@
         }
 
         if (cancelBtn) {
-          cancelBtn.style.display = "none";
+          cancelBtn.style.display = 'none';
         }
 
         function ensureStarted() {
@@ -782,8 +713,8 @@
             return;
           }
           started = true;
-          root.classList.remove("landing");
-          root.classList.add("chat-active");
+          root.classList.remove('landing');
+          root.classList.add('chat-active');
           setTimeout(() => {
             messagesEl.scrollTop = messagesEl.scrollHeight;
           }, 120);
@@ -794,16 +725,16 @@
           if (!chatInput) {
             return;
           }
-          chatInput.style.height = "auto";
-          chatInput.style.height = Math.min(chatInput.scrollHeight, 220) + "px";
+          chatInput.style.height = 'auto';
+          chatInput.style.height = Math.min(chatInput.scrollHeight, 220) + 'px';
         }
         if (chatInput) {
-          chatInput.addEventListener("input", autoResize);
+          chatInput.addEventListener('input', autoResize);
           autoResize();
           focusComposer(150);
         }
 
-        function scrollToBottom(behavior = started ? "smooth" : "auto") {
+        function scrollToBottom(behavior = started ? 'smooth' : 'auto') {
           messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior });
         }
 
@@ -815,7 +746,7 @@
             clearTimeout(focusTimer);
           }
           focusTimer = window.setTimeout(() => {
-            if (!chatInput || root.classList.contains("settings-open")) {
+            if (!chatInput || root.classList.contains('settings-open')) {
               return;
             }
             try {
@@ -832,15 +763,15 @@
 
         function append(role, text) {
           ensureStarted();
-          const wrapper = document.createElement("div");
+          const wrapper = document.createElement('div');
           wrapper.className = `msg ${role}`;
-          const bubble = document.createElement("div");
-          bubble.className = "bubble";
+          const bubble = document.createElement('div');
+          bubble.className = 'bubble';
           bubble.textContent = text;
           wrapper.appendChild(bubble);
           messagesEl.appendChild(wrapper);
           scrollToBottom();
-          if (role === "user") {
+          if (role === 'user') {
             focusComposer(100);
           }
           return wrapper;
@@ -850,20 +781,20 @@
           busy = v;
           if (sendBtn) {
             sendBtn.disabled = v;
-            sendBtn.style.display = v ? "none" : "inline-flex";
+            sendBtn.style.display = v ? 'none' : 'inline-flex';
           }
           if (cancelBtn) {
-            cancelBtn.style.display = v ? "inline-flex" : "none";
+            cancelBtn.style.display = v ? 'inline-flex' : 'none';
             cancelBtn.disabled = !v;
           }
         }
 
         if (cancelBtn) {
-          cancelBtn.addEventListener("click", () => {
+          cancelBtn.addEventListener('click', () => {
             if (!busy) {
               return;
             }
-            vscode && vscode.postMessage({ type: "playgroundAbort" });
+            vscode && vscode.postMessage({ type: 'playgroundAbort' });
           });
         }
 
@@ -871,11 +802,11 @@
           if (!settingsOverlay) {
             return;
           }
-          root.classList.add("settings-open");
-          settingsOverlay.setAttribute("aria-hidden", "false");
+          root.classList.add('settings-open');
+          settingsOverlay.setAttribute('aria-hidden', 'false');
           setTimeout(() => {
-            const initial = settingsOverlay.querySelector("input, textarea, button");
-            if (initial && typeof initial.focus === "function") {
+            const initial = settingsOverlay.querySelector('input, textarea, button');
+            if (initial && typeof initial.focus === 'function') {
               initial.focus();
             }
           }, 80);
@@ -885,15 +816,15 @@
           if (!settingsOverlay) {
             return;
           }
-          root.classList.remove("settings-open");
-          settingsOverlay.setAttribute("aria-hidden", "true");
+          root.classList.remove('settings-open');
+          settingsOverlay.setAttribute('aria-hidden', 'true');
           focusComposer(80);
         }
 
         if (headerSettings) {
-          headerSettings.addEventListener("click", (event) => {
+          headerSettings.addEventListener('click', (event) => {
             event.preventDefault();
-            if (root.classList.contains("settings-open")) {
+            if (root.classList.contains('settings-open')) {
               closeSettings();
             } else {
               openSettings();
@@ -902,56 +833,56 @@
         }
 
         if (settingsClose) {
-          settingsClose.addEventListener("click", (event) => {
+          settingsClose.addEventListener('click', (event) => {
             event.preventDefault();
             closeSettings();
           });
         }
 
         if (settingsOverlay) {
-          settingsOverlay.addEventListener("click", (event) => {
+          settingsOverlay.addEventListener('click', (event) => {
             if (event.target === settingsOverlay || event.target === settingsBackdrop) {
               closeSettings();
             }
           });
         }
 
-        document.addEventListener("keydown", (event) => {
-          if (event.key === "Escape" && root.classList.contains("settings-open")) {
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape' && root.classList.contains('settings-open')) {
             event.preventDefault();
             closeSettings();
           }
         });
 
         function currentTemperature() {
-          const el = document.getElementById("temperature");
+          const el = document.getElementById('temperature');
           return el ? parseFloat(el.value) : 0.7;
         }
         function currentTopP() {
-          const el = document.getElementById("topP");
+          const el = document.getElementById('topP');
           return el ? parseFloat(el.value) : 1.0;
         }
         function currentMaxIn() {
-          const el = document.getElementById("maxIn");
-          const raw = el ? el.value : "";
+          const el = document.getElementById('maxIn');
+          const raw = el ? el.value : '';
           return parseTokenInput(raw, 4096);
         }
         function currentMaxOut() {
-          const el = document.getElementById("maxOut");
-          const raw = el ? el.value : "";
+          const el = document.getElementById('maxOut');
+          const raw = el ? el.value : '';
           return parseTokenInput(raw, 1024);
         }
         function currentPresence() {
-          const el = document.getElementById("presencePenalty");
+          const el = document.getElementById('presencePenalty');
           return el ? parseFloat(el.value) : 0;
         }
         function currentFrequency() {
-          const el = document.getElementById("frequencyPenalty");
+          const el = document.getElementById('frequencyPenalty');
           return el ? parseFloat(el.value) : 0;
         }
         function currentSystemPrompt() {
-          const el = document.getElementById("systemPrompt");
-          return el ? el.value : "";
+          const el = document.getElementById('systemPrompt');
+          return el ? el.value : '';
         }
 
         function sendPrompt(raw) {
@@ -959,12 +890,12 @@
           if (!prompt) {
             return;
           }
-          append("user", prompt);
+          append('user', prompt);
           setBusy(true);
-          const stream = document.getElementById("useStream")?.checked === true;
+          const stream = document.getElementById('useStream')?.checked === true;
           vscode &&
             vscode.postMessage({
-              type: "playgroundSend",
+              type: 'playgroundSend',
               stream,
               prompt,
               temperature: currentTemperature(),
@@ -978,56 +909,74 @@
           focusComposer(120);
         }
 
-        const tempSlider = document.getElementById("temperature");
-        const tempValue = document.getElementById("tempValue");
+        const tempSlider = document.getElementById('temperature');
+        const tempValue = document.getElementById('tempValue');
         if (tempSlider) {
-          tempSlider.addEventListener("input", () => {
+          tempSlider.addEventListener('input', () => {
             if (tempValue) tempValue.textContent = tempSlider.value;
-            vscode && vscode.postMessage({ type: "playgroundSetParams", temperature: currentTemperature() });
+            vscode &&
+              vscode.postMessage({
+                type: 'playgroundSetParams',
+                temperature: currentTemperature(),
+              });
           });
         }
-        const topPSlider = document.getElementById("topP");
-        const topPValue = document.getElementById("topPValue");
+        const topPSlider = document.getElementById('topP');
+        const topPValue = document.getElementById('topPValue');
         if (topPSlider) {
-          topPSlider.addEventListener("input", () => {
+          topPSlider.addEventListener('input', () => {
             if (topPValue) topPValue.textContent = topPSlider.value;
-            vscode && vscode.postMessage({ type: "playgroundSetParams", topP: currentTopP() });
+            vscode && vscode.postMessage({ type: 'playgroundSetParams', topP: currentTopP() });
           });
         }
-        const maxOutInput = document.getElementById("maxOut");
-        const maxInInput = document.getElementById("maxIn");
+        const maxOutInput = document.getElementById('maxOut');
+        const maxInInput = document.getElementById('maxIn');
         if (maxInInput) {
-          maxInInput.addEventListener("change", () => {
-            vscode && vscode.postMessage({ type: "playgroundSetParams", maxInputTokens: currentMaxIn() });
+          maxInInput.addEventListener('change', () => {
+            vscode &&
+              vscode.postMessage({ type: 'playgroundSetParams', maxInputTokens: currentMaxIn() });
             maxInInput.value = formatTokenValue(currentMaxIn());
           });
         }
         if (maxOutInput) {
-          maxOutInput.addEventListener("change", () => {
-            vscode && vscode.postMessage({ type: "playgroundSetParams", maxOutputTokens: currentMaxOut() });
+          maxOutInput.addEventListener('change', () => {
+            vscode &&
+              vscode.postMessage({ type: 'playgroundSetParams', maxOutputTokens: currentMaxOut() });
             maxOutInput.value = formatTokenValue(currentMaxOut());
           });
         }
-        const presenceSlider = document.getElementById("presencePenalty");
-        const presenceValue = document.getElementById("presenceValue");
+        const presenceSlider = document.getElementById('presencePenalty');
+        const presenceValue = document.getElementById('presenceValue');
         if (presenceSlider) {
-          presenceSlider.addEventListener("input", () => {
+          presenceSlider.addEventListener('input', () => {
             if (presenceValue) presenceValue.textContent = presenceSlider.value;
-            vscode && vscode.postMessage({ type: "playgroundSetParams", presencePenalty: currentPresence() });
+            vscode &&
+              vscode.postMessage({
+                type: 'playgroundSetParams',
+                presencePenalty: currentPresence(),
+              });
           });
         }
-        const frequencySlider = document.getElementById("frequencyPenalty");
-        const frequencyValue = document.getElementById("frequencyValue");
+        const frequencySlider = document.getElementById('frequencyPenalty');
+        const frequencyValue = document.getElementById('frequencyValue');
         if (frequencySlider) {
-          frequencySlider.addEventListener("input", () => {
+          frequencySlider.addEventListener('input', () => {
             if (frequencyValue) frequencyValue.textContent = frequencySlider.value;
-            vscode && vscode.postMessage({ type: "playgroundSetParams", frequencyPenalty: currentFrequency() });
+            vscode &&
+              vscode.postMessage({
+                type: 'playgroundSetParams',
+                frequencyPenalty: currentFrequency(),
+              });
           });
         }
-        const systemPrompt = document.getElementById("systemPrompt");
+        const systemPrompt = document.getElementById('systemPrompt');
         if (systemPrompt) {
-          systemPrompt.addEventListener("change", () => {
-            vscode && vscode.postMessage({ type: "playgroundSetParams", systemPrompt: currentSystemPrompt() });
+          systemPrompt.addEventListener('change', () => {
+            vscode &&
+              vscode.postMessage({
+                type: 'playgroundSetParams',
+                systemPrompt: currentSystemPrompt(),
+              });
           });
         }
 
@@ -1035,18 +984,18 @@
           if (!chatInput) return;
           const value = chatInput.value;
           if (!value.trim()) return;
-          chatInput.value = "";
+          chatInput.value = '';
           autoResize();
           sendPrompt(value);
         }
 
         if (sendBtn) {
-          sendBtn.addEventListener("click", sendFromComposer);
+          sendBtn.addEventListener('click', sendFromComposer);
         }
 
         if (chatInput) {
-          chatInput.addEventListener("keydown", (e) => {
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+          chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
               e.preventDefault();
               sendFromComposer();
             }
@@ -1056,44 +1005,46 @@
         // Helper: detect code blocks with language classes and decorate with a small language label
         function decorateCodeBlocks(container) {
           try {
-            const pres = container.querySelectorAll ? container.querySelectorAll("pre") : [];
+            const pres = container.querySelectorAll ? container.querySelectorAll('pre') : [];
             pres.forEach((pre) => {
               // find first code child with language-xxx
-              const code = pre.querySelector && pre.querySelector("code");
+              const code = pre.querySelector && pre.querySelector('code');
               if (!code) return;
-              const cls = Array.from(code.classList || []).find((c) => c.indexOf("language-") === 0);
+              const cls = Array.from(code.classList || []).find(
+                (c) => c.indexOf('language-') === 0
+              );
               if (cls) {
-                const lang = cls.replace("language-", "").toUpperCase();
-                pre.classList.add("pre-with-lang");
+                const lang = cls.replace('language-', '').toUpperCase();
+                pre.classList.add('pre-with-lang');
                 // remove existing label/button if any
-                const old = pre.querySelector(".code-lang");
+                const old = pre.querySelector('.code-lang');
                 if (old) old.remove();
-                const oldBtn = pre.querySelector(".copy-btn");
+                const oldBtn = pre.querySelector('.copy-btn');
                 if (oldBtn) oldBtn.remove();
                 // create copy button
-                const btn = document.createElement("button");
-                btn.className = "copy-btn";
-                btn.type = "button";
-                btn.textContent = "Copy";
-                btn.setAttribute("aria-label", "Copy code");
+                const btn = document.createElement('button');
+                btn.className = 'copy-btn';
+                btn.type = 'button';
+                btn.textContent = 'Copy';
+                btn.setAttribute('aria-label', 'Copy code');
                 // click handler: copy underlying code text
-                btn.addEventListener("click", async (e) => {
+                btn.addEventListener('click', async (e) => {
                   e.preventDefault();
                   try {
-                    const txt = code ? code.textContent || "" : "";
+                    const txt = code ? code.textContent || '' : '';
                     if (navigator.clipboard && navigator.clipboard.writeText) {
                       await navigator.clipboard.writeText(txt);
                     } else {
                       // fallback
-                      const ta = document.createElement("textarea");
+                      const ta = document.createElement('textarea');
                       ta.value = txt;
                       document.body.appendChild(ta);
                       ta.select();
-                      document.execCommand("copy");
+                      document.execCommand('copy');
                       document.body.removeChild(ta);
                     }
                     const orig = btn.textContent;
-                    btn.textContent = "✓ Copied";
+                    btn.textContent = '✓ Copied';
                     btn.disabled = true;
                     setTimeout(() => {
                       btn.textContent = orig;
@@ -1102,15 +1053,15 @@
                   } catch (_err) {
                     // show brief failure
                     const orig = btn.textContent;
-                    btn.textContent = "Failed";
+                    btn.textContent = 'Failed';
                     setTimeout(() => {
                       btn.textContent = orig;
                     }, 1200);
                   }
                 });
                 pre.insertBefore(btn, pre.firstChild);
-                const label = document.createElement("span");
-                label.className = "code-lang";
+                const label = document.createElement('span');
+                label.className = 'code-lang';
                 label.textContent = lang;
                 pre.insertBefore(label, pre.firstChild);
               }
@@ -1120,9 +1071,9 @@
           }
         }
 
-        window.addEventListener("message", (event) => {
+        window.addEventListener('message', (event) => {
           const msg = event.data;
-          if (msg.type === "playgroundInit") {
+          if (msg.type === 'playgroundInit') {
             if (modelTag) {
               modelTag.textContent = `${msg.payload.modelName} @ ${msg.payload.providerName}`;
             }
@@ -1143,104 +1094,115 @@
                   }
                 }
               };
-              if (typeof p.temperature === "number") setVal("temperature", p.temperature, "tempValue");
-              if (typeof p.topP === "number") setVal("topP", p.topP, "topPValue");
-              if (typeof p.maxOutputTokens === "number") {
-                const el = document.getElementById("maxOut");
+              if (typeof p.temperature === 'number')
+                setVal('temperature', p.temperature, 'tempValue');
+              if (typeof p.topP === 'number') setVal('topP', p.topP, 'topPValue');
+              if (typeof p.maxOutputTokens === 'number') {
+                const el = document.getElementById('maxOut');
                 if (el) el.value = formatTokenValue(p.maxOutputTokens);
               }
-              if (typeof p.maxInputTokens === "number") {
-                const el = document.getElementById("maxIn");
+              if (typeof p.maxInputTokens === 'number') {
+                const el = document.getElementById('maxIn');
                 if (el) el.value = formatTokenValue(p.maxInputTokens);
               }
-              if (typeof p.presencePenalty === "number") setVal("presencePenalty", p.presencePenalty, "presenceValue");
-              if (typeof p.frequencyPenalty === "number") setVal("frequencyPenalty", p.frequencyPenalty, "frequencyValue");
-              if (typeof p.systemPrompt === "string") {
-                const sp = document.getElementById("systemPrompt");
+              if (typeof p.presencePenalty === 'number')
+                setVal('presencePenalty', p.presencePenalty, 'presenceValue');
+              if (typeof p.frequencyPenalty === 'number')
+                setVal('frequencyPenalty', p.frequencyPenalty, 'frequencyValue');
+              if (typeof p.systemPrompt === 'string') {
+                const sp = document.getElementById('systemPrompt');
                 if (sp) sp.value = p.systemPrompt;
               }
             }
             focusComposer(200);
-          } else if (msg.type === "playgroundResponse") {
+          } else if (msg.type === 'playgroundResponse') {
             // 优先复用被标记为 data-streaming 的气泡（流式创建），避免出现两个气泡：
             // 一个是空文本的未渲染气泡，另一个是渲染后新创建的气泡。
-            const streamingNodes = messagesEl.querySelectorAll('.msg.assistant[data-streaming="true"]');
-            let targetStreaming = streamingNodes && streamingNodes.length ? streamingNodes[streamingNodes.length - 1] : null;
+            const streamingNodes = messagesEl.querySelectorAll(
+              '.msg.assistant[data-streaming="true"]'
+            );
+            let targetStreaming =
+              streamingNodes && streamingNodes.length
+                ? streamingNodes[streamingNodes.length - 1]
+                : null;
             if (targetStreaming) {
-              const bubble = targetStreaming.querySelector(".bubble") || targetStreaming;
+              const bubble = targetStreaming.querySelector('.bubble') || targetStreaming;
               if (msg.payload && msg.payload.html) {
                 bubble.innerHTML = msg.payload.html;
                 decorateCodeBlocks(bubble);
               } else {
-                bubble.textContent = msg.payload.text || "[empty response]";
+                bubble.textContent = msg.payload.text || '[empty response]';
               }
-              targetStreaming.removeAttribute("data-streaming");
-              targetStreaming.setAttribute("data-stream-final", "true");
+              targetStreaming.removeAttribute('data-streaming');
+              targetStreaming.setAttribute('data-stream-final', 'true');
             } else {
               // 没有 streaming 气泡时，复用最后一个未 final 的气泡；若无，则创建新的
-              const nodes = messagesEl.querySelectorAll(".msg.assistant");
+              const nodes = messagesEl.querySelectorAll('.msg.assistant');
               const last = nodes && nodes.length ? nodes[nodes.length - 1] : null;
-              if (last && last.getAttribute("data-stream-final") !== "true") {
-                const bubble = last.querySelector(".bubble") || last;
+              if (last && last.getAttribute('data-stream-final') !== 'true') {
+                const bubble = last.querySelector('.bubble') || last;
                 if (msg.payload && msg.payload.html) {
                   bubble.innerHTML = msg.payload.html;
                 } else {
-                  bubble.textContent = msg.payload.text || "[empty response]";
+                  bubble.textContent = msg.payload.text || '[empty response]';
                 }
-                last.setAttribute("data-stream-final", "true");
+                last.setAttribute('data-stream-final', 'true');
               } else {
-                const wrapper = append("assistant", msg.payload && msg.payload.text ? msg.payload.text : "[empty response]");
+                const wrapper = append(
+                  'assistant',
+                  msg.payload && msg.payload.text ? msg.payload.text : '[empty response]'
+                );
                 if (wrapper && msg.payload && msg.payload.html) {
-                  const bubble = wrapper.querySelector(".bubble") || wrapper;
+                  const bubble = wrapper.querySelector('.bubble') || wrapper;
                   bubble.innerHTML = msg.payload.html;
                   decorateCodeBlocks(bubble);
                 }
-                if (wrapper) wrapper.setAttribute("data-stream-final", "true");
+                if (wrapper) wrapper.setAttribute('data-stream-final', 'true');
               }
             }
             setBusy(false);
-          } else if (msg.type === "playgroundError") {
-            if (msg.payload.message === "aborted") {
-              append("assistant", "[aborted]");
+          } else if (msg.type === 'playgroundError') {
+            if (msg.payload.message === 'aborted') {
+              append('assistant', '[aborted]');
             } else {
-              append("assistant", "Error: " + msg.payload.message);
+              append('assistant', 'Error: ' + msg.payload.message);
             }
             setBusy(false);
-          } else if (msg.type === "playgroundStreamDelta") {
+          } else if (msg.type === 'playgroundStreamDelta') {
             // 对于流式 delta，只在最近未完成的 assistant 气泡上做更新；
             // 如果没有正在进行的未完成气泡，则创建一个新的未完成气泡并更新它。
-            let nodes = messagesEl.querySelectorAll(".msg.assistant");
+            let nodes = messagesEl.querySelectorAll('.msg.assistant');
             let target = nodes.length ? nodes[nodes.length - 1] : null;
-            if (!target || target.getAttribute("data-stream-final") === "true") {
+            if (!target || target.getAttribute('data-stream-final') === 'true') {
               // create a new assistant bubble that is not final yet
-              append("assistant", "");
-              nodes = messagesEl.querySelectorAll(".msg.assistant");
+              append('assistant', '');
+              nodes = messagesEl.querySelectorAll('.msg.assistant');
               target = nodes[nodes.length - 1];
               // mark this new bubble as streaming so that final response can reuse it
-              if (target) target.setAttribute("data-streaming", "true");
+              if (target) target.setAttribute('data-streaming', 'true');
             }
-            const bubble = target.querySelector(".bubble") || target;
+            const bubble = target.querySelector('.bubble') || target;
             if (msg.payload && msg.payload.html) {
               bubble.innerHTML = msg.payload.html;
               decorateCodeBlocks(bubble);
             } else {
-              bubble.textContent = msg.payload.full || "";
+              bubble.textContent = msg.payload.full || '';
             }
             scrollToBottom();
-          } else if (msg.type === "playgroundStreamReasoningDelta") {
-            let nodes = messagesEl.querySelectorAll(".msg.assistant");
+          } else if (msg.type === 'playgroundStreamReasoningDelta') {
+            let nodes = messagesEl.querySelectorAll('.msg.assistant');
             let target = nodes.length ? nodes[nodes.length - 1] : null;
-            if (!target || target.getAttribute("data-stream-final") === "true") {
-              append("assistant", "");
-              nodes = messagesEl.querySelectorAll(".msg.assistant");
+            if (!target || target.getAttribute('data-stream-final') === 'true') {
+              append('assistant', '');
+              nodes = messagesEl.querySelectorAll('.msg.assistant');
               target = nodes[nodes.length - 1];
-              if (target) target.setAttribute("data-streaming", "true");
+              if (target) target.setAttribute('data-streaming', 'true');
             }
-            const bubble = target.querySelector(".bubble") || target;
-            let reasoning = bubble.querySelector(".reasoning-container");
+            const bubble = target.querySelector('.bubble') || target;
+            let reasoning = bubble.querySelector('.reasoning-container');
             if (!reasoning) {
-              reasoning = document.createElement("div");
-              reasoning.className = "reasoning-container";
+              reasoning = document.createElement('div');
+              reasoning.className = 'reasoning-container';
               bubble.prepend(reasoning);
             }
             reasoning.textContent += msg.payload.delta;

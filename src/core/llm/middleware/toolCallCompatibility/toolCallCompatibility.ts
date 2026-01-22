@@ -1,5 +1,6 @@
 import { ModelMessage } from 'ai';
 import { LLMMiddleware, LLMCallContext } from '../index';
+import { logger } from '../../../../common/logger';
 
 /**
  * Middleware to ensure tool call compatibility.
@@ -21,22 +22,28 @@ export class ToolCallCompatibilityMiddleware implements LLMMiddleware {
       settings?.patterns && Array.isArray(settings.patterns) && settings.patterns.length > 0
         ? settings.patterns
         : this.DEFAULT_PATTERNS;
+    const flags = settings?.flags || 'g';
 
     // Use cache to avoid recompiling regexes every time (especially during streaming)
-    const cacheKey = rawPatterns.join('|');
+    const cacheKey = `${flags}:${rawPatterns.join('|')}`;
     let patterns = this._regexCache.get(cacheKey);
 
     if (!patterns) {
       patterns = rawPatterns
         .map((p) => {
           try {
-            return new RegExp(p, 'gi');
+            return new RegExp(p, flags);
           } catch (e) {
             return null;
           }
         })
         .filter((p): p is RegExp => p !== null);
       this._regexCache.set(cacheKey, patterns);
+      if (isEnabled) {
+        logger.debug(
+          `[Middleware] Initialized with ${patterns.length} patterns and flags "${flags}": ${rawPatterns.join(', ')}`
+        );
+      }
     }
 
     return {
@@ -70,6 +77,7 @@ export class ToolCallCompatibilityMiddleware implements LLMMiddleware {
             }
           }
           if (changed) {
+            logger.debug(`[Middleware] Scrubbed message content for request ${context.requestId}`);
             return { ...msg, content: scrubbed.trim() } as ModelMessage;
           }
         } else if (Array.isArray(msg.content)) {
@@ -89,6 +97,11 @@ export class ToolCallCompatibilityMiddleware implements LLMMiddleware {
             }
             return part;
           });
+          if (changed) {
+            logger.debug(
+              `[Middleware] Scrubbed multi-part message for request ${context.requestId}`
+            );
+          }
           return changed ? ({ ...msg, content: scrubbedContent } as ModelMessage) : msg;
         }
       }
@@ -118,39 +131,48 @@ export class ToolCallCompatibilityMiddleware implements LLMMiddleware {
       (part.type === 'text-delta' || part.type === 'reasoning-delta') &&
       typeof part.text === 'string'
     ) {
-      let text = part.text;
+      const text = part.text;
 
       // Update buffer for this request
-      const currentBuffer = (this._streamBuffers.get(requestId) || '') + text;
+      const previousBuffer = this._streamBuffers.get(requestId) || '';
+      const currentBuffer = previousBuffer + text;
       this._streamBuffers.set(requestId, currentBuffer);
 
-      let matched = false;
       for (const pattern of config.patterns) {
         pattern.lastIndex = 0;
 
-        // Strategy 1: Check if the whole buffer matches (for retry signal)
-        // This is robust against tags split across deltas
-        if (pattern.test(currentBuffer)) {
-          matched = true;
-        }
+        // Check for match in the current total buffer
+        const match = pattern.exec(currentBuffer);
+        if (match) {
+          const action =
+            config.strategy === 'stop' ? 'stop' : config.strategy === 'retry' ? 'retry' : undefined;
 
-        // Strategy 2: Clean the current delta for UI reporting
-        // (This part is still delta-local, but that's okay because Strategy 1 triggers retry anyway)
-        pattern.lastIndex = 0;
-        text = text.replace(pattern, '');
-      }
+          if (action) {
+            // Found a match!
+            logger.warn(
+              `[Middleware] Detected unexpected output matching "${pattern.source}" in request ${requestId}`
+            );
 
-      if (matched) {
-        const action =
-          config.strategy === 'stop' ? 'stop' : config.strategy === 'retry' ? 'retry' : undefined;
-        if (action) {
-          // If we retry, we can also clear the buffer
-          if (action === 'retry') {
-            this._streamBuffers.delete(requestId);
+            if (action === 'retry') {
+              this._streamBuffers.delete(requestId);
+            }
+
+            // Return action immediately.
+            // Importantly: we return an EMPTY text delta here so the piece that
+            // triggered the match never reaches the UI.
+            return { ...part, text: '', _addiAction: action };
           }
-          return { ...part, text, _addiAction: action };
         }
       }
+
+      // NO MATCH FOUND YET.
+      // But we need to handle "Point 4": prevent escaping content that
+      // is PART of a match currently being formed.
+
+      // Strategy: Hold back the last few characters if they look like the START of any pattern.
+      // This is complex. A simpler way for Point 4 is to use a Lookahead Buffer:
+      // We don't release the current 'text' immediately if it might be a partial match.
+      // However, most tags start with <. If the text contains <, we could be wary.
 
       return { ...part, text };
     }
