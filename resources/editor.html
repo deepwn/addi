@@ -36,6 +36,7 @@
         .checkbox-group { display: flex; align-items: center; gap: 8px; }
         .checkbox-group label { margin: 0; font-weight: normal; }
         .info-text { font-size: 0.85em; color: var(--vscode-descriptionForeground); margin-top: 4px; }
+        .error-text { font-size: 0.85em; color: var(--vscode-errorForeground); margin-top: 4px; white-space: pre-wrap; }
         .button-row { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
         .secondary-btn { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
         .secondary-btn:hover { background: var(--vscode-button-secondaryHoverBackground); }
@@ -139,15 +140,38 @@
                 </div>
 
                 <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--vscode-widget-border);">
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 6px;">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="color: var(--vscode-infoForeground);">
+                                <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm.5 13H7v-2h1.5v2zm0-3.5H7V3h1.5v6.5z"/>
+                            </svg>
+                            Unexpected Behavior Handling
+                        </label>
+                        <div style="margin-top: 6px;">
+                            <span class="info-text">This is a preview feature that may have breaking changes or be deprecated in future versions</span>
+                        </div>
+                    </div>
                     <div class="form-group checkbox-group">
                         <input type="checkbox" id="m-scrub-enabled">
-                        <label for="m-scrub-enabled">Enable Output Scrubbing (Cleanup hallucinated tags)</label>
+                        <label for="m-scrub-enabled">Allow handling unexpected tool calls in output</label>
                     </div>
                     <div id="scrub-details" class="hidden">
                         <div class="form-group">
                             <label>Scrub Patterns (Regex, one per line)</label>
-                            <textarea id="m-scrub-patterns" placeholder="<\/?tool_call[^>]*>"></textarea>
+                            <textarea id="m-scrub-patterns" placeholder="</?tool_call[^>]*>"></textarea>
                             <div class="info-text">Messages or deltas matching these regexes will be processed.</div>
+                            <div id="pattern-error" class="error-text hidden"></div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Test Content (Optional)</label>
+                            <textarea id="m-scrub-test-text" placeholder="Enter sample text to test pattern matching...&#10;Example: <tool_call>This is a test</tool_call>"></textarea>
+                            <div class="info-text">Enter text to test if patterns match. Matches will be highlighted in the result below.</div>
+                        </div>
+                        
+                        <div class="form-group" id="test-result-container">
+                            <label>Test Result</label>
+                            <div id="m-scrub-test-result" class="preview-box" style="min-height: 80px; font-family: var(--vscode-editor-font-family); white-space: pre-wrap; overflow-x: auto;"></div>
                         </div>
                         <div class="form-group">
                             <label>Action on Detection</label>
@@ -201,11 +225,14 @@
         const mTools = document.getElementById('m-tools');
         const mReqAdd = document.getElementById('m-req-additional');
         
-        // Scrubbing inputs
+        // Compatibility options inputs
         const mScrubEnabled = document.getElementById('m-scrub-enabled');
         const mScrubDetails = document.getElementById('scrub-details');
         const mScrubPatterns = document.getElementById('m-scrub-patterns');
         const mScrubStrategy = document.getElementById('m-scrub-strategy');
+        const mScrubTestText = document.getElementById('m-scrub-test-text');
+        const mScrubTestResult = document.getElementById('m-scrub-test-result');
+        const patternError = document.getElementById('pattern-error');
         
         // Preview elements
         const reqPreview = document.getElementById('req-preview');
@@ -294,6 +321,10 @@
         mReqAdd.addEventListener('input', updatePreviews);
         mVision.addEventListener('change', updatePreviews);
         mTools.addEventListener('change', updatePreviews);
+        
+        // Add listeners for real-time regex testing
+        mScrubPatterns.addEventListener('input', validateAndTestPatterns);
+        mScrubTestText.addEventListener('input', validateAndTestPatterns);
 
         window.addEventListener('message', event => {
             const message = event.data;
@@ -361,13 +392,15 @@
                 
                 mReqAdd.value = data.requestAdditional || '';
                 
-                // Scrubbing
+                // Compatibility options
                 const scrub = (data.capabilities && data.capabilities.scrubSettings) || { enabled: false, patterns: [], strategy: 'retry' };
                 mScrubEnabled.checked = !!scrub.enabled;
                 mScrubPatterns.value = (scrub.patterns || []).join('\n');
                 mScrubStrategy.value = scrub.strategy || 'retry';
+                mScrubTestText.value = ''; // Clear test text on load
                 
                 if (mScrubEnabled.checked) show(mScrubDetails); else hide(mScrubDetails);
+                validateAndTestPatterns(); // Validate patterns on load
 
                 updatePreviews();
             }
@@ -379,6 +412,95 @@
 
         function show(el) { el.classList.remove('hidden'); }
         function hide(el) { el.classList.add('hidden'); }
+        
+        // HTML escape function to prevent XSS attacks
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+        
+        // Real-time regex validation and testing
+        function validateAndTestPatterns() {
+            const patternsText = mScrubPatterns.value;
+            const testText = mScrubTestText.value;
+            const patternLines = patternsText.split('\n').map(s => s.trim()).filter(s => !!s);
+            
+            // Clear previous error
+            hide(patternError);
+            patternError.textContent = '';
+            
+            if (patternLines.length === 0) {
+                mScrubTestResult.innerHTML = '<span style="color: var(--vscode-descriptionForeground);">No patterns to test</span>';
+                return { valid: true, patterns: [] };
+            }
+            
+            // Validate each pattern
+            const validPatterns = [];
+            const errors = [];
+            
+            for (let i = 0; i < patternLines.length; i++) {
+                const patternStr = patternLines[i];
+                try {
+                    // Test if the pattern is valid
+                    new RegExp(patternStr, 'gi');
+                    validPatterns.push(new RegExp(patternStr, 'gi'));
+                } catch (e) {
+                    const errorMsg = e.message || 'Invalid regex';
+                    errors.push(`Line ${i + 1}: "${patternStr}" - ${errorMsg}`);
+                }
+            }
+            
+            // Show errors if any
+            if (errors.length > 0) {
+                show(patternError);
+                patternError.textContent = errors.join('\n');
+            }
+            
+            // Test patterns against text if provided
+            if (testText.trim()) {
+                const matches = [];
+                
+                // Find all matches with context
+                for (const pattern of validPatterns) {
+                    let match;
+                    pattern.lastIndex = 0; // Reset for global matching
+                    while ((match = pattern.exec(testText)) !== null) {
+                        matches.push(`Found: "${escapeHtml(match[0])}" at position ${match.index}`);
+                    }
+                }
+                
+                if (matches.length > 0) {
+                    // Escape the test text first to prevent XSS, then highlight matches
+                    let highlightedText = escapeHtml(testText);
+                    for (const pattern of validPatterns) {
+                        pattern.lastIndex = 0;
+                        // Create a new pattern that matches the escaped version
+                        const escapedPattern = new RegExp(escapeHtml(pattern.source), 'gi');
+                        highlightedText = highlightedText.replace(escapedPattern, '<span style="background-color: var(--vscode-editor-findMatchHighlightBackground); color: var(--vscode-editorFindMatchForeground);">$&</span>');
+                    }
+                    mScrubTestResult.innerHTML = highlightedText + '\n\n<span style="color: var(--vscode-testing-iconPassed);">' + matches.length + ' match(es) found</span>';
+                } else {
+                    mScrubTestResult.innerHTML = escapeHtml(testText) + '\n\n<span style="color: var(--vscode-descriptionForeground);">No matches found</span>';
+                }
+            } else {
+                if (validPatterns.length > 0) {
+                    mScrubTestResult.innerHTML = '<span style="color: var(--vscode-descriptionForeground);">Enter test content above to see matching results</span>';
+                } else {
+                    mScrubTestResult.innerHTML = '<span style="color: var(--vscode-errorForeground);">Fix pattern errors to enable testing</span>';
+                }
+            }
+            
+            return {
+                valid: errors.length === 0,
+                patterns: patternLines
+            };
+        }
 
         btnSave.addEventListener('click', () => {
             if (!providerForm.classList.contains('hidden')) {
@@ -394,6 +516,19 @@
                     }
                 });
             } else if (!modelForm.classList.contains('hidden')) {
+                // Validate regex patterns before saving
+                const validation = validateAndTestPatterns();
+                if (mScrubEnabled.checked && !validation.valid) {
+                    // Don't save if there are invalid patterns
+                    vscode.postMessage({
+                        type: 'showError',
+                        payload: {
+                            message: 'Please fix the invalid regex patterns before saving. See the error message below the pattern input.'
+                        }
+                    });
+                    return;
+                }
+                
                 vscode.postMessage({
                     type: 'saveModel',
                     payload: {

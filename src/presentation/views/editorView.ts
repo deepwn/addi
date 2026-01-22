@@ -75,6 +75,9 @@ export class EditorViewManager {
           case 'cancel':
             this._panel?.dispose();
             break;
+          case 'showError':
+            await vscode.window.showErrorMessage(data.payload?.message || 'An error occurred');
+            break;
         }
       });
     }

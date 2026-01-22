@@ -252,6 +252,11 @@ export class ProviderModelManager {
       normalized.toolCalling = typeof toolSource === 'number' ? toolSource : Boolean(toolSource);
     }
 
+    const scrubSource = candidate.scrubSettings ?? base.scrubSettings;
+    if (scrubSource !== undefined) {
+      normalized.scrubSettings = scrubSource;
+    }
+
     return normalized;
   }
 
