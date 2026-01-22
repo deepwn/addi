@@ -17,10 +17,10 @@ export class MessageConverter {
               return { type: 'text', text: part.text };
             }
             if (part.type === 'image') {
-              return { 
-                type: 'image', 
-                image: part.image, 
-                mediaType: part.mediaType 
+              return {
+                type: 'image',
+                image: part.image,
+                mediaType: part.mediaType,
               };
             }
             return { type: 'text', text: '' };

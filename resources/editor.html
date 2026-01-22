@@ -434,6 +434,7 @@
             // Clear previous error
             hide(patternError);
             patternError.textContent = '';
+            mScrubPatterns.style.borderColor = '';
             
             if (patternLines.length === 0) {
                 mScrubTestResult.innerHTML = '<span style="color: var(--vscode-descriptionForeground);">No patterns to test</span>';
@@ -460,31 +461,56 @@
             if (errors.length > 0) {
                 show(patternError);
                 patternError.textContent = errors.join('\n');
+                mScrubPatterns.style.borderColor = 'var(--vscode-inputValidation-errorBorder)';
             }
             
             // Test patterns against text if provided
             if (testText.trim()) {
-                const matches = [];
+                let matches = [];
                 
                 // Find all matches with context
                 for (const pattern of validPatterns) {
                     let match;
                     pattern.lastIndex = 0; // Reset for global matching
                     while ((match = pattern.exec(testText)) !== null) {
-                        matches.push(`Found: "${escapeHtml(match[0])}" at position ${match.index}`);
+                        matches.push({
+                            start: match.index,
+                            end: match.index + match[0].length,
+                            text: match[0]
+                        });
                     }
                 }
                 
                 if (matches.length > 0) {
-                    // Escape the test text first to prevent XSS, then highlight matches
-                    let highlightedText = escapeHtml(testText);
-                    for (const pattern of validPatterns) {
-                        pattern.lastIndex = 0;
-                        // Create a new pattern that matches the escaped version
-                        const escapedPattern = new RegExp(escapeHtml(pattern.source), 'gi');
-                        highlightedText = highlightedText.replace(escapedPattern, '<span style="background-color: var(--vscode-editor-findMatchHighlightBackground); color: var(--vscode-editorFindMatchForeground);">$&</span>');
+                    // Sort and merge overlapping matches
+                    matches.sort((a, b) => a.start - b.start);
+                    const mergedMatches = [];
+                    if (matches.length > 0) {
+                        let current = matches[0];
+                        for (let i = 1; i < matches.length; i++) {
+                            if (matches[i].start < current.end) {
+                                current.end = Math.max(current.end, matches[i].end);
+                            } else {
+                                mergedMatches.push(current);
+                                current = matches[i];
+                            }
+                        }
+                        mergedMatches.push(current);
                     }
-                    mScrubTestResult.innerHTML = highlightedText + '\n\n<span style="color: var(--vscode-testing-iconPassed);">' + matches.length + ' match(es) found</span>';
+
+                    // Build highlighted HTML
+                    let resultHtml = '';
+                    let lastIdx = 0;
+                    for (const match of mergedMatches) {
+                        resultHtml += escapeHtml(testText.substring(lastIdx, match.start));
+                        resultHtml += '<span style="background-color: var(--vscode-editor-findMatchHighlightBackground); color: var(--vscode-editorFindMatchForeground);">' + 
+                                     escapeHtml(testText.substring(match.start, match.end)) + 
+                                     '</span>';
+                        lastIdx = match.end;
+                    }
+                    resultHtml += escapeHtml(testText.substring(lastIdx));
+                    
+                    mScrubTestResult.innerHTML = resultHtml + '\n\n<span style="color: var(--vscode-testing-iconPassed);">' + matches.length + ' match(es) found</span>';
                 } else {
                     mScrubTestResult.innerHTML = escapeHtml(testText) + '\n\n<span style="color: var(--vscode-descriptionForeground);">No matches found</span>';
                 }

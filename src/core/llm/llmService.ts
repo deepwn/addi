@@ -13,10 +13,7 @@ export class LLMService {
   private toolOrchestrator: ToolOrchestrator;
   private middlewares: LLMMiddleware[] = [];
 
-  constructor(
-    toolManager?: IToolManager,
-    mcpService?: IMcpService
-  ) {
+  constructor(toolManager?: IToolManager, mcpService?: IMcpService) {
     this.toolOrchestrator = new ToolOrchestrator(toolManager, mcpService);
     this.middlewares.push(new ToolCallCompatibilityMiddleware());
   }
@@ -74,19 +71,10 @@ export class LLMService {
       },
     };
 
-    return this.executeDirect(
-      provider,
-      model,
-      messages,
-      systemMessage,
-      tools,
-      progress,
-      token,
-      {
-        onStats: onStats ?? undefined,
-        onReasoning: onReasoning ?? undefined,
-      } as any
-    );
+    return this.executeDirect(provider, model, messages, systemMessage, tools, progress, token, {
+      onStats: onStats ?? undefined,
+      onReasoning: onReasoning ?? undefined,
+    } as any);
   }
 
   private async executeDirect(
@@ -105,13 +93,14 @@ export class LLMService {
   ): Promise<void> {
     const onStats = options?.onStats;
     const onReasoning = options?.onReasoning;
+    const requestId = Math.random().toString(36).substring(7);
 
     try {
       // 1. Apply Middlewares
       let processedMessages = [...messages];
       let processedSystem = systemMessage;
-      
-      const context = { provider, modelId: model.id, model };
+
+      const context = { provider, modelId: model.id, model, requestId };
       for (const mw of this.middlewares) {
         if (mw.processMessages) {
           const result = await mw.processMessages(processedMessages, context);
@@ -174,17 +163,21 @@ export class LLMService {
 
         let shouldRetry = false;
         let shouldStop = false;
-        
+
         for (const step of steps) {
           if (step.reasoning) {
-            let reasoning = typeof step.reasoning === 'string'
-              ? step.reasoning
-              : step.reasoning.map((r: any) => r.text || '').join('');
-            
+            let reasoning =
+              typeof step.reasoning === 'string'
+                ? step.reasoning
+                : step.reasoning.map((r: any) => r.text || '').join('');
+
             // Apply middlewares to reasoning
             for (const mw of this.middlewares) {
               if (mw.processResponsePart) {
-                const mock = mw.processResponsePart({ type: 'text-delta', text: reasoning }, context);
+                const mock = mw.processResponsePart(
+                  { type: 'text-delta', text: reasoning },
+                  context
+                );
                 reasoning = mock.text;
                 if (mock._addiAction === 'retry') {
                   shouldRetry = true;

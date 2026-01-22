@@ -228,7 +228,7 @@ export class PlaygroundManager {
             },
             onStats: (stats: any) => {
               logger.debug('Playground direct stats', stats);
-            }
+            },
           } as any);
 
           const assistantParts: UIPart[] = [];

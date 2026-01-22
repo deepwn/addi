@@ -86,12 +86,15 @@ graph TD
 ## 3. Core Design Principles
 
 ### Message Construction Standard
+
 Addi strictly follows the **Vercel AI SDK Core `ModelMessage`** convention for all LLM interactions. This ensures:
+
 1.  **High-Fidelity Context**: Accurate translation of VS Code's rich message parts (Text, Tool Call, Tool Result, Data/Images) into AI SDK parts. Ref: [docs/type-system-design.md](docs/type-system-design.md)
 2.  **Provider Neutrality**: By normalizing to `ModelMessage`, we can swap between any AI SDK supported provider (OpenAI, Anthropic, Google) without changing the core logic.
 3.  **Resilience**: Adoption of best practices like using the `system` property for system prompts to mitigate injection risks.
 
 ### Tool Execution Safety
+
 Tools are executed in an isolated MCP server environment. The `core` layer never executes tool logic directly; it only coordinates the "request-response" loop between the LLM and the MCP infrastructure.
 
 ## 4. Interaction Flow

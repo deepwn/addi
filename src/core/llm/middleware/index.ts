@@ -5,6 +5,7 @@ export interface LLMCallContext {
   provider: Provider;
   modelId: string;
   model?: Model;
+  requestId?: string;
 }
 
 export interface LLMMiddleware {

@@ -2,6 +2,50 @@
 
 All notable changes to the "addi" extension will be documented in this file.
 
+## [0.0.22] - 2026-01-22
+
+### Added
+
+- **Unexpected Behavior Handling**: New preview feature for handling unexpected tool calls in model outputs:
+  - Automatically detects and cleans hallucinated XML tags (e.g., `</?tool_call[^>]*>`, `</?function_call[^>]*>`) from model responses
+  - Real-time regex pattern validation and testing in editor with live preview
+  - Configurable strategies: **Stop** (clean and terminate) or **Retry** (clean and force tool call retry)
+  - Enhanced security with HTML escaping for pattern testing to prevent XSS attacks
+  - User-friendly interface with clear labeling: "Unexpected Behavior Handling"
+
+### Changed
+
+- **LLMService Refactor**: Complete refactoring with middleware architecture for better extensibility:
+  - Introduced `LLMMiddleware` interface for intercepting and processing requests/responses
+  - Integrated `ToolCallCompatibilityMiddleware` as the first middleware implementation
+  - Improved pattern handling consistency between editor validation and runtime processing
+  - Fixed regex pattern normalization to work correctly with user input
+- **Editor Interface**: Enhanced model editor with compatibility options:
+  - Added real-time regex pattern testing with syntax error detection
+  - Added test content input and result highlighting
+  - Improved user feedback with clear error messages and match statistics
+  - Preview feature warning for potential breaking changes
+
+### Performance
+
+- **Middleware Efficiency**: Optimized middleware processing with proper `lastIndex` reset for global regex patterns
+- **Test Coverage**: Added comprehensive middleware tests (79 passing tests)
+
+## [0.0.22] - 2026-01-22
+
+### Added
+
+- **Unexpected Behavior Handling (Beta)**: Introduced a mechanism to handle hallucinated tool call tags (e.g. `<tool_call>`) in model responses:
+  - **Scrubbing**: Automatically remove hallucinated tags from prompt history and streaming responses.
+  - **Auto-Retry**: Detect hallucinated output in real-time and automatically retry the request with `tool_choice: required` to force proper tool usage.
+  - **Robust Matching**: Support for cross-delta regex matching in streaming responses to catch tags even when split across packets.
+- **Model Editor Enhancements**: Improved the model configuration UI with real-time regex validation, error highlighting, and an interactive matching tester.
+
+### Fixed
+
+- **Middleware ID handling**: Added unique request IDs to middleware context to ensure thread-safe state management during concurrent streaming requests.
+- **Performance**: Optimized regex processing in `ToolCallCompatibilityMiddleware` using a compilation cache.
+
 ## [0.0.21] - 2026-01-21
 
 ### Changed

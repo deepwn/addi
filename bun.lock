@@ -5,12 +5,12 @@
     "": {
       "name": "addi",
       "dependencies": {
-        "@ai-sdk/anthropic": "^3.0.15",
+        "@ai-sdk/anthropic": "^3.0.17",
         "@ai-sdk/deepseek": "^2.0.8",
         "@ai-sdk/google": "^3.0.10",
-        "@ai-sdk/openai": "^3.0.12",
-        "@ai-sdk/openai-compatible": "^2.0.13",
-        "ai": "^6.0.39",
+        "@ai-sdk/openai": "^3.0.13",
+        "@ai-sdk/openai-compatible": "^2.0.16",
+        "ai": "^6.0.42",
         "js-yaml": "^4.1.1",
         "zod": "^4.3.5",
       },
@@ -19,8 +19,8 @@
         "@types/mocha": "^10.0.10",
         "@types/node": "^25.0.9",
         "@types/vscode": "^1.108.0",
-        "@typescript-eslint/eslint-plugin": "^8.53.0",
-        "@typescript-eslint/parser": "^8.53.0",
+        "@typescript-eslint/eslint-plugin": "^8.53.1",
+        "@typescript-eslint/parser": "^8.53.1",
         "@vscode/test-cli": "^0.0.12",
         "@vscode/test-electron": "^2.5.2",
         "@vscode/vsce": "^3.7.1",
@@ -33,15 +33,15 @@
     },
   },
   "packages": {
-    "@ai-sdk/anthropic": ["@ai-sdk/anthropic@3.0.17", "https://registry.npmmirror.com/@ai-sdk/anthropic/-/anthropic-3.0.17.tgz", { "dependencies": { "@ai-sdk/provider": "3.0.4", "@ai-sdk/provider-utils": "4.0.8" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-M1hToV9nRe6iPtK7+nrln7Ja6HFr0VrtiJPGd0krTpvMEgI0Q8LAeraKDI+ESv7TSH9LzLRyXTtqJ2dqBVYL9Q=="],
+    "@ai-sdk/anthropic": ["@ai-sdk/anthropic@3.0.18", "https://registry.npmmirror.com/@ai-sdk/anthropic/-/anthropic-3.0.18.tgz", { "dependencies": { "@ai-sdk/provider": "3.0.4", "@ai-sdk/provider-utils": "4.0.8" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-eusJVRK3gtXa7ENen9Im5bxwE6tNCPDF/poXyK45u7eLNx1I7aPbfseLqznyh+tjhx6AOK7FTUBV1d36MERPrA=="],
 
     "@ai-sdk/deepseek": ["@ai-sdk/deepseek@2.0.8", "https://registry.npmmirror.com/@ai-sdk/deepseek/-/deepseek-2.0.8.tgz", { "dependencies": { "@ai-sdk/provider": "3.0.4", "@ai-sdk/provider-utils": "4.0.8" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-bpG/RDvxto5Hk8cgnNPoj/ONuk4xA/dYJ8PwnQWBKtxKbusdfy3RdzhD7aBiE8PVXCw/QWx0rc4qh5qBB3pJkw=="],
 
-    "@ai-sdk/gateway": ["@ai-sdk/gateway@3.0.17", "https://registry.npmmirror.com/@ai-sdk/gateway/-/gateway-3.0.17.tgz", { "dependencies": { "@ai-sdk/provider": "3.0.4", "@ai-sdk/provider-utils": "4.0.8", "@vercel/oidc": "3.1.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-mCz50GlBPyBV96Wcll1Mpaz56MVFuHL+bwRWGkIsCJwKAKIfdgUZecFzS3gckpHGaqP5+BYnmyJocIMzUhTQ2A=="],
+    "@ai-sdk/gateway": ["@ai-sdk/gateway@3.0.18", "https://registry.npmmirror.com/@ai-sdk/gateway/-/gateway-3.0.18.tgz", { "dependencies": { "@ai-sdk/provider": "3.0.4", "@ai-sdk/provider-utils": "4.0.8", "@vercel/oidc": "3.1.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-WlJ7UkBDYgv+5q9UpGZfbnPrrW3KVnY96lRLaXs8nXy7Ea3QTWXf4Jw43jFzMSVkH4Zhhf0s9ExmG+CiyEBY5A=="],
 
     "@ai-sdk/google": ["@ai-sdk/google@3.0.10", "https://registry.npmmirror.com/@ai-sdk/google/-/google-3.0.10.tgz", { "dependencies": { "@ai-sdk/provider": "3.0.4", "@ai-sdk/provider-utils": "4.0.8" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-qd2EM9SlD7wWFrq036hwKsuAgkCVxQbwJzctszdmzPs9yUZg795/gHtZRpKItZhbyHSNWhAHmJwEgKjD+HOzuQ=="],
 
-    "@ai-sdk/openai": ["@ai-sdk/openai@3.0.13", "https://registry.npmmirror.com/@ai-sdk/openai/-/openai-3.0.13.tgz", { "dependencies": { "@ai-sdk/provider": "3.0.4", "@ai-sdk/provider-utils": "4.0.8" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-H+iqcmtND5dLsKpuMKjGdSRbU0OQwDdpJZbVBueASmCxsEL52FEWDjwTStDpSyZuvv68Xbs6tej8xcbQXFRCaw=="],
+    "@ai-sdk/openai": ["@ai-sdk/openai@3.0.14", "https://registry.npmmirror.com/@ai-sdk/openai/-/openai-3.0.14.tgz", { "dependencies": { "@ai-sdk/provider": "3.0.4", "@ai-sdk/provider-utils": "4.0.8" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-RYIsHWv4jF95DunR8KR5ikZV3yVwC5uWAnghx/jYuy5G95H1jrzKztV17LJo7NLO8V/h6H/6+ToFglCzPa70kw=="],
 
     "@ai-sdk/openai-compatible": ["@ai-sdk/openai-compatible@2.0.16", "https://registry.npmmirror.com/@ai-sdk/openai-compatible/-/openai-compatible-2.0.16.tgz", { "dependencies": { "@ai-sdk/provider": "3.0.4", "@ai-sdk/provider-utils": "4.0.8" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-Vn+zlFSeo3DiBvYZv575+9WxqYqFyu0xNx3eAWwFDHkQpMwh9MC5eVTfdpT/YRW9lK0jWvJ//aG7QnX+FE16/w=="],
 
@@ -179,7 +179,7 @@
 
     "@types/mocha": ["@types/mocha@10.0.10", "https://registry.npmmirror.com/@types/mocha/-/mocha-10.0.10.tgz", {}, "sha512-xPyYSz1cMPnJQhl0CLMH68j3gprKZaTjG3s5Vi+fDgx+uhG9NOXwbVt52eFS8ECyXhyKcjDLCBEqBExKuiZb7Q=="],
 
-    "@types/node": ["@types/node@25.0.9", "https://registry.npmmirror.com/@types/node/-/node-25.0.9.tgz", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-/rpCXHlCWeqClNBwUhDcusJxXYDjZTyE8v5oTO7WbL8eij2nKhUeU89/6xgjU7N4/Vh3He0BtyhJdQbDyhiXAw=="],
+    "@types/node": ["@types/node@25.0.10", "https://registry.npmmirror.com/@types/node/-/node-25.0.10.tgz", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-zWW5KPngR/yvakJgGOmZ5vTBemDoSqF3AcV/LrO5u5wTWyEAVVh+IT39G4gtyAkh3CtTZs8aX/yRM82OfzHJRg=="],
 
     "@types/normalize-package-data": ["@types/normalize-package-data@2.4.4", "https://registry.npmmirror.com/@types/normalize-package-data/-/normalize-package-data-2.4.4.tgz", {}, "sha512-37i+OaWTh9qeK4LSHPsyRC7NahnGotNuZvjLSgcPzblpHB3rrCJxAOgI5gCdKm7coonsaX1Of0ILiTcnZjbfxA=="],
 
@@ -243,7 +243,7 @@
 
     "agent-base": ["agent-base@7.1.4", "https://registry.npmmirror.com/agent-base/-/agent-base-7.1.4.tgz", {}, "sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ=="],
 
-    "ai": ["ai@6.0.42", "https://registry.npmmirror.com/ai/-/ai-6.0.42.tgz", { "dependencies": { "@ai-sdk/gateway": "3.0.17", "@ai-sdk/provider": "3.0.4", "@ai-sdk/provider-utils": "4.0.8", "@opentelemetry/api": "1.9.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-o+MVN7HBE4HEnhtN7nBt9WO1iISI6svyWNoOuY6WiXCdHuZfSGN4MUQ3QwjWz1Ue5gtBEcvwX5XFhgAwlPAxxw=="],
+    "ai": ["ai@6.0.44", "https://registry.npmmirror.com/ai/-/ai-6.0.44.tgz", { "dependencies": { "@ai-sdk/gateway": "3.0.18", "@ai-sdk/provider": "3.0.4", "@ai-sdk/provider-utils": "4.0.8", "@opentelemetry/api": "1.9.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-fOyssuNfSB3i3ODuDeLaWambfJY+gE3LRHQf4nmWEPDrQhfiB+fcpVMVi77LbFRBfoG/h5BrmX0heVqz4Hl7ug=="],
 
     "ajv": ["ajv@6.12.6", "https://registry.npmmirror.com/ajv/-/ajv-6.12.6.tgz", { "dependencies": { "fast-deep-equal": "^3.1.1", "fast-json-stable-stringify": "^2.0.0", "json-schema-traverse": "^0.4.1", "uri-js": "^4.2.2" } }, "sha512-j3fVLgvTo527anyYyJOGTYJbG+vnnQYvE0m5mmkc1TK+nxAppkCLMIL0aZ4dblVCNoGShhm+kzE4ZUykBoMg4g=="],
 
@@ -759,7 +759,7 @@
 
     "prelude-ls": ["prelude-ls@1.2.1", "https://registry.npmmirror.com/prelude-ls/-/prelude-ls-1.2.1.tgz", {}, "sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g=="],
 
-    "prettier": ["prettier@3.8.0", "https://registry.npmmirror.com/prettier/-/prettier-3.8.0.tgz", { "bin": { "prettier": "bin/prettier.cjs" } }, "sha512-yEPsovQfpxYfgWNhCfECjG5AQaO+K3dp6XERmOepyPDVqcJm+bjyCVO3pmU+nAPe0N5dDvekfGezt/EIiRe1TA=="],
+    "prettier": ["prettier@3.8.1", "https://registry.npmmirror.com/prettier/-/prettier-3.8.1.tgz", { "bin": { "prettier": "bin/prettier.cjs" } }, "sha512-UOnG6LftzbdaHZcKoPFtOcCKztrQ57WkHDeRD9t/PTQtmT0NHSeWWepj6pS0z/N7+08BHFDQVUrfmfMRcZwbMg=="],
 
     "process-nextick-args": ["process-nextick-args@2.0.1", "https://registry.npmmirror.com/process-nextick-args/-/process-nextick-args-2.0.1.tgz", {}, "sha512-3ouUOpQhtgrbOa17J7+uxOTpITYWaGP7/AhoR3+A+/1e9skrzelGi/dXzEYyvbxubEF6Wn2ypscTKiKJFFn1ag=="],
 

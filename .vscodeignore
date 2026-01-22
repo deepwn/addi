@@ -7,7 +7,7 @@ node_modules/**
 src/**
 .git/**
 scripts/**
-refer_documents/**
+docs/**
 *.log
 .gitignore
 .yarnrc

@@ -30,15 +30,15 @@ export class ToolOrchestrator {
               if (!this.mcpService) {
                 return 'Error: MCP Service not available.';
               }
-              
+
               const startTime = Date.now();
               try {
                 const result = await this.mcpService.callTool(ct.name, args);
                 const duration = Date.now() - startTime;
-                
-                logger.info(`Tool executed: ${ct.name}`, { 
+
+                logger.info(`Tool executed: ${ct.name}`, {
                   duration: `${duration}ms`,
-                  success: true 
+                  success: true,
                 });
 
                 if (result.content && Array.isArray(result.content)) {
@@ -49,9 +49,9 @@ export class ToolOrchestrator {
                 return 'Tool executed successfully.';
               } catch (error) {
                 const duration = Date.now() - startTime;
-                logger.error(`Tool failed: ${ct.name}`, { 
+                logger.error(`Tool failed: ${ct.name}`, {
                   duration: `${duration}ms`,
-                  error: error instanceof Error ? error.message : String(error)
+                  error: error instanceof Error ? error.message : String(error),
                 });
                 throw error;
               }

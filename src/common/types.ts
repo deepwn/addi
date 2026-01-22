@@ -10,11 +10,7 @@ export type ModelMessage =
   | { role: 'assistant'; content: string | Array<MessageContentPart> }
   | { role: 'tool'; content: Array<ToolResultPart> };
 
-export type MessageContentPart =
-  | TextPart
-  | ReasoningPart
-  | ImagePart
-  | ToolCallPart;
+export type MessageContentPart = TextPart | ReasoningPart | ImagePart | ToolCallPart;
 
 export interface TextPart {
   type: 'text';

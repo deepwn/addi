@@ -3,7 +3,7 @@
   "icon": "resources/icon-bg.min.png",
   "displayName": "Addi",
   "description": "add more custom AI providers and models for your copilot",
-  "version": "0.0.21",
+  "version": "0.0.22",
   "publisher": "deepwn",
   "repository": {
     "type": "git",
@@ -563,26 +563,26 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.0.9",
-    "@types/vscode": "^1.108.0",
+    "@types/node": "^25.0.10",
+    "@types/vscode": "^1.108.1",
     "@typescript-eslint/eslint-plugin": "^8.53.1",
     "@typescript-eslint/parser": "^8.53.1",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "eslint": "^9.39.2",
     "lint-staged": "^15.5.2",
-    "prettier": "^3.8.0",
+    "prettier": "^3.8.1",
     "rimraf": "^6.1.2",
     "typescript": "^5.9.3",
     "@vscode/vsce": "^3.7.1"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.17",
+    "@ai-sdk/anthropic": "^3.0.18",
     "@ai-sdk/deepseek": "^2.0.8",
     "@ai-sdk/google": "^3.0.10",
-    "@ai-sdk/openai": "^3.0.13",
+    "@ai-sdk/openai": "^3.0.14",
     "@ai-sdk/openai-compatible": "^2.0.16",
-    "ai": "^6.0.42",
+    "ai": "^6.0.44",
     "js-yaml": "^4.1.1",
     "zod": "^4.3.5"
   }

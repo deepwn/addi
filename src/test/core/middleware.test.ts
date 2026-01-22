@@ -16,7 +16,7 @@ suite('ToolCallCompatibilityMiddleware Test Suite', () => {
       id: 'test-p',
       name: 'Test Provider',
       providerType: 'openai',
-      models: []
+      models: [],
     } as any;
     mockModel = {
       sid: 'test-sid',
@@ -30,15 +30,15 @@ suite('ToolCallCompatibilityMiddleware Test Suite', () => {
         scrubSettings: {
           enabled: true,
           patterns: ['<\\/?tool_call[^>]*>', 'DEBUG: .*'],
-          strategy: 'retry'
-        }
-      }
+          strategy: 'retry',
+        },
+      },
     } as any;
-    
+
     context = {
       provider: mockProvider,
       modelId: mockModel.id,
-      model: mockModel
+      model: mockModel,
     };
   });
 
@@ -46,7 +46,7 @@ suite('ToolCallCompatibilityMiddleware Test Suite', () => {
     test('should scrub hallucinated tags from assistant messages', async () => {
       const messages: ModelMessage[] = [
         { role: 'user', content: 'Hello' },
-        { role: 'assistant', content: 'Thinking... <tool_call name="test"> Done.' }
+        { role: 'assistant', content: 'Thinking... <tool_call name="test"> Done.' },
       ];
 
       const result = await middleware.processMessages(messages, context);
@@ -55,10 +55,8 @@ suite('ToolCallCompatibilityMiddleware Test Suite', () => {
     });
 
     test('should scrub multiple different patterns', async () => {
-      const messages: ModelMessage[] = [
-        { role: 'assistant', content: 'SECRET_TAG answer' }
-      ];
-      
+      const messages: ModelMessage[] = [{ role: 'assistant', content: 'SECRET_TAG answer' }];
+
       // Override patterns for this specific test to avoid RegExp pitfalls
       const customContext = {
         ...context,
@@ -69,10 +67,10 @@ suite('ToolCallCompatibilityMiddleware Test Suite', () => {
             scrubSettings: {
               enabled: true,
               patterns: ['SECRET_TAG'],
-              strategy: 'retry'
-            }
-          }
-        }
+              strategy: 'retry',
+            },
+          },
+        },
       } as any;
 
       const result = await middleware.processMessages(messages, customContext);
@@ -114,7 +112,7 @@ suite('ToolCallCompatibilityMiddleware Test Suite', () => {
     });
 
     test('should use default patterns if enabled but no patterns provided', () => {
-       if (mockModel.capabilities.scrubSettings) {
+      if (mockModel.capabilities.scrubSettings) {
         mockModel.capabilities.scrubSettings.patterns = [];
       }
       const part = { type: 'text-delta', text: 'Using <function_call>' };
