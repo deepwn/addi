@@ -1,6 +1,5 @@
 import { ModelMessage } from 'ai';
 import { LLMMiddleware, LLMCallContext } from '../index';
-import { logger } from '../../../../common/logger';
 
 /**
  * Middleware to ensure tool call compatibility.
@@ -9,20 +8,34 @@ import { logger } from '../../../../common/logger';
  */
 export class ToolCallCompatibilityMiddleware implements LLMMiddleware {
   private readonly DEFAULT_PATTERNS = [
-    /<\/?tool_call[^>]*>/gi,
-    /<\/?function_call[^>]*>/gi
+    '<\\\\/?tool_call[^>]*>',
+    '<\\\\/?function_call[^>]*>'
   ];
 
   private getScrubbingConfig(context: LLMCallContext) {
     const settings = context.model?.capabilities?.scrubSettings;
-    if (!settings || !settings.enabled) {
-      return { enabled: false, patterns: [], strategy: 'retry' as const };
-    }
-    const patterns = (settings.patterns || []).map((p) => new RegExp(p, 'gi'));
+    
+    // Explicitly check for enabled property and patterns
+    const isEnabled = settings !== undefined && (settings as any).enabled === true;
+    const strategy = settings?.strategy || 'retry';
+    const rawPatterns = (settings?.patterns && Array.isArray(settings.patterns) && settings.patterns.length > 0) 
+      ? settings.patterns 
+      : this.DEFAULT_PATTERNS;
+
+    const patterns = rawPatterns.map((p) => {
+      try {
+        // Double escape backslashes for the RegExp constructor if they come from JSON strings
+        const normalized = p.replace(/\\\\/g, '\\');
+        return new RegExp(normalized, 'gi');
+      } catch (e) {
+        return null;
+      }
+    }).filter((p): p is RegExp => p !== null);
+
     return {
-      enabled: true,
-      patterns: patterns.length > 0 ? patterns : this.DEFAULT_PATTERNS,
-      strategy: settings.strategy || 'retry',
+      enabled: isEnabled,
+      patterns,
+      strategy
     };
   }
 
@@ -30,8 +43,6 @@ export class ToolCallCompatibilityMiddleware implements LLMMiddleware {
     messages: ModelMessage[],
     context: LLMCallContext
   ): Promise<{ messages: ModelMessage[] }> {
-    logger.debug(`[Middleware] Applying tool call compatibility for ${context.modelId}`);
-
     const config = this.getScrubbingConfig(context);
 
     const processed = messages.map((msg) => {
@@ -40,6 +51,7 @@ export class ToolCallCompatibilityMiddleware implements LLMMiddleware {
         if (typeof msg.content === 'string') {
           let scrubbed = msg.content;
           for (const pattern of config.patterns) {
+            pattern.lastIndex = 0;
             scrubbed = scrubbed.replace(pattern, '');
           }
           if (scrubbed !== msg.content) {
@@ -50,6 +62,7 @@ export class ToolCallCompatibilityMiddleware implements LLMMiddleware {
             if (part.type === 'text') {
               let text = part.text;
               for (const pattern of config.patterns) {
+                pattern.lastIndex = 0;
                 text = text.replace(pattern, '');
               }
               return { ...part, text };
@@ -77,6 +90,8 @@ export class ToolCallCompatibilityMiddleware implements LLMMiddleware {
       let text = part.text;
       let matched = false;
       for (const pattern of config.patterns) {
+        // Reset lastIndex for reuse of global regex
+        pattern.lastIndex = 0;
         if (pattern.test(text)) {
           matched = true;
           text = text.replace(pattern, '');
