@@ -1,13 +1,18 @@
 import * as vscode from 'vscode';
-import { Provider, Model, ChatMessage } from '../common/types';
+import { Provider, Model, UIMessage, UIPart } from '../common/types';
 import { ConfigManager } from '../common/utils';
 import { TextDecoder } from 'util';
 import { logger } from '../common/logger';
+import { MessageConverter } from '../core/llm/messageConverter';
+import { LLMService } from '../core/llm/llmService';
 
 const PLAYGROUND_TOKEN_LIMIT = 1024 * 1024 * 4; // allow up to ~4M tokens when overridden
 
 export class PlaygroundManager {
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly llmService: LLMService
+  ) {}
 
   private createPlaygroundHtmlPlaceholder(): string {
     return `<!DOCTYPE html><html><body><p>Loading playground...</p></body></html>`;
@@ -38,7 +43,7 @@ export class PlaygroundManager {
 
     // 不再在扩展端更改或定制 markdown-it 的渲染规则；前端/主机会自行处理渲染样式
 
-    const history: ChatMessage[] = [];
+    const history: UIMessage[] = [];
     const presetKey = `addi.playground.params.${model.sid}`;
     const stored = this.context?.workspaceState.get<unknown>(presetKey);
     let temperature = 0.7;
@@ -174,93 +179,69 @@ export class PlaygroundManager {
           systemPrompt = sp.length ? sp : undefined;
         }
 
-        const chatModel = await this.selectChatModel(model);
-        if (!chatModel) {
-          logger.warn('Playground could not select chat model', logger.sanitizeModel(model));
-          panel.webview.postMessage({
-            type: 'playgroundError',
-            payload: { message: 'No Addi chat model is available. Configure a provider first.' },
-          });
-          return;
-        }
-
-        const messages = this.createChatMessages(history, prompt, systemPrompt);
-        if (messages.length === 0) {
-          panel.webview.postMessage({
-            type: 'playgroundError',
-            payload: { message: 'Unable to build chat prompt.' },
-          });
-          return;
-        }
-
-        const requestOptionsInput: {
-          temperature?: number;
-          topP?: number;
-          maxInputTokens?: number;
-          maxOutputTokens?: number;
-          presencePenalty?: number;
-          frequencyPenalty?: number;
-        } = { temperature: localTemp };
-        if (typeof topP === 'number') {
-          requestOptionsInput.topP = topP;
-        }
-        if (typeof maxInputTokens === 'number') {
-          requestOptionsInput.maxInputTokens = maxInputTokens;
-        }
-        if (typeof maxOutputTokens === 'number') {
-          requestOptionsInput.maxOutputTokens = maxOutputTokens;
-        }
-        if (typeof presencePenalty === 'number') {
-          requestOptionsInput.presencePenalty = presencePenalty;
-        }
-        if (typeof frequencyPenalty === 'number') {
-          requestOptionsInput.frequencyPenalty = frequencyPenalty;
-        }
-
-        const requestOptions = this.createChatRequestOptions(requestOptionsInput);
-
         const streaming = msg.stream === true;
         const cts = new vscode.CancellationTokenSource();
         addiPanel._addiCancellation = cts;
 
         const priorLength = history.length;
-        history.push({ role: 'user', content: prompt });
+        history.push({
+          id: Math.random().toString(36).substring(7),
+          role: 'user',
+          parts: [{ type: 'text', text: prompt }],
+        });
+
+        const coreMessages = MessageConverter.uiMessagesToCoreMessages(history);
 
         try {
-          const response = await chatModel.sendRequest(messages, requestOptions, cts.token);
-          logger.debug('Playground chatModel.sendRequest started', {
-            streaming,
-            messageCount: messages.length,
-          });
+          logger.debug('Playground using direct LLMService optimization');
           let assembled = '';
+          let reasoningAssembled = '';
 
-          // Create a small adapter that mimics the ChatResponseStream.markdown behaviour
-          // and forwards HTML-rendered deltas to the playground webview. This keeps
-          // playground rendering semantics close to the official stream.markdown API.
-          const webviewStream = {
-            markdown: (md: string) => {
-              if (typeof md !== 'string' || md.length === 0) {
-                return;
+          await this.llmService.chatStream({
+            provider,
+            model,
+            messages: coreMessages,
+            systemMessage: systemPrompt || undefined,
+            token: cts.token,
+            onProgress: (delta: string) => {
+              if (delta) {
+                assembled += delta;
+                if (streaming) {
+                  panel.webview.postMessage({
+                    type: 'playgroundStreamDelta',
+                    payload: {
+                      delta: delta,
+                      full: assembled,
+                    },
+                  });
+                }
               }
-              assembled += md;
-              if (streaming) {
+            },
+            onReasoning: (delta: string) => {
+              if (delta) {
+                reasoningAssembled += delta;
                 panel.webview.postMessage({
-                  type: 'playgroundStreamDelta',
-                  payload: {
-                    delta: md,
-                    full: assembled,
-                  },
+                  type: 'playgroundStreamReasoningDelta',
+                  payload: { delta },
                 });
               }
             },
-            // progress/other methods could be added later if needed
-          };
+            onStats: (stats: any) => {
+              logger.debug('Playground direct stats', stats);
+            }
+          } as any);
 
-          for await (const fragment of response.text) {
-            webviewStream.markdown(String(fragment ?? ''));
+          const assistantParts: UIPart[] = [];
+          if (reasoningAssembled) {
+            assistantParts.push({ type: 'reasoning', reasoning: reasoningAssembled });
           }
+          assistantParts.push({ type: 'text', text: assembled });
 
-          history.push({ role: 'assistant', content: assembled });
+          history.push({
+            id: Math.random().toString(36).substring(7),
+            role: 'assistant',
+            parts: assistantParts,
+          });
           panel.webview.postMessage({ type: 'playgroundResponse', payload: { text: assembled } });
           logger.info('Playground response completed', { length: assembled.length });
         } catch (error) {
@@ -343,109 +324,6 @@ export class PlaygroundManager {
     });
 
     postInit();
-  }
-
-  private async selectChatModel(model?: Model): Promise<vscode.LanguageModelChat | undefined> {
-    try {
-      if (model?.sid) {
-        const [match] = await vscode.lm.selectChatModels({ id: `addi-provider:${model.sid}` });
-        if (match) {
-          return match;
-        }
-      }
-      const [fallback] = await vscode.lm.selectChatModels({ vendor: 'addi-provider' });
-      return fallback;
-    } catch (error) {
-      logger.warn('Failed to select chat model', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return undefined;
-    }
-  }
-
-  private createChatMessages(
-    history: ChatMessage[],
-    prompt: string,
-    systemPrompt?: string
-  ): vscode.LanguageModelChatMessage[] {
-    const factory = vscode.LanguageModelChatMessage as unknown as {
-      User: (value: string) => vscode.LanguageModelChatMessage;
-      Assistant: (value: string) => vscode.LanguageModelChatMessage;
-      System?: (value: string) => vscode.LanguageModelChatMessage;
-    };
-
-    if (!factory || typeof factory.User !== 'function' || typeof factory.Assistant !== 'function') {
-      return [];
-    }
-
-    const messages: vscode.LanguageModelChatMessage[] = [];
-
-    if (systemPrompt && systemPrompt.trim().length > 0) {
-      const trimmed = systemPrompt.trim();
-      if (typeof factory.System === 'function') {
-        messages.push(factory.System(trimmed));
-      } else {
-        messages.push(factory.User(trimmed));
-      }
-    }
-
-    for (const entry of history) {
-      const content = entry.content?.trim();
-      if (!content) {
-        continue;
-      }
-      if (entry.role === 'assistant') {
-        messages.push(factory.Assistant(content));
-      } else if (entry.role === 'system' && typeof factory.System === 'function') {
-        messages.push(factory.System(content));
-      } else {
-        messages.push(factory.User(content));
-      }
-    }
-
-    if (prompt.trim().length > 0) {
-      messages.push(factory.User(prompt.trim()));
-    }
-
-    return messages;
-  }
-
-  private createChatRequestOptions(params: {
-    temperature?: number;
-    topP?: number;
-    maxInputTokens?: number;
-    maxOutputTokens?: number;
-    presencePenalty?: number;
-    frequencyPenalty?: number;
-  }): Record<string, unknown> {
-    const options: Record<string, unknown> = {};
-
-    if (typeof params.temperature === 'number' && Number.isFinite(params.temperature)) {
-      options['temperature'] = params.temperature;
-    }
-    if (typeof params.topP === 'number' && Number.isFinite(params.topP)) {
-      options['topP'] = Math.min(Math.max(params.topP, 0), 1);
-    }
-    if (typeof params.maxInputTokens === 'number' && Number.isFinite(params.maxInputTokens)) {
-      options['maxInputTokens'] = Math.min(
-        Math.max(Math.floor(params.maxInputTokens), 1),
-        PLAYGROUND_TOKEN_LIMIT
-      );
-    }
-    if (typeof params.maxOutputTokens === 'number' && Number.isFinite(params.maxOutputTokens)) {
-      options['maxOutputTokens'] = Math.min(
-        Math.max(Math.floor(params.maxOutputTokens), 1),
-        PLAYGROUND_TOKEN_LIMIT
-      );
-    }
-    if (typeof params.presencePenalty === 'number' && Number.isFinite(params.presencePenalty)) {
-      options['presencePenalty'] = Math.min(Math.max(params.presencePenalty, -2), 2);
-    }
-    if (typeof params.frequencyPenalty === 'number' && Number.isFinite(params.frequencyPenalty)) {
-      options['frequencyPenalty'] = Math.min(Math.max(params.frequencyPenalty, -2), 2);
-    }
-
-    return options;
   }
 }
 

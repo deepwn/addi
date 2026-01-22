@@ -99,9 +99,10 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  const llmService = new LLMService(toolManager, mcpService);
   vscode.lm.registerLanguageModelChatProvider(
     'addi-provider',
-    new AddiChatProvider(manager, new LLMService(toolManager, mcpService))
+    new AddiChatProvider(manager, llmService)
   );
 
   const treeView = vscode.window.createTreeView('addiProviders', {
@@ -119,7 +120,7 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  const commandHandler = new CommandHandler(manager, treeDataProvider, context);
+  const commandHandler = new CommandHandler(manager, treeDataProvider, context, llmService);
 
   context.subscriptions.push(
     vscode.commands.registerCommand('addi.manage', async () => {

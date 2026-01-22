@@ -1,8 +1,60 @@
 import * as vscode from 'vscode';
 import { ModelMessage, UserContent, ToolContent, AssistantContent } from 'ai';
 import { logger } from '../../common/logger';
+import { UIMessage } from '../../common/types';
 
 export class MessageConverter {
+  /**
+   * Converts UIMessages to AI SDK Core ModelMessages.
+   */
+  static uiMessagesToCoreMessages(uiMessages: UIMessage[]): ModelMessage[] {
+    return uiMessages.map((msg) => {
+      if (msg.role === 'user') {
+        return {
+          role: 'user',
+          content: msg.parts.map((part) => {
+            if (part.type === 'text') {
+              return { type: 'text', text: part.text };
+            }
+            if (part.type === 'image') {
+              return { 
+                type: 'image', 
+                image: part.image, 
+                mediaType: part.mediaType 
+              };
+            }
+            return { type: 'text', text: '' };
+          }) as UserContent,
+        };
+      } else if (msg.role === 'assistant') {
+        const content: AssistantContent = [];
+        for (const part of msg.parts) {
+          if (part.type === 'text') {
+            content.push({ type: 'text', text: part.text });
+          } else if (part.type === 'reasoning') {
+            content.push({ type: 'reasoning' as any, reasoning: part.reasoning } as any);
+          } else if (part.type === 'tool-call') {
+            content.push({
+              type: 'tool-call',
+              toolCallId: part.toolCallId,
+              toolName: part.toolName,
+              args: part.args,
+            } as any);
+          }
+        }
+        return { role: 'assistant', content };
+      } else if (msg.role === 'system') {
+        const text = msg.parts
+          .filter((p) => p.type === 'text')
+          .map((p: any) => p.text)
+          .join('\n');
+        return { role: 'system', content: text };
+      }
+      // Handle tool role if UIMessage supports it in the future
+      return { role: 'user', content: [] };
+    });
+  }
+
   static async toAiCoreMessages(
     messages: readonly vscode.LanguageModelChatRequestMessage[]
   ): Promise<ModelMessage[]> {

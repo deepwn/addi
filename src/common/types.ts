@@ -1,8 +1,81 @@
 import { JSONSchema7 } from 'ai';
 
+/**
+ * AI SDK Core Message Types
+ * Based on @ai-sdk/core
+ */
+export type ModelMessage =
+  | { role: 'system'; content: string }
+  | { role: 'user'; content: string | Array<MessageContentPart> }
+  | { role: 'assistant'; content: string | Array<MessageContentPart> }
+  | { role: 'tool'; content: Array<ToolResultPart> };
+
+export type MessageContentPart =
+  | TextPart
+  | ReasoningPart
+  | ImagePart
+  | ToolCallPart;
+
+export interface TextPart {
+  type: 'text';
+  text: string;
+}
+
+export interface ReasoningPart {
+  type: 'reasoning';
+  reasoning: string;
+}
+
+export interface ImagePart {
+  type: 'image';
+  image: string | Uint8Array | Buffer | URL;
+  mediaType?: string;
+}
+
+export interface ToolCallPart {
+  type: 'tool-call';
+  toolCallId: string;
+  toolName: string;
+  args: any;
+}
+
+export interface ToolResultPart {
+  type: 'tool-result';
+  toolCallId: string;
+  toolName: string;
+  result: any;
+}
+
+/**
+ * AI SDK UI Message Types
+ * Based on @ai-sdk/ui
+ */
+export interface UIMessage {
+  id: string;
+  role: 'system' | 'user' | 'assistant';
+  parts: Array<UIPart>;
+  metadata?: Record<string, any>;
+}
+
+export type UIPart =
+  | { type: 'text'; text: string }
+  | { type: 'reasoning'; reasoning: string }
+  | { type: 'image'; image: string; mediaType?: string }
+  | { type: 'tool-call'; toolCallId: string; toolName: string; args: any }
+  | { type: 'tool-result'; toolCallId: string; result: any };
+
+export type ScrubStrategy = 'stop' | 'retry';
+
+export interface ScrubSettings {
+  enabled: boolean;
+  patterns: string[];
+  strategy: ScrubStrategy;
+}
+
 export interface ModelCapabilities {
   imageInput?: boolean;
   toolCalling?: boolean | number;
+  scrubSettings?: ScrubSettings;
 }
 
 export interface RemoteModelInfo {

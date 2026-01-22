@@ -123,6 +123,30 @@
         transform: none;
       }
 
+      /* Reasoning / Thinking block styles */
+      .reasoning-container {
+        margin-bottom: 8px;
+        padding: 10px 14px;
+        background: rgba(255, 255, 255, 0.03);
+        border-left: 2px solid var(--accent);
+        border-radius: 4px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--muted);
+        font-style: italic;
+        position: relative;
+      }
+      .reasoning-container::before {
+        content: "Thinking...";
+        display: block;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+        opacity: 0.7;
+        font-style: normal;
+      }
+
       .chat-shell {
         flex: 1;
         display: flex;
@@ -1202,6 +1226,24 @@
             } else {
               bubble.textContent = msg.payload.full || "";
             }
+            scrollToBottom();
+          } else if (msg.type === "playgroundStreamReasoningDelta") {
+            let nodes = messagesEl.querySelectorAll(".msg.assistant");
+            let target = nodes.length ? nodes[nodes.length - 1] : null;
+            if (!target || target.getAttribute("data-stream-final") === "true") {
+              append("assistant", "");
+              nodes = messagesEl.querySelectorAll(".msg.assistant");
+              target = nodes[nodes.length - 1];
+              if (target) target.setAttribute("data-streaming", "true");
+            }
+            const bubble = target.querySelector(".bubble") || target;
+            let reasoning = bubble.querySelector(".reasoning-container");
+            if (!reasoning) {
+              reasoning = document.createElement("div");
+              reasoning.className = "reasoning-container";
+              bubble.prepend(reasoning);
+            }
+            reasoning.textContent += msg.payload.delta;
             scrollToBottom();
           }
         });

@@ -10,6 +10,7 @@ import { logger } from '../common/logger';
 import PlaygroundManager from './playground';
 
 import { EditorViewManager } from './views/editorView';
+import { LLMService } from '../core/llm/llmService';
 
 type ModelSyncResult = {
   added: number;
@@ -24,7 +25,8 @@ export class CommandHandler {
   constructor(
     private readonly manager: ProviderModelManager,
     private readonly treeDataProvider: AddiTreeDataProvider,
-    private readonly context?: vscode.ExtensionContext
+    private readonly context: vscode.ExtensionContext,
+    private readonly llmService: LLMService
   ) {
     logger.debug('CommandHandler initialized', {
       hasContext: Boolean(context),
@@ -34,8 +36,6 @@ export class CommandHandler {
   public setEditorViewManager(manager: EditorViewManager) {
     this.editorViewManager = manager;
   }
-
-  // playground logic moved to PlaygroundManager
 
   async openPlayground(
     provider: Provider,
@@ -53,7 +53,7 @@ export class CommandHandler {
       logger.error('openPlayground missing extension context', undefined, 'Commands');
       throw new Error('No extension context');
     }
-    const mgr = new PlaygroundManager(this.context);
+    const mgr = new PlaygroundManager(this.context, this.llmService);
     // ensure model has the shape of Model
     const realModel = model as Model;
     await mgr.openPlayground(provider, realModel);

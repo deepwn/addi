@@ -137,6 +137,27 @@
                     <textarea id="m-req-additional" placeholder='{"stream": "false"}'></textarea>
                     <div class="info-text">Additional JSON properties to merge into the request body.</div>
                 </div>
+
+                <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--vscode-widget-border);">
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="m-scrub-enabled">
+                        <label for="m-scrub-enabled">Enable Output Scrubbing (Cleanup hallucinated tags)</label>
+                    </div>
+                    <div id="scrub-details" class="hidden">
+                        <div class="form-group">
+                            <label>Scrub Patterns (Regex, one per line)</label>
+                            <textarea id="m-scrub-patterns" placeholder="<\/?tool_call[^>]*>"></textarea>
+                            <div class="info-text">Messages or deltas matching these regexes will be processed.</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Action on Detection</label>
+                            <select id="m-scrub-strategy">
+                                <option value="retry">Retry (Clean & force tool call)</option>
+                                <option value="stop">Stop (Clean & terminate)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="button-row">
@@ -179,6 +200,12 @@
         const mVision = document.getElementById('m-vision');
         const mTools = document.getElementById('m-tools');
         const mReqAdd = document.getElementById('m-req-additional');
+        
+        // Scrubbing inputs
+        const mScrubEnabled = document.getElementById('m-scrub-enabled');
+        const mScrubDetails = document.getElementById('scrub-details');
+        const mScrubPatterns = document.getElementById('m-scrub-patterns');
+        const mScrubStrategy = document.getElementById('m-scrub-strategy');
         
         // Preview elements
         const reqPreview = document.getElementById('req-preview');
@@ -334,9 +361,21 @@
                 
                 mReqAdd.value = data.requestAdditional || '';
                 
+                // Scrubbing
+                const scrub = (data.capabilities && data.capabilities.scrubSettings) || { enabled: false, patterns: [], strategy: 'retry' };
+                mScrubEnabled.checked = !!scrub.enabled;
+                mScrubPatterns.value = (scrub.patterns || []).join('\n');
+                mScrubStrategy.value = scrub.strategy || 'retry';
+                
+                if (mScrubEnabled.checked) show(mScrubDetails); else hide(mScrubDetails);
+
                 updatePreviews();
             }
         }
+
+        mScrubEnabled.addEventListener('change', () => {
+            if (mScrubEnabled.checked) show(mScrubDetails); else hide(mScrubDetails);
+        });
 
         function show(el) { el.classList.remove('hidden'); }
         function hide(el) { el.classList.add('hidden'); }
@@ -366,7 +405,12 @@
                         maxOutputTokens: mOutput.value,
                         imageInput: mVision.checked,
                         toolCalling: mTools.checked,
-                        requestAdditional: mReqAdd.value
+                        requestAdditional: mReqAdd.value,
+                        scrubSettings: {
+                            enabled: mScrubEnabled.checked,
+                            patterns: mScrubPatterns.value.split('\n').map(s => s.trim()).filter(s => !!s),
+                            strategy: mScrubStrategy.value
+                        }
                     }
                 });
             }

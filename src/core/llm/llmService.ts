@@ -1,30 +1,28 @@
 import * as vscode from 'vscode';
-import { streamText, generateText, Tool } from 'ai';
-import { z } from 'zod';
+import { streamText, generateText, ModelMessage, Tool } from 'ai';
 import { Provider, Model } from '../../common/types';
 import { IToolManager, IMcpService } from '../../common/interfaces';
 import { AIProviderRegistry } from './aiRegistry';
 import { MessageConverter } from './messageConverter';
+import { ToolOrchestrator } from './toolOrchestrator';
+import { LLMMiddleware } from './middleware';
+import { ToolCallCompatibilityMiddleware } from './middleware/toolCallCompatibility/toolCallCompatibility';
 import { logger } from '../../common/logger';
-import { safeConvertToZod } from './schemaConverter';
 
 export class LLMService {
+  private toolOrchestrator: ToolOrchestrator;
+  private middlewares: LLMMiddleware[] = [];
+
   constructor(
-    private toolManager?: IToolManager,
-    private mcpService?: IMcpService
-  ) {}
+    toolManager?: IToolManager,
+    mcpService?: IMcpService
+  ) {
+    this.toolOrchestrator = new ToolOrchestrator(toolManager, mcpService);
+    this.middlewares.push(new ToolCallCompatibilityMiddleware());
+  }
 
   /**
-   * Orchestrates the chat interaction using Vercel AI SDK.
-   *
-   * Flow:
-   * 1. Factory Creation: Creates specific AI model instance (OpenAI/Anthropic/DeepSeek etc).
-   * 2. Message Conversion: Transforms VS Code chat messages to AI SDK CoreMessage format.
-   * 3. Tool Registration:
-   *    - Custom Tools (from yaml/json): Registered with execution handlers via MCP.
-   *    - Host Tools (from VS Code): Registered as pass-through tools.
-   * 4. Streaming: Initiates `streamText` with multi-step support (`stopWhen`).
-   * 5. Response Handling: Converts AI SDK stream parts (text/tool-calls) back to VS Code format.
+   * VS Code API compatible chat entry point.
    */
   async chat(
     provider: Provider,
@@ -35,140 +33,118 @@ export class LLMService {
     token: vscode.CancellationToken,
     onStats?: (stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => void
   ): Promise<void> {
+    const coreMessages = await MessageConverter.toAiCoreMessages(messages);
+    const systemMessage = MessageConverter.extractSystemMessage(messages);
+    const tools = await this.toolOrchestrator.prepareTools(options);
+
+    return this.executeDirect(
+      provider,
+      model,
+      coreMessages,
+      systemMessage,
+      tools,
+      progress,
+      token,
+      { onStats } as any
+    );
+  }
+
+  /**
+   * AI SDK optimized chat entry point (formerly chatStreamV2).
+   */
+  async chatStream(params: {
+    provider: Provider;
+    model: Model;
+    messages: ModelMessage[];
+    systemMessage?: string;
+    token: vscode.CancellationToken;
+    onProgress: (delta: string) => void;
+    onReasoning?: (delta: string) => void;
+    onStats?: (stats: any) => void;
+  }): Promise<void> {
+    const { provider, model, messages, systemMessage, token, onProgress, onReasoning, onStats } =
+      params;
+    const tools = await this.toolOrchestrator.prepareTools(undefined);
+
+    const progress: vscode.Progress<vscode.LanguageModelResponsePart> = {
+      report: (part) => {
+        if (part instanceof vscode.LanguageModelTextPart) {
+          onProgress(part.value);
+        }
+      },
+    };
+
+    return this.executeDirect(
+      provider,
+      model,
+      messages,
+      systemMessage,
+      tools,
+      progress,
+      token,
+      {
+        onStats: onStats ?? undefined,
+        onReasoning: onReasoning ?? undefined,
+      } as any
+    );
+  }
+
+  private async executeDirect(
+    provider: Provider,
+    model: Model,
+    messages: ModelMessage[],
+    systemMessage: string | undefined,
+    tools: Record<string, Tool>,
+    progress: vscode.Progress<vscode.LanguageModelResponsePart>,
+    token: vscode.CancellationToken,
+    options?: {
+      onStats?: (stats: any) => void;
+      onReasoning?: (delta: string) => void;
+    },
+    retryCount = 0
+  ): Promise<void> {
+    const onStats = options?.onStats;
+    const onReasoning = options?.onReasoning;
+
     try {
-      // 1. Create AI SDK Model Instance
+      // 1. Apply Middlewares
+      let processedMessages = [...messages];
+      let processedSystem = systemMessage;
+      
+      const context = { provider, modelId: model.id, model };
+      for (const mw of this.middlewares) {
+        if (mw.processMessages) {
+          const result = await mw.processMessages(processedMessages, context);
+          processedMessages = result.messages;
+          if (result.system) {
+            processedSystem = (processedSystem ? processedSystem + '\n' : '') + result.system;
+          }
+        }
+      }
+
       const aiModel = AIProviderRegistry.createModel(provider, model.id);
+      const abortController = new AbortController();
+      token.onCancellationRequested(() => abortController.abort());
 
-      // 2. 转换消息
-      const coreMessages = await MessageConverter.toAiCoreMessages(messages);
-
-      // 3. 准备工具
-      const tools: Record<string, Tool> = {};
-
-      // Add Custom Tools
-      if (this.toolManager) {
-        const customTools = this.toolManager.getTools();
-        logger.debug('LLMService: customTools from manager', {
-          tools:
-            customTools && customTools.length ? customTools.map((t: any) => t.name) : customTools,
-        });
-        for (const ct of customTools) {
-          try {
-            // Convert JSON Schema to Zod Schema following AI SDK best practices
-            const zodSchema = safeConvertToZod(
-              ct.parameters,
-              z.object({}) // Fallback to empty object schema
-            );
-
-            tools[ct.name] = {
-              description: ct.description,
-              inputSchema: zodSchema,
-              execute: async (args: any) => {
-                // Log tool execution without sensitive args
-                logger.debug(`Executing custom tool ${ct.name}`, {
-                  paramCount: Object.keys(args || {}).length,
-                });
-
-                if (!this.mcpService) {
-                  return 'Error: MCP Service not available for tool execution.';
-                }
-
-                try {
-                  const result = await this.mcpService.callTool(ct.name, args);
-
-                  // MCP result structure: { content: [{ type: 'text', text: '...' }], isError: boolean }
-                  if (result.content && Array.isArray(result.content)) {
-                    const parts = result.content.map((p: any) => {
-                      if (p.type === 'text') {
-                        return p.text;
-                      }
-                      return '';
-                    });
-                    return parts.join('\n');
-                  }
-                  return 'Tool executed successfully with no output.';
-                } catch (e: any) {
-                  logger.error(`Error executing ${ct.name} via MCP`, e);
-                  return `Error executing tool '${ct.name}': ${e.message}`;
-                }
-              },
-            };
-          } catch (e) {
-            logger.error(`Failed to register custom tool ${ct.name} for AI SDK`, e);
-          }
-        }
-      }
-
-      // @ts-ignore: options.tools might exist in runtime even if not in d.ts
-      const providedTools = (options as any)?.tools as vscode.LanguageModelChatTool[] | undefined;
-
-      if (providedTools && providedTools.length > 0) {
-        for (const tool of providedTools) {
-          let schema: any;
-          try {
-            schema = tool.inputSchema
-              ? JSON.parse(JSON.stringify(tool.inputSchema))
-              : { type: 'object', properties: {} };
-          } catch (e) {
-            logger.error(
-              `Failed to clone schema for tool ${tool.name}, using default object schema`,
-              e
-            );
-            schema = { type: 'object', properties: {} };
-          }
-
-          // Convert JSON Schema to Zod Schema
-          const zodSchema = safeConvertToZod(
-            schema,
-            z.object({}) // Fallback to empty object schema
-          );
-
-          // Log tool registration
-          logger.info(`Registering tool: ${tool.name}`, {
-            description:
-              tool.description && tool.description.length > 50
-                ? tool.description.substring(0, 50) + '...'
-                : tool.description,
-          });
-
-          try {
-            tools[tool.name] = {
-              description: tool.description,
-              inputSchema: zodSchema,
-            } as any;
-          } catch (e) {
-            logger.error(`Failed to register provided tool ${tool.name} due to schema error`, e);
-            // Skip this tool instead of crashing the whole chat
-            continue;
-          }
-        }
-      }
-
-      // 4. 提取生成参数
-      // 尝试从 model.requestAdditional 解析参数
       let additionalParams: Record<string, any> = {};
       if (model.requestAdditional) {
         try {
           additionalParams = JSON.parse(model.requestAdditional);
         } catch (e) {
-          logger.warn('Failed to parse requestAdditional', e);
+          /* ignore */
         }
       }
 
       let firstTokenTime: number | undefined;
-      const abortController = new AbortController();
-      token.onCancellationRequested(() => abortController.abort());
 
-      // 5. 调用 streamText
-      const streamOptions: any = {
+      const baseOptions: any = {
         model: aiModel,
-        messages: coreMessages,
+        system: processedSystem,
+        messages: processedMessages,
         abortSignal: abortController.signal,
         maxOutputTokens: model.maxOutputTokens,
         temperature: additionalParams['temperature'],
         topP: additionalParams['topP'],
-        presencePenalty: additionalParams['presencePenalty'],
-        frequencyPenalty: additionalParams['frequencyPenalty'],
         onFinish: ({ usage }: any) => {
           if (onStats && usage) {
             onStats({
@@ -180,221 +156,189 @@ export class LLMService {
         },
       };
 
-      logger.debug('LLMService: tools registered at call time', { tools: Object.keys(tools) });
-      if (Object.keys(tools).length > 0) {
-        streamOptions.tools = tools;
-        // Enable multi-step tool calls
-        // Precedence: 1. Model-specific JSON setting, 2. Global setting, 3. Hardcoded safe default 100
-        const globalMaxSteps = vscode.workspace
-          .getConfiguration('addi')
-          .get<number | null>('maxToolChainSteps');
-        streamOptions.maxSteps = additionalParams['maxSteps'] ?? globalMaxSteps ?? 100;
+      // Force tool choice if this is a retry
+      if (retryCount > 0 && Object.keys(tools).length > 0) {
+        baseOptions.toolChoice = 'required';
       }
 
-      // Check if non-streaming is explicitly requested
+      if (Object.keys(tools).length > 0) {
+        baseOptions.tools = tools;
+        baseOptions.maxSteps = additionalParams['maxSteps'] ?? 100;
+      }
+
       const useStreaming = additionalParams['stream'] !== false;
 
       if (!useStreaming) {
-        logger.info('Using non-streaming request (generateText)', { modelId: model.id });
-        const result = await generateText(streamOptions);
+        const result = await generateText(baseOptions);
+        const steps = (result.steps as any[]) || [];
 
-        // 1. Report reasoning and tool calls from each step
-        for (const step of result.steps as any[]) {
-          // reasoning
+        let shouldRetry = false;
+        let shouldStop = false;
+        
+        for (const step of steps) {
           if (step.reasoning) {
-            if (typeof step.reasoning === 'string') {
-              progress.report(new vscode.LanguageModelTextPart(step.reasoning));
-            } else if (Array.isArray(step.reasoning)) {
-              const reasoningText = step.reasoning.map((r: any) => r.text || '').join('');
-              if (reasoningText) {
-                progress.report(new vscode.LanguageModelTextPart(reasoningText));
+            let reasoning = typeof step.reasoning === 'string'
+              ? step.reasoning
+              : step.reasoning.map((r: any) => r.text || '').join('');
+            
+            // Apply middlewares to reasoning
+            for (const mw of this.middlewares) {
+              if (mw.processResponsePart) {
+                const mock = mw.processResponsePart({ type: 'text-delta', text: reasoning }, context);
+                reasoning = mock.text;
+                if (mock._addiAction === 'retry') {
+                  shouldRetry = true;
+                }
+                if (mock._addiAction === 'stop') {
+                  shouldStop = true;
+                }
               }
+            }
+
+            if (!shouldRetry && !shouldStop && reasoning) {
+              if (onReasoning) {
+                onReasoning(reasoning);
+              }
+              progress.report(new vscode.LanguageModelTextPart(reasoning));
             }
           }
 
-          // tool calls and results
-          if (step.toolCalls) {
-            for (const toolCall of step.toolCalls) {
-              progress.report(
-                new vscode.LanguageModelToolCallPart(
-                  toolCall.toolCallId,
-                  toolCall.toolName,
-                  toolCall.args || toolCall.input
-                )
-              );
+          if (shouldRetry || shouldStop) {
+            break;
+          }
 
-              // find corresponding result in this step
-              const toolResult = step.toolResults?.find(
-                (r: any) => r.toolCallId === toolCall.toolCallId
+          for (const tc of step.toolCalls || []) {
+            progress.report(
+              new vscode.LanguageModelToolCallPart(tc.toolCallId, tc.toolName, tc.args || tc.input)
+            );
+            const tr = step.toolResults?.find((r: any) => r.toolCallId === tc.toolCallId);
+            if (tr) {
+              const res = typeof tr.result === 'string' ? tr.result : JSON.stringify(tr.result);
+              progress.report(
+                new vscode.LanguageModelToolResultPart(tc.toolCallId, [
+                  new vscode.LanguageModelTextPart(res),
+                ])
               );
-              if (toolResult) {
-                const res = toolResult.result;
-                const contentParts: vscode.LanguageModelResponsePart[] = [];
-                if (typeof res === 'string') {
-                  contentParts.push(new vscode.LanguageModelTextPart(res));
-                } else {
-                  contentParts.push(new vscode.LanguageModelTextPart(JSON.stringify(res)));
-                }
-                progress.report(
-                  new vscode.LanguageModelToolResultPart(toolCall.toolCallId, contentParts)
-                );
-              }
             }
           }
         }
 
-        // 2. Report final text
-        if (result.text) {
+        if (!shouldRetry && !shouldStop && result.text) {
+          let text = result.text;
+          for (const mw of this.middlewares) {
+            if (mw.processResponsePart) {
+              const mock = mw.processResponsePart({ type: 'text-delta', text: text }, context);
+              text = mock.text;
+              if (mock._addiAction === 'retry') {
+                shouldRetry = true;
+              }
+              if (mock._addiAction === 'stop') {
+                shouldStop = true;
+              }
+            }
+          }
           if (!firstTokenTime) {
             firstTokenTime = Date.now();
           }
-          progress.report(new vscode.LanguageModelTextPart(result.text));
+          if (!shouldRetry && !shouldStop) {
+            progress.report(new vscode.LanguageModelTextPart(text));
+          }
         }
 
-        if (onStats && result.usage) {
-          onStats({
-            firstTokenTime: firstTokenTime || Date.now(),
-            endTime: Date.now(),
-            tokenCount: result.usage.outputTokens || 0,
-          });
+        if (shouldRetry && retryCount < 1) {
+          logger.warn(`Middleware requested retry for ${model.id} (non-streaming).`);
+          return this.executeDirect(
+            provider,
+            model,
+            messages,
+            systemMessage,
+            tools,
+            progress,
+            token,
+            options,
+            retryCount + 1
+          );
+        }
+
+        if (shouldStop) {
+          return;
         }
         return;
       }
 
-      const result = streamText(streamOptions);
+      const result = await streamText(baseOptions);
+      for await (let part of result.fullStream) {
+        if (!firstTokenTime) {
+          firstTokenTime = Date.now();
+        }
+        if (token.isCancellationRequested) {
+          break;
+        }
 
-      // 6. 处理流式响应
-      const streamStartTime = Date.now();
-      logger.info(
-        'Stream processing started',
-        {
-          modelId: model.id,
-          messageCount: coreMessages.length,
-          toolCount: Object.keys(tools).length,
-        },
-        'LLM'
-      );
+        // Apply Middlewares to response parts
+        for (const mw of this.middlewares) {
+          if (mw.processResponsePart) {
+            part = mw.processResponsePart(part, context);
+          }
+        }
 
-      let hasOutput = false;
-      for await (const part of result.fullStream) {
-        if (part.type === 'text-delta') {
-          if (!firstTokenTime) {
-            firstTokenTime = Date.now();
-          }
-          hasOutput = true;
-          progress.report(new vscode.LanguageModelTextPart(part.text));
-        } else if (part.type === 'reasoning-delta') {
-          if (!firstTokenTime) {
-            firstTokenTime = Date.now();
-          }
-          hasOutput = true;
-          // Output reasoning as text, maybe italicized or quoted if markdown supported,
-          // but LanguageModelTextPart is plain text usually interpreted as markdown in chat.
-          // We'll just stream it. Users can distinguish contextually.
-          progress.report(new vscode.LanguageModelTextPart(part.text));
-        } else if (part.type === 'tool-call') {
-          const args = (part as any).args ?? (part as any).input;
-          logger.trace(
-            'Tool Call received',
-            { toolCallId: part.toolCallId, toolName: part.toolName, args },
-            'LLM'
+        if ((part as any)._addiAction === 'stop') {
+          abortController.abort();
+          return;
+        }
+
+        if ((part as any)._addiAction === 'retry' && retryCount < 1) {
+          abortController.abort();
+          logger.warn(`Middleware requested retry for ${model.id}.`);
+          return this.executeDirect(
+            provider,
+            model,
+            messages,
+            systemMessage,
+            tools,
+            progress,
+            token,
+            options,
+            retryCount + 1
           );
-          // Report the tool call to VS Code (UI)
-          // Whether it's a client-side tool (providedTools) or server-side tool (customTools),
-          // we notify VS Code that a tool is being called.
-          progress.report(
-            new vscode.LanguageModelToolCallPart(part.toolCallId, part.toolName, args)
-          );
-          hasOutput = true;
+        }
 
-          // Note: We do NOT execute the tool manually here anymore.
-          // Since we enabled `stopWhen` (multi-step) and provided `execute` functions for custom tools,
-          // the AI SDK will automatically execute the tool and emit a `tool-result` part later in the stream.
-        } else if (part.type === 'tool-result') {
-          const result = (part as any).result;
-          logger.trace(
-            'Tool Result received',
-            { toolCallId: part.toolCallId, toolName: part.toolName, result },
-            'LLM'
-          );
-
-          // 1. Report the result to VS Code so it appears in the chat history
-          if (result !== undefined) {
-            const contentParts: vscode.LanguageModelResponsePart[] = [];
-            if (typeof result === 'string') {
-              contentParts.push(new vscode.LanguageModelTextPart(result));
-            } else if (result && typeof result === 'object') {
-              contentParts.push(new vscode.LanguageModelTextPart(JSON.stringify(result)));
-            } else {
-              contentParts.push(new vscode.LanguageModelTextPart(String(result)));
+        switch (part.type) {
+          case 'text-delta':
+            progress.report(new vscode.LanguageModelTextPart(part.text));
+            break;
+          case 'reasoning-delta':
+            if (onReasoning) {
+              onReasoning(part.text);
             }
-
-            try {
-              progress.report(
-                new vscode.LanguageModelToolResultPart(part.toolCallId, contentParts)
-              );
-              hasOutput = true;
-            } catch (e) {
-              // Fallback if ToolResultPart fails
-              logger.warn('Failed to report ToolResultPart', e);
-            }
-          }
-
-          // 2. Handle errors (if any)
-          const toolErr = (part as any).error ?? (part as any).result?.error ?? null;
-          if (toolErr) {
-            // Log full error server-side for debugging
-            logger.error(`Tool ${part.toolName} returned error`, toolErr);
-
-            // Build a safe, truncated message for the model (no stacktraces, no secrets)
-            let rawMessage: string;
-            if (typeof toolErr === 'string') {
-              rawMessage = toolErr;
-            } else if (toolErr && typeof toolErr.message === 'string') {
-              rawMessage = toolErr.message;
-            } else {
-              rawMessage = String(toolErr);
-            }
-
-            const safeMessage = rawMessage.replace(/\s+/g, ' ').trim().slice(0, 1024);
-            const errorCode = (toolErr && (toolErr.code ?? toolErr.status)) || null;
-
-            // Create a clear, human-readable error message with retry suggestion
-            const retryMessage = `Tool "${part.toolName}" failed${
-              errorCode ? ` (${errorCode})` : ''
-            }: ${safeMessage}. Please try calling this tool again with corrected parameters or use an alternative approach.`;
-
-            // Report the error back to the model as a text part so the model can decide next steps
-            // Use plain text instead of JSON for better model understanding
-            progress.report(new vscode.LanguageModelTextPart(retryMessage));
-            hasOutput = true;
-
-            // Also log the JSON payload for debugging
-            logger.info('Tool error reported to model', {
-              toolName: part.toolName,
-              toolCallId: part.toolCallId,
-              message: retryMessage,
-            });
-          }
-        } else if (part.type === 'error') {
-          logger.error('Stream Error', part.error);
-          throw part.error;
+            // Still report to VS Code progress for compatibility
+            progress.report(new vscode.LanguageModelTextPart(part.text));
+            break;
+          case 'tool-call':
+            progress.report(
+              new vscode.LanguageModelToolCallPart(
+                part.toolCallId,
+                part.toolName,
+                (part as any).args || (part as any).input
+              )
+            );
+            break;
+          case 'tool-result':
+            const toolRes = (part as any).result || (part as any).output;
+            const res = typeof toolRes === 'string' ? toolRes : JSON.stringify(toolRes);
+            progress.report(
+              new vscode.LanguageModelToolResultPart(part.toolCallId, [
+                new vscode.LanguageModelTextPart(res),
+              ])
+            );
+            break;
         }
       }
-
-      const streamDuration = Date.now() - streamStartTime;
-      logger.info('Stream processing completed', {
-        duration: streamDuration,
-        hasOutput,
-        outputCount: hasOutput ? 1 : 0,
-      });
-
-      if (!hasOutput) {
-        logger.error('Stream finished with no text output');
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        return;
       }
-    } catch (error) {
-      logger.error('LLMService chat error', error);
-      // 重新抛出以便上层处理
+      logger.error('LLMService executeDirect error', error);
       throw error;
     }
   }
