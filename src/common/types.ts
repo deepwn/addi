@@ -66,7 +66,8 @@ export interface ScrubSettings {
   enabled: boolean;
   patterns: string[];
   strategy: ScrubStrategy;
-  flags?: string; // e.g. "gis"
+  flags?: string;
+  toolNameGroup?: number; // Capture group index for tool name extraction
 }
 
 export interface ModelCapabilities {

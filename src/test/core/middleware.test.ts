@@ -91,9 +91,17 @@ suite('ToolCallCompatibilityMiddleware Test Suite', () => {
 
   suite('processResponsePart', () => {
     test('should scrub text deltas in stream', () => {
-      const part = { type: 'text-delta', text: 'Some <tool_call> text' };
-      const result = middleware.processResponsePart(part, context);
-      assert.strictEqual(result.text, 'Some  text');
+      // Test case 1: No match - output all content
+      const part1 = { type: 'text-delta', text: 'Some  text' };
+      const result1 = middleware.processResponsePart(part1, context);
+      assert.strictEqual(result1.text, 'Some  text');
+
+      // Test case 2: Match detected - output content before match, then stop
+      const part2 = { type: 'text-delta', text: ' before <tool_call> after' };
+      const result2 = middleware.processResponsePart(part2, context);
+      // Should output ' before ' and stop, not ' after'
+      assert.strictEqual(result2.text, ' before ');
+      assert.strictEqual((result2 as any)._addiAction, 'retry');
     });
 
     test('should signal retry if strategy is retry and pattern matches', () => {
@@ -117,7 +125,9 @@ suite('ToolCallCompatibilityMiddleware Test Suite', () => {
       }
       const part = { type: 'text-delta', text: 'Using <function_call>' };
       const result = middleware.processResponsePart(part, context);
+      // Default patterns will match <function_call>, so output 'Using ' and stop
       assert.strictEqual(result.text, 'Using ');
+      assert.strictEqual((result as any)._addiAction, 'retry');
     });
   });
 });

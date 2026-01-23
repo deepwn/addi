@@ -2,34 +2,18 @@
 
 All notable changes to the "addi" extension will be documented in this file.
 
-## [0.0.22] - 2026-01-22
+## [0.0.23] - 2026-01-22
 
 ### Added
 
-- **Unexpected Behavior Handling**: New preview feature for handling unexpected tool calls in model outputs:
-  - Automatically detects and cleans hallucinated XML tags (e.g., `</?tool_call[^>]*>`, `</?function_call[^>]*>`) from model responses
-  - Real-time regex pattern validation and testing in editor with live preview
-  - Configurable strategies: **Stop** (clean and terminate) or **Retry** (clean and force tool call retry)
-  - Enhanced security with HTML escaping for pattern testing to prevent XSS attacks
-  - User-friendly interface with clear labeling: "Unexpected Behavior Handling"
+- **RegExp Flags Configuration**: Users can now customize regular expression flags (`i`, `s`, `m`) for scrubbing patterns in the model settings.
+- **Retry Limit & Safety**: Added a hard limit of 3 retries for unexpected behavior handling to prevent infinite loops, with user notification upon failure.
 
 ### Changed
 
-- **LLMService Refactor**: Complete refactoring with middleware architecture for better extensibility:
-  - Introduced `LLMMiddleware` interface for intercepting and processing requests/responses
-  - Integrated `ToolCallCompatibilityMiddleware` as the first middleware implementation
-  - Improved pattern handling consistency between editor validation and runtime processing
-  - Fixed regex pattern normalization to work correctly with user input
-- **Editor Interface**: Enhanced model editor with compatibility options:
-  - Added real-time regex pattern testing with syntax error detection
-  - Added test content input and result highlighting
-  - Improved user feedback with clear error messages and match statistics
-  - Preview feature warning for potential breaking changes
-
-### Performance
-
-- **Middleware Efficiency**: Optimized middleware processing with proper `lastIndex` reset for global regex patterns
-- **Test Coverage**: Added comprehensive middleware tests (79 passing tests)
+- **Enhanced Scrubbing Logic**: Updated streaming response middleware to use persistent buffers per request, ensuring robust detection of patterns even when split across multiple packets.
+- **Improved Output Interception**: Fully masks the triggering data chunks from reaching the UI when a retry is initiated.
+- **Default Behavior**: Set default RegExp flags to `g` (global) to provide predictable matching by default.
 
 ## [0.0.22] - 2026-01-22
 

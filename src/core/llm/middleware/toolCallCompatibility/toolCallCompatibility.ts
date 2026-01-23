@@ -12,6 +12,7 @@ export class ToolCallCompatibilityMiddleware implements LLMMiddleware {
 
   private _regexCache: Map<string, RegExp[]> = new Map();
   private _streamBuffers: Map<string, string> = new Map();
+  private _emittedLengths: Map<string, number> = new Map();
 
   private getScrubbingConfig(context: LLMCallContext) {
     const settings = context.model?.capabilities?.scrubSettings;
@@ -50,6 +51,7 @@ export class ToolCallCompatibilityMiddleware implements LLMMiddleware {
       enabled: isEnabled,
       patterns,
       strategy,
+      toolNameGroup: settings?.toolNameGroup,
     };
   }
 
@@ -123,6 +125,7 @@ export class ToolCallCompatibilityMiddleware implements LLMMiddleware {
     // Cleanup buffer on finish to prevent memory leaks
     if (part.type === 'finish') {
       this._streamBuffers.delete(requestId);
+      this._emittedLengths.delete(requestId);
       return part;
     }
 
@@ -138,6 +141,8 @@ export class ToolCallCompatibilityMiddleware implements LLMMiddleware {
       const currentBuffer = previousBuffer + text;
       this._streamBuffers.set(requestId, currentBuffer);
 
+      const emittedStep = this._emittedLengths.get(requestId) || 0;
+
       for (const pattern of config.patterns) {
         pattern.lastIndex = 0;
 
@@ -149,32 +154,48 @@ export class ToolCallCompatibilityMiddleware implements LLMMiddleware {
 
           if (action) {
             // Found a match!
+            const matchIndex = match.index;
+            let matchedContent = match[0];
+            let toolName: string | undefined;
+            if (config.toolNameGroup !== undefined && match[config.toolNameGroup]) {
+              toolName = match[config.toolNameGroup];
+            }
+
             logger.warn(
-              `[Middleware] Detected unexpected output matching "${pattern.source}" in request ${requestId}`
+              `[Middleware] Detected unexpected output matching "${pattern.source}" (Content: "${matchedContent}")`
             );
+
+            // Smart truncation: emit content BEFORE the match, then stop
+            const safeEmitLength = matchIndex;
+            const toEmit = currentBuffer.substring(emittedStep, safeEmitLength);
 
             if (action === 'retry') {
               this._streamBuffers.delete(requestId);
+              this._emittedLengths.delete(requestId);
             }
 
-            // Return action immediately.
-            // Importantly: we return an EMPTY text delta here so the piece that
-            // triggered the match never reaches the UI.
-            return { ...part, text: '', _addiAction: action };
+            // Return the safe content and the action signal
+            return {
+              ...part,
+              text: toEmit,
+              _addiAction: action,
+              _addiTool: toolName,
+              _addiMatched: matchedContent,
+            };
           }
         }
       }
 
       // NO MATCH FOUND YET.
-      // But we need to handle "Point 4": prevent escaping content that
-      // is PART of a match currently being formed.
-
-      // Strategy: Hold back the last few characters if they look like the START of any pattern.
-      // This is complex. A simpler way for Point 4 is to use a Lookahead Buffer:
-      // We don't release the current 'text' immediately if it might be a partial match.
-      // However, most tags start with <. If the text contains <, we could be wary.
-
-      return { ...part, text };
+      // Only hold back if the buffer ends with a possible tag start (e.g. <tool, <funct, etc.)
+      // Otherwise, emit all new content.
+      // 没有任何正则匹配时，全部输出原始内容
+      const toEmit = currentBuffer.substring(emittedStep, currentBuffer.length);
+      if (toEmit.length > 0) {
+        this._emittedLengths.set(requestId, emittedStep + toEmit.length);
+        return { ...part, text: toEmit };
+      }
+      return { ...part, text: '' };
     }
     return part;
   }

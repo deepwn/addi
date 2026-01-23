@@ -89,7 +89,8 @@ export class LLMService {
       onStats?: (stats: any) => void;
       onReasoning?: (delta: string) => void;
     },
-    retryCount = 0
+    retryCount = 0,
+    forcedToolName?: string
   ): Promise<void> {
     const onStats = options?.onStats;
     const onReasoning = options?.onReasoning;
@@ -146,7 +147,12 @@ export class LLMService {
       };
 
       // Force tool choice if this is a retry
-      if (retryCount > 0 && Object.keys(tools).length > 0) {
+      if (forcedToolName && tools[forcedToolName]) {
+        // https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling#tool-choice
+        // { type: 'tool', toolName: string (typed) } if forcing a specific tool
+        baseOptions.toolChoice = { type: 'tool', toolName: forcedToolName };
+        logger.info(`[LLMService] Forcing tool call to "${forcedToolName}" for retry.`);
+      } else if (retryCount > 0 && Object.keys(tools).length > 0) {
         baseOptions.toolChoice = 'required';
       }
 
@@ -240,6 +246,21 @@ export class LLMService {
 
         if (shouldRetry && retryCount < 3) {
           logger.warn(`Middleware requested retry for ${model.id} (non-streaming).`);
+
+          const toolCallId = `retry-${requestId}-${retryCount}`;
+          progress.report(
+            new vscode.LanguageModelToolCallPart(
+              toolCallId,
+              `Addi Compatibility (Retry ${retryCount + 1}/3)`,
+              { action: 'recovery' }
+            )
+          );
+          progress.report(
+            new vscode.LanguageModelToolResultPart(toolCallId, [
+              new vscode.LanguageModelTextPart(`Detected unexpected output. Retrying...`),
+            ])
+          );
+
           return this.executeDirect(
             provider,
             model,
@@ -290,7 +311,28 @@ export class LLMService {
         if ((part as any)._addiAction === 'retry') {
           if (retryCount < 3) {
             abortController.abort();
-            logger.warn(`Middleware requested retry for ${model.id} (Attempt ${retryCount + 1}).`);
+            const toolName = (part as any)._addiTool;
+            const matchedContent = (part as any)._addiMatched || 'unexpected tool call';
+
+            logger.warn(
+              `Middleware requested retry for ${model.id} (Attempt ${retryCount + 1}). Content: ${matchedContent}`
+            );
+
+            // Inform user via Copilot UI using tool-like status block
+            const toolCallId = `retry-${requestId}-${retryCount}`;
+            progress.report(
+              new vscode.LanguageModelToolCallPart(
+                toolCallId,
+                `Addi Compatibility (Retry ${retryCount + 1}/3)`,
+                { matched: matchedContent }
+              )
+            );
+            progress.report(
+              new vscode.LanguageModelToolResultPart(toolCallId, [
+                new vscode.LanguageModelTextPart(`Detected unexpected output. Retrying...`),
+              ])
+            );
+
             return this.executeDirect(
               provider,
               model,
@@ -300,7 +342,8 @@ export class LLMService {
               progress,
               token,
               options,
-              retryCount + 1
+              retryCount + 1,
+              toolName
             );
           } else {
             abortController.abort();

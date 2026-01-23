@@ -45,6 +45,7 @@
       }
       input[type='text'],
       input[type='password'],
+      input[type='number'],
       select,
       textarea {
         width: 100%;
@@ -314,6 +315,15 @@
               </div>
 
               <div class="form-group">
+                <label>Tool Name Capture Group (Optional)</label>
+                <input type="number" id="m-scrub-tool-group" min="0" placeholder="e.g. 1 for $1" />
+                <div class="info-text">
+                  If patterns use (capturing groups), specify which index contains the tool name to
+                  force it during retry. 0 means full match.
+                </div>
+              </div>
+
+              <div class="form-group">
                 <label>Test Content (Optional)</label>
                 <textarea
                   id="m-scrub-test-text"
@@ -399,6 +409,7 @@
       const mScrubStrategy = document.getElementById('m-scrub-strategy');
       const mScrubTestText = document.getElementById('m-scrub-test-text');
       const mScrubTestResult = document.getElementById('m-scrub-test-result');
+      const mScrubToolGroup = document.getElementById('m-scrub-tool-group');
       const patternError = document.getElementById('pattern-error');
 
       const reFlagI = document.getElementById('re-flag-i');
@@ -496,6 +507,7 @@
       // Add listeners for real-time regex testing
       mScrubPatterns.addEventListener('input', validateAndTestPatterns);
       mScrubTestText.addEventListener('input', validateAndTestPatterns);
+      mScrubToolGroup.addEventListener('input', validateAndTestPatterns);
       [reFlagI, reFlagS, reFlagM].forEach((el) =>
         el.addEventListener('change', validateAndTestPatterns)
       );
@@ -580,6 +592,7 @@
           mScrubEnabled.checked = !!scrub.enabled;
           mScrubPatterns.value = (scrub.patterns || []).join('\n');
           mScrubStrategy.value = scrub.strategy || 'retry';
+          mScrubToolGroup.value = scrub.toolNameGroup !== undefined ? scrub.toolNameGroup : '';
           mScrubTestText.value = ''; // Clear test text on load
 
           // Set flags
@@ -676,6 +689,8 @@
         // Test patterns against text if provided
         if (testText.trim()) {
           let matches = [];
+          let detectedTool = null;
+          const toolGroupIdx = mScrubToolGroup.value !== '' ? parseInt(mScrubToolGroup.value) : -1;
 
           // Find all matches with context
           for (const pattern of validPatterns) {
@@ -687,6 +702,11 @@
                 end: match.index + match[0].length,
                 text: match[0],
               });
+
+              // Try to extract tool name from capture group if requested
+              if (toolGroupIdx >= 0 && match[toolGroupIdx] && !detectedTool) {
+                detectedTool = match[toolGroupIdx];
+              }
             }
           }
 
@@ -720,11 +740,16 @@
             }
             resultHtml += escapeHtml(testText.substring(lastIdx));
 
+            let statusMsg = matches.length + ' match(es) found';
+            if (detectedTool) {
+              statusMsg += ' for tool: <code style="background: var(--vscode-textCodeBlock-background); padding: 0 4px;">' + escapeHtml(detectedTool) + '</code>';
+            }
+
             mScrubTestResult.innerHTML =
               resultHtml +
               '\n\n<span style="color: var(--vscode-testing-iconPassed);">' +
-              matches.length +
-              ' match(es) found</span>';
+              statusMsg +
+              '</span>';
           } else {
             mScrubTestResult.innerHTML =
               escapeHtml(testText) +
@@ -794,6 +819,7 @@
                   .filter((s) => !!s),
                 strategy: mScrubStrategy.value,
                 flags: getSelectedFlags(),
+                toolNameGroup: mScrubToolGroup.value !== '' ? parseInt(mScrubToolGroup.value) : undefined,
               },
             },
           });
