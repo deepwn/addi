@@ -25,9 +25,16 @@
 - [供应商与模型管理 Provider \& Model Management](#供应商与模型管理-provider--model-management)
   - [添加供应商 Add Provider](#添加供应商-add-provider)
   - [添加模型 Add Model](#添加模型-add-model)
+  - [模型验证 Model Verification](#模型验证-model-verification)
   - [快速编辑 Edit API Key](#快速编辑-edit-api-key)
-  - [切换模型 Switch Model](#切换模型-switch-model)
-- [自定义工具 Custom Tools](#自定义工具-custom-tools)
+- [自定义工具 Custom Tools (MCP)](#自定义工具-custom-tools-mcp)
+  - [核心特性 Core Features](#核心特性-core-features)
+  - [快速概览 Quick Overview](#快速概览-quick-overview)
+  - [非预期行为处置 Unexpected Behavior Handling (Preview)](#非预期行为处置-unexpected-behavior-handling-preview)
+    - [功能说明 Description](#功能说明-description)
+    - [使用场景 Use Cases](#使用场景-use-cases)
+    - [安全警告 Warning](#安全警告-warning)
+    - [配置示例 Configuration Example](#配置示例-configuration-example)
 - [命令 Commands](#命令-commands)
 - [配置项 Settings Items](#配置项-settings-items)
 - [配置文件格式 Config Format](#配置文件格式-config-format)
@@ -36,11 +43,8 @@
   - [Q: 为什么我添加的模型在 Copilot 中不可见？](#q-为什么我添加的模型在-copilot-中不可见)
   - [Q: 如何知道我的模型是否正在使用中？](#q-如何知道我的模型是否正在使用中)
   - [Q: 我可以添加多少个供应商和模型？](#q-我可以添加多少个供应商和模型)
+  - [Q: 我的自定义工具没有显示在 Copilot 的工具列表中？](#q-我的自定义工具没有显示在-copilot-的工具列表中)
 - [故障排除 Troubleshooting](#故障排除-troubleshooting)
-- [开发 Development](#开发-development)
-  - [环境准备](#环境准备)
-  - [开发命令](#开发命令)
-  - [清理缓存](#清理缓存)
 - [许可证 License](#许可证-license)
 - [免责声明 Disclaimer](#免责声明-disclaimer)
 - [致谢 Thanks](#致谢-thanks)
@@ -148,7 +152,7 @@ Addi 内置了一个 **Model Context Protocol (MCP)** Server，支持通过 YAML
 
 详细文档与示例：[自定义工具指南 (CUSTOM_TOOLS.md)](CUSTOM_TOOLS.md)
 
-### 核心特性
+### 核心特性 Core Features
 
 - **多语言支持**: 支持 PowerShell, Bash, Python, Node.js 等多种运行时。
 - **热重载**: 修改 YAML 文件后自动生效，无需重启 VS Code。
@@ -158,7 +162,7 @@ Addi 内置了一个 **Model Context Protocol (MCP)** Server，支持通过 YAML
 > 自定义工具的 YAML 文件支持热重载，修改后会自动生效，无需重启 VS Code 或手动处置 Addi MCP Server 进程。
 > 但因 VS Code 资源按需运行的基本原则，修改 yaml 模板文件后的 Copilot 工具列表将只会在 Chat 触发服务启动时发出 `list_tool` 并更新 UI 中显示的工具。或您可尝试通过命令面板执行 `MCP: List Server` 选中并手动启动服务来同步刚增加修改或删除的工具列表。
 
-### 快速概览
+### 快速概览 Quick Overview
 
 1. **创建工具文件**：在 `.addi/public/` (共享) 或 `.addi/private/` (私有) 目录下创建 `.yaml` 文件。
 2. **定义工具**：
@@ -173,11 +177,11 @@ Addi 内置了一个 **Model Context Protocol (MCP)** Server，支持通过 YAML
    ```
 3. **使用工具**：在对话中直接询问 "Check my IP"。
 
-### 非预期行为处置 (Preview)
+### 非预期行为处置 Unexpected Behavior Handling (Preview)
 
 Addi 提供了一个强大的正则表达式过滤系统，用于处理模型输出中的非预期行为。此功能在模型设置界面中配置，支持实时测试和验证。
 
-#### 功能说明
+#### 功能说明 Description
 
 - **自定义正则表达式**: 配置正则表达式来匹配需要过滤或修改的内容（如非预期的工具调用格式）
 - **实时验证**: 界面提供实时测试功能，可以立即验证正则表达式的有效性
@@ -185,13 +189,21 @@ Addi 提供了一个强大的正则表达式过滤系统，用于处理模型输
   - **重试**: 当匹配到设定的内容时，自动去除非法内容并重新发送请求以获取新的输出
   - **停止**: 当匹配到设定的内容时，停止当前请求等待用户进行后续操作
 - **实时测试**: 在编辑器界面中可以输入测试内容并预览过滤效果
+- **工具名匹配**: 支持针对特定工具名称进行 `RegExp Group` 匹配，以便更精确地控制过滤行为（无工具名则使用 `tool_choice: required` 重试）
 
-#### 使用场景
+> [!Tip]
+>
+> - 在配置正则表达式时，可以使用界面提供的测试区域输入示例文本，实时查看匹配结果和处置效果。
+> - 尽量使用简短且高效的正则表达式，以减少对模型输出的影响。
+> - 该功能适用于需要严格控制模型输出的场景，如过滤幻觉工具调用或危害信息。
+> - 如出现不一致工具调用行为，可尝试同时减小 `Max Input Tokens` 以提升模型响应的稳定性。
+
+#### 使用场景 Use Cases
 
 1. **过滤幻觉工具调用**: 如果模型输出中经常包含错误的工具调用标签，可以使用正则表达式匹配这些标签并选择“重试”处置方式，以确保输出的准确性。
 2. **危害信息处理**: 如果模型输出中可能包含危害信息，可以使用正则表达式匹配这些信息并选择“停止”处置方式，以防止不当内容的传播。
 
-#### 安全警告
+#### 安全警告 Warning
 
 > [!Warning]
 > 此功能处于 **预览阶段**，请谨慎使用并充分测试。
@@ -201,12 +213,12 @@ Addi 提供了一个强大的正则表达式过滤系统，用于处理模型输
 > - 请确保正则表达式不会误删或误改重要信息
 > - 建议在生产环境使用前进行充分的测试
 
-#### 配置示例
+#### 配置示例 Configuration Example
 
 在编辑器界面中：
 
 1. 填写正则表达式（如 `<\s*tool_call\s*>.*?<\s*/\s*tool_call\s*>` 用于匹配错误的类似functionCall调用标签）
-2. 选择处置方式（如"重试"）
+2. 选择处置方式（"重试"或"停止"）
 3. 使用测试区域输入示例文本确认正则准确性
 4. 保存配置后，Addi 会在模型输出时自动根据规则检查内容是否匹配并执行相应处置
 
