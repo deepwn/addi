@@ -478,6 +478,92 @@ runs:
       await vscode.window.showTextDocument(doc);
     })
   );
+
+  // Run tool command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('addi.runTool', async (item: ToolTreeItem) => {
+      if (!item || !item.tool) {
+        return;
+      }
+
+      const tool = item.tool;
+      
+      // Build input form based on tool.parameters (use property keys directly)
+      const inputsList: Array<{ key: string; options: vscode.InputBoxOptions }> = [];
+
+      if (tool.parameters && typeof tool.parameters === 'object') {
+        const params = tool.parameters as any;
+        if (params.properties) {
+          for (const [key, prop] of Object.entries(params.properties)) {
+            const propDef = prop as any;
+            const placeholder = propDef.description || `Enter ${key}`;
+            const defaultValue = propDef.default !== undefined ? String(propDef.default) : '';
+
+            inputsList.push({
+              key,
+              options: {
+                prompt: propDef.description || `Enter value for ${key}`,
+                placeHolder: placeholder,
+                value: defaultValue,
+                ignoreFocusOut: true,
+              },
+            });
+          }
+        }
+      }
+
+      // Collect input values by iterating known keys (keeps mapping correct)
+      let inputValues: Record<string, string> = {};
+      if (inputsList.length > 0) {
+        for (const item of inputsList) {
+          const result = await vscode.window.showInputBox(item.options);
+          if (result === undefined) {
+            // User cancelled
+            return;
+          }
+          inputValues[item.key] = result;
+        }
+      }
+
+      // Show running status
+      vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Running tool: ${tool.name}`,
+        cancellable: false
+      }, async (progress) => {
+        try {
+          progress.report({ message: 'Executing tool...' });
+          
+          // Execute the tool via MCP server
+          const result = await mcpService.callTool(tool.name, inputValues);
+          
+          if (result && result.content && Array.isArray(result.content)) {
+            // Format the result for display
+            const resultText = result.content.map((item: any) => {
+              if (item.type === 'text') {
+                return item.text;
+              } else if (item.type === 'image') {
+                return `[Image: ${item.data}]`;
+              }
+              return JSON.stringify(item);
+            }).join('\n');
+            
+            // Show result in a new document
+            const resultDoc = await vscode.workspace.openTextDocument({
+              content: `# Tool Result: ${tool.name}\n\nInput:\n${JSON.stringify(inputValues, null, 2)}\n\nOutput:\n${resultText}`,
+              language: 'markdown'
+            });
+            await vscode.window.showTextDocument(resultDoc);
+            
+          } else {
+            vscode.window.showInformationMessage(`Tool executed successfully: ${tool.name}`);
+          }
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to run tool: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      });
+    })
+  );
 }
 
 export function deactivate() {}

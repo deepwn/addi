@@ -270,15 +270,20 @@
         {
           "command": "addi.editTool",
           "when": "view == addiTools && viewItem == tool",
-          "group": "inline"
+          "group": "modify@1"
         },
         {
           "command": "addi.copyTool",
           "when": "view == addiTools && viewItem == tool",
-          "group": "inline@1"
+          "group": "modify@2"
         },
         {
           "command": "addi.deleteTool",
+          "when": "view == addiTools && viewItem == tool",
+          "group": "modify@99"
+        },
+        {
+          "command": "addi.runTool",
           "when": "view == addiTools && viewItem == tool",
           "group": "inline"
         }
@@ -455,6 +460,13 @@
         "title": "Delete Tool",
         "shortTitle": "Delete",
         "icon": "$(trash)",
+        "category": "Addi"
+      },
+      {
+        "command": "addi.runTool",
+        "title": "Run Tool",
+        "shortTitle": "Run",
+        "icon": "$(play)",
         "category": "Addi"
       },
       {
