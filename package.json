@@ -563,10 +563,10 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.0.10",
+    "@types/node": "^25.2.0",
     "@types/vscode": "^1.108.1",
-    "@typescript-eslint/eslint-plugin": "^8.53.1",
-    "@typescript-eslint/parser": "^8.53.1",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "eslint": "^9.39.2",
@@ -577,12 +577,12 @@
     "@vscode/vsce": "^3.7.1"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.23",
-    "@ai-sdk/deepseek": "^2.0.11",
-    "@ai-sdk/google": "^3.0.13",
-    "@ai-sdk/openai": "^3.0.18",
-    "@ai-sdk/openai-compatible": "^2.0.18",
-    "ai": "^6.0.48",
+    "@ai-sdk/anthropic": "^3.0.35",
+    "@ai-sdk/deepseek": "^2.0.17",
+    "@ai-sdk/google": "^3.0.20",
+    "@ai-sdk/openai": "^3.0.25",
+    "@ai-sdk/openai-compatible": "^2.0.26",
+    "ai": "^6.0.67",
     "js-yaml": "^4.1.1",
     "zod": "^4.3.6"
   }
