@@ -322,6 +322,9 @@ func executeComposite(ctx context.Context, tool tools.ToolDef, args map[string]i
 			}
 
 			bin, shellArgs := resolveShell(shellName, scriptPath)
+			if bin == "" {
+				return mcp.NewToolResultError(fmt.Sprintf("Step %d requested shell '%s' but it's not available on this platform (WSL required on Windows)", i+1, shellName)), nil
+			}
 			cmd := exec.CommandContext(ctx, bin, shellArgs...)
 
 			// Set working directory
@@ -342,6 +345,34 @@ func executeComposite(ctx context.Context, tool tools.ToolDef, args map[string]i
 				val, _ := evaluate(v)
 				stepEnv = append(stepEnv, fmt.Sprintf("%s=%s", k, val))
 			}
+
+			// If we're executing via WSL, convert Windows-style temp file paths
+			// (ADDI_ENV/ADDI_OUTPUT/ADDI_PATH and common GITHUB_* aliases) to
+			// WSL paths (/mnt/<drive>/...) so that bash redirections work inside WSL.
+			if bin == "wsl" && runtime.GOOS == "windows" {
+				for i, ev := range stepEnv {
+					parts := strings.SplitN(ev, "=", 2)
+					if len(parts) != 2 {
+						continue
+					}
+					key := parts[0]
+					val := parts[1]
+					// Only convert known file-path env vars
+					if key == "ADDI_ENV" || key == "ADDI_OUTPUT" || key == "ADDI_PATH" || key == "GITHUB_ENV" || key == "GITHUB_OUTPUT" || key == "GITHUB_PATH" {
+						if len(val) >= 2 && val[1] == ':' {
+							drive := strings.ToLower(string(val[0]))
+							rest := val[2:]
+							rest = strings.ReplaceAll(rest, "\\", "/")
+							val = "/mnt/" + drive + rest
+						} else {
+							// also convert backslashes generally
+							val = strings.ReplaceAll(val, "\\", "/")
+						}
+						stepEnv[i] = fmt.Sprintf("%s=%s", key, val)
+					}
+				}
+			}
+
 			cmd.Env = stepEnv
 
 			out, err := cmd.CombinedOutput()
@@ -587,7 +618,28 @@ func resolveShell(shell, scriptPath string) (string, []string) {
 	case strings.Contains(shell, "powershell") || shell == "pwsh":
 		return "powershell", []string{"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath}
 	case strings.Contains(shell, "bash"):
-		return "bash", []string{"--noprofile", "--norc", "-e", scriptPath}
+		// On Windows, convert Windows path to bash-compatible path
+		bashPath := scriptPath
+		if runtime.GOOS == "windows" {
+			// On Windows require WSL to run bash. If WSL exists, run bash inside WSL
+			if _, err := exec.LookPath("wsl"); err == nil {
+				// Convert C:\path\to\file to /mnt/<drive>/path for WSL
+				if len(scriptPath) >= 2 && scriptPath[1] == ':' {
+					drive := strings.ToLower(string(scriptPath[0]))
+					unixPath := scriptPath[2:]
+					unixPath = strings.ReplaceAll(unixPath, "\\", "/")
+					bashPath = "/mnt/" + drive + unixPath
+				} else {
+					// If not a drive path, just convert backslashes
+					bashPath = strings.ReplaceAll(scriptPath, "\\", "/")
+				}
+				// Execute via wsl to ensure environment compatibility
+				return "wsl", []string{"bash", "--noprofile", "--norc", "-e", bashPath}
+			}
+			// No WSL -> indicate unsupported on this platform by returning empty bin
+			return "", nil
+		}
+		return "bash", []string{"--noprofile", "--norc", "-e", bashPath}
 	case shell == "python" || strings.Contains(shell, "python"):
 		// Try python3 on linux/mac, python on windows, or just rely on path
 		if runtime.GOOS == "windows" {

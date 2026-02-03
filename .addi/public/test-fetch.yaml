@@ -1,0 +1,107 @@
+name: test_fetch
+description: "A multi-platform HTTP request tool that uses irm on Windows and curl/wget on Unix"
+inputs:
+  url:
+    description: "The URL to fetch"
+    default: "https://httpbin.org/get"
+    required: true
+  method:
+    description: "HTTP method (GET, POST, PUT, DELETE)"
+    default: "GET"
+  headers:
+    description: 'HTTP headers as JSON string (e.g. {"Authorization": "Bearer token"})'
+    default: ""
+  body:
+    description: "Request body for POST/PUT"
+    default: ""
+runs:
+  using: "composite"
+  steps:
+    # Windows: Use PowerShell's Invoke-RestMethod
+    - name: Fetch on Windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $URL = "${{ inputs.url }}"
+        $METHOD = "${{ inputs.method }}"
+        $BODY = "${{ inputs.body }}"
+
+        Write-Host "Running on Windows with Invoke-RestMethod..."
+
+        try {
+          if ($METHOD -eq "POST" -and $BODY) {
+            $RESPONSE = Invoke-RestMethod -Uri $URL -Method $METHOD -Body $BODY -ContentType "application/json"
+          } elseif ($METHOD -eq "PUT" -and $BODY) {
+            $RESPONSE = Invoke-RestMethod -Uri $URL -Method $METHOD -Body $BODY -ContentType "application/json"
+          } elseif ($METHOD -eq "DELETE") {
+            $RESPONSE = Invoke-RestMethod -Uri $URL -Method $METHOD
+          } else {
+            # Default GET
+            $RESPONSE = Invoke-RestMethod -Uri $URL -Method "GET"
+          }
+          
+          $RESPONSE | ConvertTo-Json -Depth 10
+          Write-Host "response_output=$($RESPONSE | ConvertTo-Json -Compress -Depth 10)"
+        } catch {
+          Write-Error "Error: $_"
+          exit 1
+        }
+
+    # Unix/Linux/macOS: Use curl
+    - name: Fetch on Unix
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        URL="${{ inputs.url }}"
+        METHOD="${{ inputs.method }}"
+        HEADERS="${{ inputs.headers }}"
+        BODY="${{ inputs.body }}"
+
+        echo "Running on Unix with curl..."
+
+        # Build curl options
+        CURL_OPTS="-s"
+
+        # Add headers if provided
+        if [ -n "$HEADERS" ]; then
+          echo "Adding custom headers: $HEADERS"
+          # Parse JSON headers and add to curl using jq or manual parsing
+          if command -v jq &> /dev/null; then
+            HEADERS_PARSED=$(echo "$HEADERS" | jq -r 'to_entries[] | "-H \"\(.key): \(.value)\""' | tr '\n' ' ')
+            CURL_OPTS="$CURL_OPTS $HEADERS_PARSED"
+          else
+            # Manual JSON parsing for simple headers
+            HEADERS_CLEAN=$(echo "$HEADERS" | tr -d '{}\n' | tr ',' '\n')
+            while IFS=':' read -r key value; do
+              if [ -n "$key" ] && [ -n "$value" ]; then
+                CURL_OPTS="$CURL_OPTS -H \"$key:$value\""
+              fi
+            done <<< "$HEADERS_CLEAN"
+          fi
+        fi
+
+        # Execute request and capture response directly
+        if [ "$METHOD" = "POST" ]; then
+          if [ -n "$BODY" ]; then
+            RESPONSE=$(curl -X POST "$URL" $CURL_OPTS -H "Content-Type: application/json" -d "$BODY")
+          else
+            RESPONSE=$(curl -X POST "$URL" $CURL_OPTS)
+          fi
+        elif [ "$METHOD" = "PUT" ]; then
+          if [ -n "$BODY" ]; then
+            RESPONSE=$(curl -X PUT "$URL" $CURL_OPTS -H "Content-Type: application/json" -d "$BODY")
+          else
+            RESPONSE=$(curl -X PUT "$URL" $CURL_OPTS)
+          fi
+        elif [ "$METHOD" = "DELETE" ]; then
+          RESPONSE=$(curl -X DELETE "$URL" $CURL_OPTS)
+        else
+          # Default GET
+          RESPONSE=$(curl "$URL" $CURL_OPTS)
+        fi
+
+        # Output response and set GITHUB_OUTPUT
+        echo "$RESPONSE"
+        # Escape special characters for GITHUB_OUTPUT
+        RESPONSE_ESCAPED=$(echo "$RESPONSE" | jq -Rs '.')
+        echo "response_output=$RESPONSE_ESCAPED" >> $GITHUB_OUTPUT

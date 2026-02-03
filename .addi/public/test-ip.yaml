@@ -1,0 +1,35 @@
+name: test_ip
+description: "Get IP geolocation info using test-fetch"
+inputs:
+  ip:
+    description: "IP address to lookup (empty for current IP)"
+    default: ""
+runs:
+  using: "composite"
+  steps:
+    # Windows: Use PowerShell's Invoke-RestMethod
+    - name: Fetch IP info on Windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $IP = "${{ inputs.ip }}"
+        if (-not $IP) {
+          $IP = (Invoke-WebRequest -Uri "http://ip-api.com/json" -UseBasicParsing).Content | ConvertFrom-Json | Select-Object -ExpandProperty query
+        }
+        Write-Host "Fetching info for IP: $IP"
+        $RESPONSE = Invoke-RestMethod -Uri "http://ip-api.com/json/$IP"
+        $RESPONSE | ConvertTo-Json -Depth 10
+
+    # Unix/Linux/macOS: Use curl
+    - name: Fetch IP info on Unix
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        IP="${{ inputs.ip }}"
+        if [ -z "$IP" ]; then
+          # Get current IP
+          IP=$(curl -s http://ip-api.com/json | jq -r '.query')
+        fi
+        echo "Fetching info for IP: $IP"
+        RESPONSE=$(curl -s "http://ip-api.com/json/$IP")
+        echo "$RESPONSE"

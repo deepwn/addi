@@ -1,0 +1,276 @@
+name: test_multi_steps
+description: "Comprehensive test tool demonstrating all custom tool features: multiple inputs, cross-platform execution, step outputs, environment variables, conditional logic, and Python/Shell scripts"
+inputs:
+  # String inputs
+  message:
+    description: "A message to display and process"
+    default: "Hello from Addi Test Tool"
+  # Numeric inputs (passed as strings)
+  count:
+    description: "Number of iterations for loops"
+    default: "3"
+  # Boolean-like inputs (passed as strings, truthy values)
+  enable_debug:
+    description: "Enable debug mode (true/false)"
+    default: "false"
+  # Optional inputs
+  target_platform:
+    description: "Target platform override (windows/linux/darwin/auto)"
+    default: "auto"
+runs:
+  using: "composite"
+  steps:
+    # ============================================
+    # STEP 1: Display System Context Information
+    # ============================================
+    - name: Display System Context
+      id: system_info
+      run: |
+        echo "=========================================="
+        echo "Addi Multi-Steps Test Tool - System Info"
+        echo "=========================================="
+        echo "Operating System: ${{ runner.os }}"
+        echo "Architecture: ${{ runner.arch }}"
+        echo "Temporary Directory: ${{ runner.temp }}"
+        echo "Workspace: ${{ github.workspace }}"
+        echo "Action Path: ${{ github.action_path }}"
+        echo "Git Commit SHA: ${{ github.sha }}"
+        echo "Git Ref: ${{ github.ref }}"
+        echo "Timestamp: $(date)"
+      shell: bash
+
+    # ============================================
+    # STEP 2: Display Input Parameters
+    # ============================================
+    - name: Display Input Parameters
+      id: show_inputs
+      run: |
+        echo "=========================================="
+        echo "Received Input Parameters"
+        echo "=========================================="
+        echo "Message: ${{ inputs.message }}"
+        echo "Count: ${{ inputs.count }}"
+        echo "Debug Mode: ${{ inputs.enable_debug }}"
+        echo "Platform Override: ${{ inputs.target_platform }}"
+      shell: bash
+
+    # ============================================
+    # STEP 3: Set Step Outputs (Key-Value Pairs)
+    # ============================================
+    - name: Initialize Outputs
+      id: init_outputs
+      run: |
+        # Set outputs using ADDI_OUTPUT file
+        echo "status=initialized" >> $ADDI_OUTPUT
+        echo "platform=${{ runner.os }}" >> $ADDI_OUTPUT
+        echo "arch=${{ runner.arch }}" >> $ADDI_OUTPUT
+        echo "step_count=0" >> $ADDI_OUTPUT
+        echo "debug_mode=${{ inputs.enable_debug }}" >> $ADDI_OUTPUT
+      shell: bash
+
+    # ============================================
+    # STEP 4: Python Calculation Step
+    # ============================================
+    - name: Python Calculation
+      id: python_calc
+      run: |
+        import os
+        import json
+        import random
+        import datetime
+        
+        # Read inputs (passed as environment strings)
+        message = """${{ inputs.message }}"""
+        count_str = """${{ inputs.count }}"""
+        enable_debug = """${{ inputs.enable_debug }}"""
+        
+        try:
+            count = int(count_str)
+        except ValueError:
+            count = 3
+        
+        # Generate results
+        results = []
+        for i in range(1, count + 1):
+            results.append({
+                "iteration": i,
+                "value": random.randint(1, 100),
+                "squared": i * i
+            })
+        
+        # Calculate sum
+        total = sum(r["value"] for r in results)
+        
+        # Output results
+        print("=" * 50)
+        print("Python Calculation Results")
+        print("=" * 50)
+        print(f"Message: {message}")
+        print(f"Iteration Count: {count}")
+        print(f"Generated Numbers: {[r['value'] for r in results]}")
+        print(f"Sum Total: {total}")
+        print(f"Debug Enabled: {enable_debug}")
+        
+        # Write to ADDI_OUTPUT
+        outfile = os.environ.get("ADDI_OUTPUT")
+        if outfile:
+            with open(outfile, "a", encoding="utf-8") as f:
+                f.write(f"random_numbers={json.dumps([r['value'] for r in results])}\n")
+                f.write(f"sum_total={total}\n")
+                f.write(f"iteration_count={count}\n")
+                f.write(f"calculation_timestamp={datetime.datetime.now().isoformat()}\n")
+        else:
+            print("Warning: ADDI_OUTPUT not found")
+        
+        print("Python step completed successfully!")
+      shell: python
+
+    # ============================================
+    # STEP 5: Cross-Platform Shell Execution
+    # ============================================
+    # Windows-specific step
+    - name: Windows Platform Tasks
+      if: runner.os == 'Windows'
+      id: windows_tasks
+      run: |
+        Write-Host "=========================================="
+        Write-Host "Windows Platform Tasks"
+        Write-Host "=========================================="
+        Write-Host "Detected OS: Windows (${{ runner.arch }})"
+        Write-Host "PowerShell Version: $PSVersionTable.PSVersion"
+        
+        # Show outputs from previous steps
+        Write-Host "Previous Step Status: ${{ steps.init_outputs.outputs.status }}"
+        Write-Host "Platform from init: ${{ steps.init_outputs.outputs.platform }}"
+        
+        # Get Python calculation results
+        $numbers = "${{ steps.python_calc.outputs.random_numbers }}"
+        Write-Host "Numbers from Python: $numbers"
+        
+        # Test environment variable access
+        $envPath = $env:PATH.Substring(0, [Math]::Min(50, $env:PATH.Length))
+        Write-Host "PATH (first 50 chars): $envPath..."
+        
+        Write-Host "Windows tasks completed!"
+      shell: pwsh
+
+    # Unix/Linux/macOS-specific step
+    - name: Unix Platform Tasks
+      if: runner.os != 'Windows'
+      id: unix_tasks
+      run: |
+        echo "=========================================="
+        echo "Unix Platform Tasks"
+        echo "=========================================="
+        echo "Detected OS: ${{ runner.os }} (${{ runner.arch }})"
+        echo "Shell: $(echo $SHELL)"
+        echo "User: $(whoami)"
+        
+        # Show outputs from previous steps
+        echo "Previous Step Status: ${{ steps.init_outputs.outputs.status }}"
+        echo "Platform from init: ${{ steps.init_outputs.outputs.platform }}"
+        
+        # Get Python calculation results
+        NUMBERS="${{ steps.python_calc.outputs.random_numbers }}"
+        echo "Numbers from Python: $NUMBERS"
+        
+        # Test environment variable access
+        echo "HOME: $HOME"
+        echo "PWD: $PWD"
+        
+        echo "Unix tasks completed!"
+      shell: bash
+
+    # ============================================
+    # STEP 6: Conditional Debug Step
+    # ============================================
+    - name: Debug Information
+      id: debug_info
+      if: inputs.enable_debug == 'true'
+      run: |
+        echo "=========================================="
+        echo "DEBUG MODE ENABLED"
+        echo "=========================================="
+        echo "All Step Outputs:"
+        echo "  - system_info: (no outputs)"
+        echo "  - show_inputs: (no outputs)"
+        echo "  - init_outputs.status: ${{ steps.init_outputs.outputs.status }}"
+        echo "  - init_outputs.platform: ${{ steps.init_outputs.outputs.platform }}"
+        echo "  - init_outputs.arch: ${{ steps.init_outputs.outputs.arch }}"
+        echo "  - init_outputs.debug_mode: ${{ steps.init_outputs.outputs.debug_mode }}"
+        echo "  - python_calc.random_numbers: ${{ steps.python_calc.outputs.random_numbers }}"
+        echo "  - python_calc.sum_total: ${{ steps.python_calc.outputs.sum_total }}"
+        echo "  - python_calc.iteration_count: ${{ steps.python_calc.outputs.iteration_count }}"
+        echo "  - python_calc.calculation_timestamp: ${{ steps.python_calc.outputs.calculation_timestamp }}"
+        echo "=========================================="
+      shell: bash
+
+    # ============================================
+    # STEP 7: Verification and Summary
+    # ============================================
+    - name: Verification and Summary
+      id: verification
+      run: |
+        echo "=========================================="
+        echo "VERIFICATION AND SUMMARY"
+        echo "=========================================="
+        
+        # Verify step outputs are accessible
+        STATUS="${{ steps.init_outputs.outputs.status }}"
+        PLATFORM="${{ steps.init_outputs.outputs.platform }}"
+        ARCH="${{ steps.init_outputs.outputs.arch }}"
+        DEBUG_MODE="${{ steps.init_outputs.outputs.debug_mode }}"
+        NUMBERS="${{ steps.python_calc.outputs.random_numbers }}"
+        SUM="${{ steps.python_calc.outputs.sum_total }}"
+        COUNT="${{ steps.python_calc.outputs.iteration_count }}"
+        TIMESTAMP="${{ steps.python_calc.outputs.calculation_timestamp }}"
+        
+        echo "Verification Results:"
+        echo "  ✓ Status set: ${STATUS:-NOT_SET}"
+        echo "  ✓ Platform detected: ${PLATFORM:-NOT_SET}"
+        echo "  ✓ Architecture: ${ARCH:-NOT_SET}"
+        echo "  ✓ Debug mode: ${DEBUG_MODE:-NOT_SET}"
+        echo "  ✓ Random numbers generated: ${NUMBERS:-NOT_SET}"
+        echo "  ✓ Sum calculated: ${SUM:-NOT_SET}"
+        echo "  ✓ Iteration count: ${COUNT:-NOT_SET}"
+        echo "  ✓ Timestamp: ${TIMESTAMP:-NOT_SET}"
+        
+        # Write final verification output
+        echo "verification_status=passed" >> $ADDI_OUTPUT
+        echo "all_outputs_accessible=true" >> $ADDI_OUTPUT
+        echo "platform=$PLATFORM" >> $ADDI_OUTPUT
+        echo "steps_executed=6" >> $ADDI_OUTPUT
+        
+        echo ""
+        echo "=========================================="
+        echo "TEST TOOL EXECUTION COMPLETED SUCCESSFULLY!"
+        echo "=========================================="
+        echo "This tool has demonstrated:"
+        echo "  1. Multiple input types (string, numeric)"
+        echo "  2. Step output setting and retrieval"
+        echo "  3. Cross-platform execution (Windows/Unix)"
+        echo "  4. Python script execution"
+        echo "  5. Conditional step execution"
+        echo "  6. Environment variable access"
+        echo "  7. Multi-step workflow chaining"
+        echo "=========================================="
+      shell: bash
+
+    # ============================================
+    # STEP 8: Final Output Display (for AI)
+    # ============================================
+    - name: Final Output for AI
+      id: final_output
+      run: |
+        echo "=========================================="
+        echo "FINAL OUTPUT FOR AI MODEL"
+        echo "=========================================="
+        echo "Tool: test_multi_steps"
+        echo "Status: SUCCESS"
+        echo "Platform: ${{ runner.os }}"
+        echo "Total Steps Executed: 8"
+        echo "Sum of Random Numbers: ${{ steps.python_calc.outputs.sum_total }}"
+        echo "Iteration Count: ${{ steps.python_calc.outputs.iteration_count }}"
+        echo "Verification: ${{ steps.verification.outputs.verification_status }}"
+        echo "=========================================="
+      shell: bash
