@@ -166,6 +166,7 @@
           <div class="form-group api-key-container">
             <label>API Key</label>
             <input type="password" id="p-apikey" placeholder="Leave empty to keep unchanged" />
+            <div id="p-key-hint" class="info-text" style="font-family: monospace; color: var(--vscode-textPreformat-foreground); overflow-wrap: break-word;"></div>
           </div>
           <div class="form-group">
             <label>Description</label>
@@ -390,6 +391,7 @@
       const pApiKey = document.getElementById('p-apikey');
       const pDesc = document.getElementById('p-description');
       const pWeb = document.getElementById('p-website');
+      let pApiKeyTouched = false;
 
       // Model inputs
       const mName = document.getElementById('m-name');
@@ -544,19 +546,29 @@
           hide(modelForm);
           hide(btnVerify);
           hide(previewCol);
+          pApiKeyTouched = false;
 
           const data = item.data;
           pName.value = data.name || '';
           pType.value = data.providerType || 'generic';
           pEndpoint.value = data.apiEndpoint || '';
 
+          // Show masked key in placeholder
+          // Remove separate hint to keep UI clean and follow user preference for placeholder
+          const pKeyHint = document.getElementById('p-key-hint');
+          hide(pKeyHint); 
+
           if (isCreate && data.apiKey) {
             pApiKey.value = data.apiKey;
           } else {
             pApiKey.value = '';
           }
-          pApiKey.placeholder =
-            isCreate && !data.apiKey ? 'Required' : 'Leave empty to keep unchanged';
+
+          if (data.maskedApiKey) {
+            pApiKey.placeholder = `Current: ${data.maskedApiKey}`;
+          } else {
+            pApiKey.placeholder = isCreate ? 'Required' : 'Leave empty to keep unchanged';
+          }
 
           pDesc.value = data.description || '';
           pWeb.value = data.website || '';
@@ -611,6 +623,10 @@
       mScrubEnabled.addEventListener('change', () => {
         if (mScrubEnabled.checked) show(mScrubDetails);
         else hide(mScrubDetails);
+      });
+
+      pApiKey.addEventListener('input', () => {
+        pApiKeyTouched = true;
       });
 
       function show(el) {
@@ -780,6 +796,7 @@
               providerType: pType.value,
               apiEndpoint: pEndpoint.value,
               apiKey: pApiKey.value,
+              apiKeyTouched: pApiKeyTouched,
               description: pDesc.value,
               website: pWeb.value,
             },

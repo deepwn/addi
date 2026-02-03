@@ -509,13 +509,27 @@ export class CommandHandler {
   }
 
   private encodeProvidersForExport(providers: Provider[], password?: string): string {
-    // If no password is provided, strip sensitive information (apiKey)
-    const exportData = password
-      ? providers
-      : providers.map((p) => {
-          const { apiKey, ...rest } = p;
-          return rest;
-        });
+    // Determine export data:
+    // 1. Always strip runtime stats (speedHistory, averageSpeed) as they are local-only.
+    // 2. If no password is provided, strip sensitive information (apiKey).
+    const exportData = providers.map((p) => {
+      const { apiKey, models, ...restProvider } = p;
+      
+      // Keep apiKey only if we are encrypting (password provided)
+      const exportApiKey = password ? apiKey : undefined;
+
+      // Clean models: remove stats
+      const cleanModels = models.map((m) => {
+        const { speedHistory, averageSpeed, ...restModel } = m;
+        return restModel;
+      });
+
+      return {
+        ...restProvider,
+        apiKey: exportApiKey,
+        models: cleanModels
+      };
+    });
 
     const plainJson = JSON.stringify(exportData, null, 2);
 

@@ -1,15 +1,19 @@
 import * as vscode from 'vscode';
 
-function maskSecret(value: string | undefined | null): string | undefined {
+export function maskSecret(value: string | undefined | null): string | undefined {
   if (!value) {
     return value ?? undefined;
   }
   const trimmed = value.trim();
-  if (trimmed.length <= 4) {
+  if (trimmed.length < 8) {
     return '***';
   }
-  const prefix = trimmed.slice(0, 3);
-  const suffix = trimmed.slice(-2);
+  if (trimmed.length < 16) {
+    const suffix = trimmed.slice(-4);
+    return `***${suffix}`;
+  }
+  const prefix = trimmed.slice(0, 4);
+  const suffix = trimmed.slice(-4);
   return `${prefix}***${suffix}`;
 }
 

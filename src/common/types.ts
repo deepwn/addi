@@ -96,37 +96,61 @@ export type ModelDraft = {
   capabilities: ModelCapabilities;
   requestAdditional?: string;
   sid?: string;
+  // Stats - Optional in draft, managed separately in runtime
   speedHistory?: number[];
   averageSpeed?: number;
 };
 
 /**
- * Represents a specific AI model configuration.
+ * Persisted configuration for a model (Synced).
  */
-export interface Model extends Omit<ModelDraft, 'sid'> {
-  /**
-   * Internal unique identifier (UUID) for this model instance.
-   * Distinct from `id` which is the provider-specific model identifier (e.g. 'gpt-4').
-   */
+export interface ModelConfig {
   sid: string;
+  id: string;
+  name: string;
+  family: string;
+  version: string;
+  maxInputTokens: number;
+  maxOutputTokens: number;
+  capabilities: ModelCapabilities;
+  requestAdditional?: string;
+}
+
+/**
+ * Runtime statistics for a model (Local only).
+ */
+export interface ModelStats {
+  speedHistory?: number[];
+  averageSpeed?: number;
+}
+
+/**
+ * Represents a specific AI model configuration.
+ * Combines static config and runtime stats.
+ */
+export interface Model extends ModelConfig, ModelStats {
 }
 
 export type ProviderType = 'openai' | 'anthropic' | 'google' | 'deepseek' | 'generic';
 
 /**
- * Represents an AI Provider (e.g. OpenAI, DeepSeek, or a custom OAI-compatible provider).
+ * Persisted configuration for a provider (Synced).
  */
-export interface Provider {
-  /** Internal unique identifier for this provider. */
+export interface ProviderConfig {
   id: string;
-  /** Display name. */
   name: string;
-  /** Type of the provider (determines API compatibility). */
   providerType: ProviderType;
   description?: string;
   website?: string;
-  /** Base URL for the API (e.g. https://api.openai.com/v1). */
   apiEndpoint?: string;
+  models: ModelConfig[];
+}
+
+/**
+ * Represents an AI Provider (e.g. OpenAI, DeepSeek, or a custom OAI-compatible provider).
+ * runtime object with secrets and full models.
+ */
+export interface Provider extends Omit<ProviderConfig, 'models'> {
   /** API Key (stored securely). */
   apiKey?: string;
   /** List of models associated with this provider. */

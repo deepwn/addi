@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { ProviderModelManager } from '../../core/providers/ProviderModelManager';
 import { ProviderTreeItem } from './providerView';
 import { ModelTreeItem } from '../../core/providers/AddiChatProvider';
-import { logger } from '../../common/logger';
+import { logger, maskSecret } from '../../common/logger';
 import { Provider, Model } from '../../common/types';
 import { TokenFormatter, ConfigManager } from '../../common/utils';
 import { ModelTester } from '../../core/llm/modelTester';
@@ -139,7 +139,15 @@ export class EditorViewManager {
         };
       }
     } else {
-      dataToSend = item instanceof ProviderTreeItem ? item.provider : item?.model;
+      if (item instanceof ProviderTreeItem) {
+        // Clone provider and inject masked API key for UI display
+        dataToSend = {
+          ...item.provider,
+          maskedApiKey: maskSecret(item.provider.apiKey),
+        };
+      } else {
+        dataToSend = item?.model;
+      }
     }
 
     if (this._panel) {
@@ -203,17 +211,18 @@ export class EditorViewManager {
       return;
     }
     const provider = this._currentItem.provider;
+    const apiKeyTouched = Boolean(data.apiKeyTouched);
+    const trimmedApiKey = typeof data.apiKey === 'string' ? data.apiKey.trim() : undefined;
     const updates: Partial<Provider> = {
       name: data.name,
       description: data.description,
       website: data.website,
       apiEndpoint: data.apiEndpoint,
-      apiKey: data.apiKey,
       providerType: data.providerType,
     };
 
-    if (!updates.apiKey) {
-      delete updates.apiKey;
+    if (apiKeyTouched) {
+      updates.apiKey = trimmedApiKey ?? '';
     }
 
     const success = await this._manager.updateProvider(provider.id, updates);
