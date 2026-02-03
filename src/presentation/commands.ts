@@ -516,7 +516,7 @@ export class CommandHandler {
     // 2. If no password is provided, strip sensitive information (apiKey).
     const exportData = providers.map((p) => {
       const { apiKey, models, ...restProvider } = p;
-      
+
       // Keep apiKey only if we are encrypting (password provided)
       const exportApiKey = password ? apiKey : undefined;
 
@@ -529,7 +529,7 @@ export class CommandHandler {
       return {
         ...restProvider,
         apiKey: exportApiKey,
-        models: cleanModels
+        models: cleanModels,
       };
     });
 

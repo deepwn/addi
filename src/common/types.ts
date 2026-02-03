@@ -128,8 +128,7 @@ export interface ModelStats {
  * Represents a specific AI model configuration.
  * Combines static config and runtime stats.
  */
-export interface Model extends ModelConfig, ModelStats {
-}
+export interface Model extends ModelConfig, ModelStats {}
 
 export type ProviderType = 'openai' | 'anthropic' | 'google' | 'deepseek' | 'generic';
 

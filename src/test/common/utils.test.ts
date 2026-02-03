@@ -135,7 +135,7 @@ suite('Utils Test Suite', () => {
       assert.ok(masked!.startsWith('sk-p'), 'should start with first 4 chars');
       assert.ok(masked!.endsWith('l012'), 'should end with last 4 chars');
       assert.ok(masked!.includes('***'), 'should contain masking asterisks');
-      assert.strictEqual(masked!, 'sk-p***l012');  // Fixed: check exact masked value
+      assert.strictEqual(masked!, 'sk-p***l012'); // Fixed: check exact masked value
     });
 
     test('should mask medium secrets (8-15 chars) showing only last 4', () => {

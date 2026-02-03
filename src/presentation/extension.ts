@@ -487,7 +487,7 @@ runs:
       }
 
       const tool = item.tool;
-      
+
       // Build input form based on tool.parameters (use property keys directly)
       const inputsList: Array<{ key: string; options: vscode.InputBoxOptions }> = [];
 
@@ -526,42 +526,48 @@ runs:
       }
 
       // Show running status
-      vscode.window.withProgress({
-        location: vscode.ProgressLocation.Notification,
-        title: `Running tool: ${tool.name}`,
-        cancellable: false
-      }, async (progress) => {
-        try {
-          progress.report({ message: 'Executing tool...' });
-          
-          // Execute the tool via MCP server
-          const result = await mcpService.callTool(tool.name, inputValues);
-          
-          if (result && result.content && Array.isArray(result.content)) {
-            // Format the result for display
-            const resultText = result.content.map((item: any) => {
-              if (item.type === 'text') {
-                return item.text;
-              } else if (item.type === 'image') {
-                return `[Image: ${item.data}]`;
-              }
-              return JSON.stringify(item);
-            }).join('\n');
-            
-            // Show result in a new document
-            const resultDoc = await vscode.workspace.openTextDocument({
-              content: `# Tool Result: ${tool.name}\n\nInput:\n${JSON.stringify(inputValues, null, 2)}\n\nOutput:\n${resultText}`,
-              language: 'markdown'
-            });
-            await vscode.window.showTextDocument(resultDoc);
-            
-          } else {
-            vscode.window.showInformationMessage(`Tool executed successfully: ${tool.name}`);
+      vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `Running tool: ${tool.name}`,
+          cancellable: false,
+        },
+        async (progress) => {
+          try {
+            progress.report({ message: 'Executing tool...' });
+
+            // Execute the tool via MCP server
+            const result = await mcpService.callTool(tool.name, inputValues);
+
+            if (result && result.content && Array.isArray(result.content)) {
+              // Format the result for display
+              const resultText = result.content
+                .map((item: any) => {
+                  if (item.type === 'text') {
+                    return item.text;
+                  } else if (item.type === 'image') {
+                    return `[Image: ${item.data}]`;
+                  }
+                  return JSON.stringify(item);
+                })
+                .join('\n');
+
+              // Show result in a new document
+              const resultDoc = await vscode.workspace.openTextDocument({
+                content: `# Tool Result: ${tool.name}\n\nInput:\n${JSON.stringify(inputValues, null, 2)}\n\nOutput:\n${resultText}`,
+                language: 'markdown',
+              });
+              await vscode.window.showTextDocument(resultDoc);
+            } else {
+              vscode.window.showInformationMessage(`Tool executed successfully: ${tool.name}`);
+            }
+          } catch (error) {
+            vscode.window.showErrorMessage(
+              `Failed to run tool: ${error instanceof Error ? error.message : String(error)}`
+            );
           }
-        } catch (error) {
-          vscode.window.showErrorMessage(`Failed to run tool: ${error instanceof Error ? error.message : String(error)}`);
         }
-      });
+      );
     })
   );
 }

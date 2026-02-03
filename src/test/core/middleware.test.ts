@@ -182,7 +182,12 @@ suite('ToolCallCompatibilityMiddleware Test Suite', () => {
       // Should extract tool name from group if configured
       assert.ok(result.messages.length > 0, 'Messages array should not be empty');
       const firstContent = result.messages[0]?.content;
-      const contentLength = typeof firstContent === 'string' ? firstContent.length : Array.isArray(firstContent) ? firstContent.length : 0;
+      const contentLength =
+        typeof firstContent === 'string'
+          ? firstContent.length
+          : Array.isArray(firstContent)
+            ? firstContent.length
+            : 0;
       assert.ok(contentLength > 0, 'First message content should not be empty');
     });
   });

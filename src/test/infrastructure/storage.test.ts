@@ -58,9 +58,9 @@ const createMockContext = () => {
     globalState,
     subscriptions: [],
     // Cast to any to satisfy the complex ExtensionContext interface
-  } as unknown as vscode.ExtensionContext & { 
-    secrets: InMemorySecretStorage; 
-    globalState: InMemoryGlobalState 
+  } as unknown as vscode.ExtensionContext & {
+    secrets: InMemorySecretStorage;
+    globalState: InMemoryGlobalState;
   };
 };
 
@@ -90,9 +90,9 @@ suite('StorageService Test Suite', () => {
           maxOutputTokens: 1000,
           capabilities: {},
           speedHistory: [100, 200], // Stats
-          averageSpeed: 150 // Stats
-        }
-      ]
+          averageSpeed: 150, // Stats
+        },
+      ],
     };
 
     await storage.saveProviders([provider]);
@@ -101,7 +101,11 @@ suite('StorageService Test Suite', () => {
     const storedConfig = context.globalState.get<any[]>('addi.providers');
     assert.strictEqual(storedConfig?.length, 1);
     assert.strictEqual(storedConfig[0].apiKey, undefined, 'API Key should not be in config');
-    assert.strictEqual(storedConfig[0].models[0].speedHistory, undefined, 'Stats should not be in config');
+    assert.strictEqual(
+      storedConfig[0].models[0].speedHistory,
+      undefined,
+      'Stats should not be in config'
+    );
 
     // 2. Verify Secrets
     const storedSecret = await context.secrets.get('addi.provider.apikey.p1');
@@ -114,15 +118,17 @@ suite('StorageService Test Suite', () => {
 
   test('should reconstitute provider on get', async () => {
     // Setup state manually
-    await context.globalState.update('addi.providers', [{
-      id: 'p1',
-      name: 'Test',
-      providerType: 'openai',
-      models: [{ sid: 'm1', id: 'gpt-4', name: 'GPT-4' }]
-    }]);
+    await context.globalState.update('addi.providers', [
+      {
+        id: 'p1',
+        name: 'Test',
+        providerType: 'openai',
+        models: [{ sid: 'm1', id: 'gpt-4', name: 'GPT-4' }],
+      },
+    ]);
     await context.secrets.store('addi.provider.apikey.p1', 'restored-key');
     await context.globalState.update('addi.providers.stats', {
-      p1: { m1: { averageSpeed: 999 } }
+      p1: { m1: { averageSpeed: 999 } },
     });
 
     await storage.initialize();
@@ -136,45 +142,53 @@ suite('StorageService Test Suite', () => {
 
   test('update should preserve secret if not provided', async () => {
     // Initial save
-    await storage.saveProviders([{
-      id: 'p1', 
-      name: 'Init', 
-      providerType: 'generic', 
-      apiKey: 'initial-key', 
-      models: []
-    }]);
+    await storage.saveProviders([
+      {
+        id: 'p1',
+        name: 'Init',
+        providerType: 'generic',
+        apiKey: 'initial-key',
+        models: [],
+      },
+    ]);
 
     // Update (simulating UI that didn't send back the obscured key)
     // apiKey is undefined here
-    await storage.saveProviders([{
-      id: 'p1', 
-      name: 'Updated', 
-      providerType: 'generic', 
-      models: []
-    }]);
+    await storage.saveProviders([
+      {
+        id: 'p1',
+        name: 'Updated',
+        providerType: 'generic',
+        models: [],
+      },
+    ]);
 
     const secret = await context.secrets.get('addi.provider.apikey.p1');
     assert.strictEqual(secret, 'initial-key');
   });
-  
+
   test('update should update secret if provided', async () => {
-     // Initial save
-     await storage.saveProviders([{
-      id: 'p1', 
-      name: 'Init', 
-      providerType: 'generic', 
-      apiKey: 'initial-key', 
-      models: []
-    }]);
+    // Initial save
+    await storage.saveProviders([
+      {
+        id: 'p1',
+        name: 'Init',
+        providerType: 'generic',
+        apiKey: 'initial-key',
+        models: [],
+      },
+    ]);
 
     // Update with new Key
-    await storage.saveProviders([{
-      id: 'p1', 
-      name: 'Updated', 
-      providerType: 'generic', 
-      apiKey: 'new-key',
-      models: []
-    }]);
+    await storage.saveProviders([
+      {
+        id: 'p1',
+        name: 'Updated',
+        providerType: 'generic',
+        apiKey: 'new-key',
+        models: [],
+      },
+    ]);
 
     const secret = await context.secrets.get('addi.provider.apikey.p1');
     assert.strictEqual(secret, 'new-key');
@@ -182,12 +196,14 @@ suite('StorageService Test Suite', () => {
 
   test('migration: should move insecure keys to secrets', async () => {
     // Setup legacy state: apiKey in globalState
-    await context.globalState.update('addi.providers', [{
-      id: 'old1',
-      name: 'Legacy',
-      apiKey: 'insecure-key',
-      models: []
-    }]);
+    await context.globalState.update('addi.providers', [
+      {
+        id: 'old1',
+        name: 'Legacy',
+        apiKey: 'insecure-key',
+        models: [],
+      },
+    ]);
 
     await storage.initialize();
 

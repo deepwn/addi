@@ -128,9 +128,13 @@ export class StorageService implements IStorageService {
       for (const model of provider.models) {
         if (model.speedHistory || model.averageSpeed !== undefined) {
           const stats: ModelStats = {};
-          if (model.speedHistory) {stats.speedHistory = model.speedHistory;}
-          if (model.averageSpeed !== undefined) {stats.averageSpeed = model.averageSpeed;}
-          
+          if (model.speedHistory) {
+            stats.speedHistory = model.speedHistory;
+          }
+          if (model.averageSpeed !== undefined) {
+            stats.averageSpeed = model.averageSpeed;
+          }
+
           if (Object.keys(stats).length > 0) {
             providerStats[model.sid] = stats;
           }
@@ -156,10 +160,10 @@ export class StorageService implements IStorageService {
     const extendedData = this.getExtendedData();
 
     // Reassemble full Provider objects
-    return stored.map(config => {
+    return stored.map((config) => {
       const provider: Provider = {
         ...config,
-        models: [] // Will be populated below
+        models: [], // Will be populated below
       };
 
       // 1. Attach API Secret
@@ -172,15 +176,19 @@ export class StorageService implements IStorageService {
 
       // 2. Attach Model Stats
       const providerStats = extendedData.get(config.id);
-      
-      provider.models = config.models.map(modelConfig => {
+
+      provider.models = config.models.map((modelConfig) => {
         const model: Model = { ...modelConfig };
-        
+
         if (providerStats) {
           const stats = providerStats.get(model.sid);
           if (stats) {
-            if (stats.speedHistory) {model.speedHistory = stats.speedHistory;}
-            if (stats.averageSpeed !== undefined) {model.averageSpeed = stats.averageSpeed;}
+            if (stats.speedHistory) {
+              model.speedHistory = stats.speedHistory;
+            }
+            if (stats.averageSpeed !== undefined) {
+              model.averageSpeed = stats.averageSpeed;
+            }
           }
         }
         return model;
@@ -203,21 +211,24 @@ export class StorageService implements IStorageService {
 
     // Detect deleted providers to clean up secrets
     // Note: We use the raw globalState access here to get previous IDs cheaply
-    const oldConfig = this.context.globalState.get<ProviderConfig[]>(StorageService.STORAGE_KEY, []);
+    const oldConfig = this.context.globalState.get<ProviderConfig[]>(
+      StorageService.STORAGE_KEY,
+      []
+    );
     const newIds = new Set(providers.map((p) => p.id));
 
     // Load all existing secrets for preservation logic
     const existingSecrets = new Map<string, string | undefined>();
     for (const p of oldConfig) {
       if (!newIds.has(p.id)) {
-         // Cleanup secrets for deleted providers
+        // Cleanup secrets for deleted providers
         const secretKey = `addi.provider.apikey.${p.id}`;
         await this.context.secrets.delete(secretKey);
         this.secretsCache.delete(p.id);
       } else {
-         // Keep track of secrets for existing providers (in case we need to preserve them)
-         const secret = await this.context.secrets.get(`addi.provider.apikey.${p.id}`);
-         existingSecrets.set(p.id, secret);
+        // Keep track of secrets for existing providers (in case we need to preserve them)
+        const secret = await this.context.secrets.get(`addi.provider.apikey.${p.id}`);
+        existingSecrets.set(p.id, secret);
       }
     }
 
@@ -243,16 +254,16 @@ export class StorageService implements IStorageService {
           this.secretsCache.set(p.id, existingSecret);
         }
       }
-      // If p.apiKey === '', we treat it as "clear secret", so we do nothing here 
-      // (and it will overwrite the old secret effectively if we don't preserve it? 
+      // If p.apiKey === '', we treat it as "clear secret", so we do nothing here
+      // (and it will overwrite the old secret effectively if we don't preserve it?
       // Actually secrets API doesn't have "update if exists", store overwrites.
-      // So if apiKey is empty string, we might want to delete it? 
+      // So if apiKey is empty string, we might want to delete it?
       // For now, let's assume empty string means "no change" in some contexts or "clear" in others.
       // The safest bet is: if provided and not empty -> store. If undefined -> preserve.
-      
+
       // --- 2. Prepare Config (Strip Stats & Secrets) ---
       const { apiKey, models, ...restProvider } = p;
-      
+
       const modelsConfig: ModelConfig[] = models.map((model) => {
         // Destructure to remove stats properties
         const { speedHistory, averageSpeed, ...staticConfig } = model;
@@ -261,7 +272,7 @@ export class StorageService implements IStorageService {
 
       configToSave.push({
         ...restProvider,
-        models: modelsConfig
+        models: modelsConfig,
       });
     }
 
@@ -270,7 +281,7 @@ export class StorageService implements IStorageService {
 
     // --- 4. Save Config (Synced) ---
     await this.context.globalState.update(StorageService.STORAGE_KEY, configToSave);
-    
+
     this._onDidUpdate.fire();
   }
 }
