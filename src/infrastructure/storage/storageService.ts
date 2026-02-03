@@ -5,7 +5,7 @@ import { logger } from '../../common/logger';
 
 export class StorageService implements IStorageService {
   private static readonly STORAGE_KEY = 'addi.providers';
-  private static readonly EXTEND_STORAGE_KEY = 'addi.providers.extend';
+  private static readonly STATS_STORAGE_KEY = 'addi.providers.stats';
   private secretsCache: Map<string, string> = new Map();
   private syncEnabled = false;
   private readonly _onDidUpdate = new vscode.EventEmitter<void>();
@@ -97,7 +97,7 @@ export class StorageService implements IStorageService {
    */
   private getExtendedData(): Map<string, Map<string, ModelStats>> {
     const stored = this.context.globalState.get<Record<string, Record<string, ModelStats>>>(
-      StorageService.EXTEND_STORAGE_KEY,
+      StorageService.STATS_STORAGE_KEY,
       {}
     );
     const result = new Map<string, Map<string, ModelStats>>();
@@ -128,8 +128,8 @@ export class StorageService implements IStorageService {
       for (const model of provider.models) {
         if (model.speedHistory || model.averageSpeed !== undefined) {
           const stats: ModelStats = {};
-          if (model.speedHistory) stats.speedHistory = model.speedHistory;
-          if (model.averageSpeed !== undefined) stats.averageSpeed = model.averageSpeed;
+          if (model.speedHistory) {stats.speedHistory = model.speedHistory;}
+          if (model.averageSpeed !== undefined) {stats.averageSpeed = model.averageSpeed;}
           
           if (Object.keys(stats).length > 0) {
             providerStats[model.sid] = stats;
@@ -142,7 +142,7 @@ export class StorageService implements IStorageService {
       }
     }
 
-    await this.context.globalState.update(StorageService.EXTEND_STORAGE_KEY, extendData);
+    await this.context.globalState.update(StorageService.STATS_STORAGE_KEY, extendData);
   }
 
   /**
@@ -179,8 +179,8 @@ export class StorageService implements IStorageService {
         if (providerStats) {
           const stats = providerStats.get(model.sid);
           if (stats) {
-            if (stats.speedHistory) model.speedHistory = stats.speedHistory;
-            if (stats.averageSpeed !== undefined) model.averageSpeed = stats.averageSpeed;
+            if (stats.speedHistory) {model.speedHistory = stats.speedHistory;}
+            if (stats.averageSpeed !== undefined) {model.averageSpeed = stats.averageSpeed;}
           }
         }
         return model;

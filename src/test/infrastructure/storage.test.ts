@@ -82,7 +82,7 @@ suite('StorageService Test Suite', () => {
       models: [
         {
           sid: 'm1',
-          id: 'gpt-4', 
+          id: 'gpt-4',
           name: 'GPT-4',
           family: 'openai',
           version: '1',
@@ -108,8 +108,8 @@ suite('StorageService Test Suite', () => {
     assert.strictEqual(storedSecret, 'secret-key-123');
 
     // 3. Verify Stats
-    const storedStats = context.globalState.get<any>('addi.providers.extend');
-    assert.deepStrictEqual(storedStats['p1']['m1'].speedHistory, [100, 200]);
+    const storedStats = context.globalState.get<any>('addi.providers.stats');
+    assert.deepStrictEqual(storedStats?.['p1']?.['m1']?.speedHistory, [100, 200]);
   });
 
   test('should reconstitute provider on get', async () => {
@@ -121,7 +121,7 @@ suite('StorageService Test Suite', () => {
       models: [{ sid: 'm1', id: 'gpt-4', name: 'GPT-4' }]
     }]);
     await context.secrets.store('addi.provider.apikey.p1', 'restored-key');
-    await context.globalState.update('addi.providers.extend', {
+    await context.globalState.update('addi.providers.stats', {
       p1: { m1: { averageSpeed: 999 } }
     });
 

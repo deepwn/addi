@@ -35,6 +35,16 @@
     - [使用场景 Use Cases](#使用场景-use-cases)
     - [安全警告 Warning](#安全警告-warning)
     - [配置示例 Configuration Example](#配置示例-configuration-example)
+- [中间件与存储架构 Middleware \& Storage Architecture](#中间件与存储架构-middleware--storage-architecture)
+  - [中间件系统 Middleware System](#中间件系统-middleware-system)
+    - [核心组件 Core Components](#核心组件-core-components)
+    - [ToolCallCompatibilityMiddleware](#toolcallcompatibilitymiddleware)
+    - [流式响应处理](#流式响应处理)
+  - [三层存储架构 Three-Tier Storage Architecture](#三层存储架构-three-tier-storage-architecture)
+    - [配置层 Config Layer](#配置层-config-layer)
+    - [统计层 Stats Layer](#统计层-stats-layer)
+    - [密钥层 Secrets Layer](#密钥层-secrets-layer)
+  - [API 密钥脱敏 API Key Masking](#api-密钥脱敏-api-key-masking)
 - [命令 Commands](#命令-commands)
 - [配置项 Settings Items](#配置项-settings-items)
 - [配置文件格式 Config Format](#配置文件格式-config-format)
@@ -60,23 +70,26 @@ Addi 让你在 VS Code 中为 GitHub Copilot 添加自定义 / 第三方 / 自�
 
 ## 特性 Features
 
-| 类别            | 说明                                                          |
-| --------------- | ------------------------------------------------------------- |
-| Provider 管理   | 添加 / 编辑 / 复制 / 删除 / 快速编辑 API Key                  |
-| 模型管理        | 绑定于 Provider 的模型定义与特性标记（视觉 / 工具调用支持等） |
-| 智能模型验证    | 自动检测连通性、视觉能力、工具调用支持和 Token 限制           |
-| 模型切换        | 在 Copilot 模型选择器中勾选后即可切换自定义模型               |
-| 配置导入导出    | JSON 结构备份 / 迁移到其他机器                                |
-| 可配置默认参数  | 默认 family / version / token 限制                            |
-| 排序选项        | 支持按字母、输入/输出 Token 数排序供应商和模型                |
-| UI / 树视图     | 直观的 ActivityBar 侧边栏管理界面                             |
-| 非预期行为处理  | 检测并清洗幻觉工具调用标签，或自动重试以强制工具调用          |
-| 右键上下文操作  | 针对 Provider / Model 的快捷操作                              |
-| Playground 调试 | 发送消息、调节参数、实时查看日志                              |
-| SSE 流式输出    | 支持 OpenAI 及兼容端点增量输出                                |
-| 参数持久化      | 最近一次 Playground 参数自动恢复                              |
-| 测试覆盖        | Streaming / 参数裁剪与持久化测试                              |
-| 日志输出        | 专用 output channel 与可调 Log Level                          |
+| 类别             | 说明                                                          |
+| ---------------- | ------------------------------------------------------------- |
+| Provider 管理    | 添加 / 编辑 / 复制 / 删除 / 快速编辑 API Key                  |
+| 模型管理         | 绑定于 Provider 的模型定义与特性标记（视觉 / 工具调用支持等） |
+| 智能模型验证     | 自动检测连通性、视觉能力、工具调用支持和 Token 限制           |
+| 模型切换         | 在 Copilot 模型选择器中勾选后即可切换自定义模型               |
+| 配置导入导出     | JSON 结构备份 / 迁移到其他机器                                |
+| 可配置默认参数   | 默认 family / version / token 限制                            |
+| 排序选项         | 支持按字母、输入/输出 Token 数排序供应商和模型                |
+| UI / 树视图      | 直观的 ActivityBar 侧边栏管理界面                             |
+| 非预期行为处理   | 检测并清洗幻觉工具调用标签，或自动重试以强制工具调用          |
+| 中间件系统       | ToolCallCompatibilityMiddleware 处理模型异常输出              |
+| 三层存储架构     | 配置层 / 统计层 / 密钥层分离，提升安全性                      |
+| API 密钥自动脱敏 | 日志和 UI 中自动隐藏敏感信息                                  |
+| 右键上下文操作   | 针对 Provider / Model 的快捷操作                              |
+| Playground 调试  | 发送消息、调节参数、实时查看日志                              |
+| SSE 流式输出     | 支持 OpenAI 及兼容端点增量输出                                |
+| 参数持久化       | 最近一次 Playground 参数自动恢复                              |
+| 测试覆盖         | Streaming / 参数裁剪与持久化测试                              |
+| 日志输出         | 专用 output channel 与可调 Log Level                          |
 
 ## 快速开始 Quick Start
 
@@ -221,6 +234,227 @@ Addi 提供了一个强大的正则表达式过滤系统，用于处理模型输
 2. 选择处置方式（"重试"或"停止"）
 3. 使用测试区域输入示例文本确认正则准确性
 4. 保存配置后，Addi 会在模型输出时自动根据规则检查内容是否匹配并执行相应处置
+
+## 中间件与存储架构 Middleware & Storage Architecture
+
+### 中间件系统 Middleware System
+
+Addi 实现了强大的中间件系统，用于处理 AI 模型消息和响应，特别擅长处理模型异常行为。
+
+#### 核心组件 Core Components
+
+```typescript
+// 中间件核心接口
+interface LLMCallContext {
+  provider: Provider;
+  modelId: string;
+  model: Model;
+}
+
+interface MiddlewareResult {
+  messages: ModelMessage[];
+}
+```
+
+#### ToolCallCompatibilityMiddleware
+
+提供全面的工具来处理模型异常行为：
+
+**基于模式的内容过滤**
+
+```typescript
+interface ScrubSettings {
+  enabled: boolean; // 是否启用
+  patterns: string[]; // 正则表达式模式列表
+  strategy: 'stop' | 'retry'; // 处置策略
+  flags?: string; // 正则标志
+  toolNameGroup?: number; // 工具名匹配组
+}
+```
+
+**核心功能**：
+
+- 可配置的正则表达式模式匹配
+- 支持多个检测模式
+- 按模型配置能力独立设置
+- 检测到模式时自动重试
+
+**配置示例**：
+
+```typescript
+const model = {
+  id: 'gpt-4',
+  capabilities: {
+    scrubSettings: {
+      enabled: true,
+      patterns: ['<tool_call>.*?</tool_call>', 'DEBUG: .*'],
+      strategy: 'retry',
+      flags: 's',
+    },
+  },
+};
+```
+
+#### 流式响应处理
+
+中间件支持实时流式响应处理：
+
+1. **文本增量处理**：过滤或修改文本内容
+2. **工具调用检测**：识别和处理意外的工具调用
+3. **工具结果处理**：验证和转换结果
+4. **错误恢复**：检测到模式时自动重试
+
+### 三层存储架构 Three-Tier Storage Architecture
+
+Addi 采用三层存储架构分离关注点并提升安全性：
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│                    Storage Architecture                      │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │  Config Layer (addi.providers)                         │  │
+│  │  • Provider configurations                             │  │
+│  │  • Model definitions                                   │  │
+│  │  • Capability settings                                 │  │
+│  │  • Sync: VS Code Settings Sync                         │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │  Stats Layer (addi.providers.stats)                    │  │
+│  │  • Usage statistics                                    │  │
+│  │  • Token counts                                        │  │
+│  │  • Error rates                                         │  │
+│  │  • Sync: Local only                                    │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │  Secrets Layer (VS Code SecretStorage)                 │  │
+│  │  • API keys                                            │  │
+│  │  • Tokens                                              │  │
+│  │  • Credentials                                         │  │
+│  │  • Sync: Encrypted, platform-specific                  │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### 配置层 Config Layer
+
+**存储位置**：`vscode.workspace.globalState`
+
+**数据类型**：
+
+```typescript
+interface ProviderConfig {
+  id: string;
+  name: string;
+  providerType: 'openai' | 'anthropic' | 'generic';
+  apiEndpoint?: string;
+  defaultModel?: string;
+  models: ModelConfig[];
+}
+
+interface ModelConfig {
+  id: string;
+  name: string;
+  family: string;
+  version: string;
+  maxInputTokens: number;
+  maxOutputTokens: number;
+  capabilities?: ModelCapabilities;
+}
+```
+
+**特点**：
+
+- 通过 VS Code Settings Sync 同步
+- 可在多台机器间共享
+- 包含供应商和模型配置
+- 支持能力定义
+
+#### 统计层 Stats Layer
+
+**存储位置**：`vscode.workspace.globalState`
+
+**数据类型**：
+
+```typescript
+interface ProviderStats {
+  providerId: string;
+  totalRequests: number;
+  totalTokens: number;
+  successCount: number;
+  errorCount: number;
+  lastUsed: Date;
+}
+
+interface ModelStats {
+  modelId: string;
+  providerId: string;
+  inputTokens: number;
+  outputTokens: number;
+  requestCount: number;
+  averageLatency: number;
+}
+```
+
+**特点**：
+
+- 本地存储
+- 不跨机器同步
+- 用于统计和分析
+- 可独立清除
+
+#### 密钥层 Secrets Layer
+
+**存储位置**：`vscode.secretStorage`
+
+**安全特性**：
+
+- 平台特定加密（macOS Keychain, Windows 凭证管理器等）
+- 绝不存储明文
+- 扩展卸载时自动清除
+- API 密钥在日志和 UI 中自动脱敏
+
+**示例用法**：
+
+```typescript
+// 存储 API 密钥
+await context.secrets.store(`addi.provider.${providerId}.apiKey`, apiKey);
+
+// 检索 API 密钥
+const apiKey = await context.secrets.get(`addi.provider.${providerId}.apiKey`);
+
+// 删除 API 密钥
+await context.secrets.delete(`addi.provider.${providerId}.apiKey`);
+```
+
+### API 密钥脱敏 API Key Masking
+
+Addi 实现自动 API 密钥脱敏保护安全：
+
+```typescript
+function maskSecret(secret: string): string {
+  if (secret.length >= 16) {
+    // 显示前4位和后4位
+    return `${secret.slice(0, 4)}***${secret.slice(-4)}`;
+  } else if (secret.length >= 8) {
+    // 仅显示后4位
+    return `****${secret.slice(-4)}`;
+  } else {
+    // 短密钥完全脱敏
+    return '****';
+  }
+}
+```
+
+**示例**：
+
+- `sk-proj-abc123def456...` → `sk-p***9012`
+- `sk-abc12345` → `****2345`
+- `sk-ab` → `****`
 
 ## 命令 Commands
 

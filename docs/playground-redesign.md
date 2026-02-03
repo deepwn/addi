@@ -1394,6 +1394,240 @@ interface PlaygroundMetadata {
 
 ---
 
+---
+
+## Middleware and Storage Architecture
+
+### Middleware System
+
+Addi implements a middleware system for processing AI model messages and responses. This is particularly useful for handling unexpected model behaviors like hallucinated tool calls.
+
+#### Architecture Overview
+
+```typescript
+// Core middleware interfaces
+interface LLMCallContext {
+  provider: Provider;
+  modelId: string;
+  model: Model;
+}
+
+interface MiddlewareResult {
+  messages: ModelMessage[];
+}
+
+interface ResponseProcessor {
+  processResponsePart(
+    part: TextDeltaPart | ToolCallPart | ToolResultPart,
+    context: LLMCallContext
+  ): ProcessingResult;
+}
+```
+
+#### ToolCallCompatibilityMiddleware
+
+The middleware provides comprehensive tools for managing unexpected AI model behaviors:
+
+**Pattern-Based Content Filtering**
+```typescript
+interface ScrubSettings {
+  enabled: boolean;
+  patterns: string[];
+  strategy: 'stop' | 'retry';
+  flags?: string;
+  toolNameGroup?: number;
+}
+```
+
+**Features**:
+- Configurable pattern matching using regex
+- Support for multiple detection patterns
+- Per-model configuration via capabilities
+- Automatic retry on detected patterns
+
+**Example Configuration**:
+```typescript
+const model = {
+  id: 'gpt-4',
+  capabilities: {
+    scrubSettings: {
+      enabled: true,
+      patterns: [
+        '<tool_call>.*?</tool_call>',
+        'DEBUG: .*'
+      ],
+      strategy: 'retry',
+      flags: 's'
+    }
+  }
+};
+```
+
+#### Streaming Response Processing
+
+The middleware supports real-time response processing during streaming:
+
+1. **Text Delta Processing**: Filters or modifies text content
+2. **Tool Call Detection**: Identifies and handles unexpected tool calls
+3. **Tool Result Processing**: Validates and transforms results
+4. **Error Recovery**: Automatic retry on detected patterns
+
+### Three-Tier Storage Architecture
+
+Addi uses a three-tier storage architecture to separate concerns and improve security:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    Storage Architecture                      │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │  Config Layer (addi.providers)                         │  │
+│  │  • Provider configurations                             │  │
+│  │  • Model definitions                                   │  │
+│  │  • Capability settings                                 │  │
+│  │  • Sync: VS Code Settings Sync                         │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │  Stats Layer (addi.providers.stats)                    │  │
+│  │  • Usage statistics                                    │  │
+│  │  • Token counts                                        │  │
+│  │  • Error rates                                         │  │
+│  │  • Sync: Local only                                    │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │  Secrets Layer (VS Code SecretStorage)                 │  │
+│  │  • API keys                                            │  │
+│  │  • Tokens                                              │  │
+│  │  • Credentials                                         │  │
+│  │  • Sync: Encrypted, platform-specific                  │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### Config Layer (`addi.providers`)
+
+**Storage Location**: `vscode.workspace.globalState`
+
+**Data Types**:
+```typescript
+interface ProviderConfig {
+  id: string;
+  name: string;
+  providerType: 'openai' | 'anthropic' | 'generic';
+  apiEndpoint?: string;
+  defaultModel?: string;
+  models: ModelConfig[];
+}
+
+interface ModelConfig {
+  id: string;
+  name: string;
+  family: string;
+  version: string;
+  maxInputTokens: number;
+  maxOutputTokens: number;
+  capabilities?: ModelCapabilities;
+}
+```
+
+**Characteristics**:
+- Synchronized via VS Code Settings Sync
+- Can be shared across machines
+- Includes provider and model configurations
+- Supports capability definitions
+
+#### Stats Layer (`addi.providers.stats`)
+
+**Storage Location**: `vscode.workspace.globalState`
+
+**Data Types**:
+```typescript
+interface ProviderStats {
+  providerId: string;
+  totalRequests: number;
+  totalTokens: number;
+  successCount: number;
+  errorCount: number;
+  lastUsed: Date;
+}
+
+interface ModelStats {
+  modelId: string;
+  providerId: string;
+  inputTokens: number;
+  outputTokens: number;
+  requestCount: number;
+  averageLatency: number;
+}
+```
+
+**Characteristics**:
+- Local-only storage
+- Not synchronized across machines
+- Used for analytics and usage tracking
+- Can be cleared independently
+
+#### Secrets Layer (SecretStorage)
+
+**Storage Location**: `vscode.secretStorage`
+
+**Data Types**:
+```typescript
+interface SecretData {
+  providerId: string;
+  apiKey: string;
+  organizationId?: string;
+}
+```
+
+**Security Features**:
+- Platform-specific encryption (macOS Keychain, Windows Credential Manager, etc.)
+- Never stored in plain text
+- Automatically cleared on extension uninstall
+- API keys masked in logs and UI
+
+**Example Usage**:
+```typescript
+// Storing an API key
+await context.secrets.store(`addi.provider.${providerId}.apiKey`, apiKey);
+
+// Retrieving an API key
+const apiKey = await context.secrets.get(`addi.provider.${providerId}.apiKey`);
+
+// Deleting an API key
+await context.secrets.delete(`addi.provider.${providerId}.apiKey`);
+```
+
+### API Key Masking
+
+Addi implements automatic API key masking for security:
+
+```typescript
+function maskSecret(secret: string): string {
+  if (secret.length >= 16) {
+    // Show first 4 and last 4 characters
+    return `${secret.slice(0, 4)}***${secret.slice(-4)}`;
+  } else if (secret.length >= 8) {
+    // Show only last 4 characters
+    return `****${secret.slice(-4)}`;
+  } else {
+    // Mask entirely for short secrets
+    return '****';
+  }
+}
+```
+
+**Examples**:
+- `sk-proj-abc123def456...` → `sk-p***9012`
+- `sk-abc12345` → `****2345`
+- `sk-ab` → `****`
+
+---
+
 ## Conclusion
 
 The redesigned Playground architecture:
@@ -1406,6 +1640,8 @@ The redesigned Playground architecture:
 6. **Enhances type safety** with AI SDK types
 7. **Better testing** with AI SDK mock utilities
 8. **Rich metadata support** for debugging and analytics
+9. **Middleware System** for handling unexpected model behaviors
+10. **Three-Tier Storage** for separation of concerns and security
 
 This architecture aligns completely with AI SDK technical specifications while maintaining VS Code API compatibility for Copilot integration through a separate path.
 

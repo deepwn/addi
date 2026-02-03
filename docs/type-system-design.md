@@ -25,15 +25,12 @@ This document describes the type system design for Addi's integration with AI SD
 **Purpose**: Standardized message type for UI components
 
 **Definition**:
+
 ```typescript
 interface UIMessage<Metadata = Record<string, unknown>> {
   id: string;
   role: 'user' | 'assistant' | 'system';
-  parts: Array<
-    | UIMessageTextPart
-    | UIMessageToolCallPart
-    | UIMessageToolResultPart
-  >;
+  parts: Array<UIMessageTextPart | UIMessageToolCallPart | UIMessageToolResultPart>;
   metadata?: Metadata;
 }
 
@@ -60,6 +57,7 @@ interface UIMessageToolResultPart {
 ```
 
 **Key Characteristics**:
+
 - Immutable by convention (but not enforced)
 - Supports rich content (text, tool calls, tool results)
 - Optional metadata for extensions
@@ -72,6 +70,7 @@ interface UIMessageToolResultPart {
 **Purpose**: Fundamental message structure used with AI SDK Core functions (`generateText`, `streamText`, etc.).
 
 **Definition**:
+
 ```typescript
 type ModelMessage =
   | SystemModelMessage
@@ -145,7 +144,7 @@ interface ToolResultPart {
 }
 
 // Tool Result Output variants
-type ToolResultOutput = 
+type ToolResultOutput =
   | { type: 'text'; value: string }
   | { type: 'json'; value: JSONValue }
   | { type: 'error-text'; value: string }
@@ -155,10 +154,55 @@ type ToolResultOutput =
 ```
 
 **Key Characteristics**:
+
 - Used internally by AI SDK Core
 - High-fidelity representation for multi-modal and tool-calling scenarios
 - Should be converted from `vscode.LanguageModelChatRequestMessage` or `UIMessage`
 - **Important**: For durability and resilience against prompt injection, use the `system` property in `generateText` instead of a separate system message when possible.
+
+### ScrubSettings (非预期行为处理)
+
+**Purpose**: Handle unexpected model output behaviors like hallucinated tool calls
+
+**Definition**:
+
+```typescript
+type ScrubStrategy = 'stop' | 'retry';
+
+interface ScrubSettings {
+  enabled: boolean;
+  patterns: string[]; // RegExp patterns to match unwanted content
+  strategy: ScrubStrategy; // 'stop' or 'retry'
+  flags?: string; // RegExp flags (default: 'g')
+  toolNameGroup?: number; // Capture group index for tool name extraction
+}
+```
+
+**Usage Example**:
+
+```typescript
+const scrubSettings: ScrubSettings = {
+  enabled: true,
+  patterns: [
+    '<\\s*tool_call[^>]*>.*?<\\s*/\\s*tool_call\\s*>', // Match hallucinated tool_call tags
+    'DEBUG: .*', // Match debug output
+  ],
+  strategy: 'retry', // Automatically retry on match
+};
+```
+
+**Behavior**:
+
+- **stop**: When a pattern matches, stop processing and wait for user input
+- **retry**: When a pattern matches, remove the matched content and resend the request
+- **toolNameGroup**: If specified, extract tool name from regex capture group for targeted handling
+
+**Key Characteristics**:
+
+- Configurable per model
+- Real-time pattern testing in UI
+- Default patterns include common hallucination formats
+- Works with streaming responses via `processResponsePart()`
 
 ### Tool
 
@@ -167,15 +211,17 @@ type ToolResultOutput =
 **Purpose**: Define tools for AI SDK to call
 
 **Definition**:
+
 ```typescript
 interface Tool<RESULT = unknown> {
   description: string;
-  inputSchema: z.ZodTypeAny;  // Zod schema for input validation
+  inputSchema: z.ZodTypeAny; // Zod schema for input validation
   execute: (args: z.infer<z.ZodTypeAny>) => RESULT | Promise<RESULT>;
 }
 ```
 
 **Usage**:
+
 ```typescript
 const weatherTool = tool({
   description: 'Get the current weather in a location',
@@ -236,6 +282,7 @@ export type PlaygroundUIMessage = UIMessage<PlaygroundMetadata>;
 ```
 
 **Design Rationale**:
+
 - **Timestamps**: Track when messages were created and completed
 - **Model configuration**: Remember which model was used for each message
 - **Usage metrics**: Track token usage for cost estimation
@@ -297,6 +344,7 @@ export type StoredMessagePart =
 ```
 
 **Conversion**:
+
 ```typescript
 // Convert from UIMessage to StoredMessage
 function toStoredMessage(message: PlaygroundUIMessage): StoredMessage {
@@ -364,7 +412,10 @@ export interface MessageStore {
 ```typescript
 export interface PlaygroundService {
   sendMessage(prompt: string, options?: PlaygroundOptions): Promise<void>;
-  generateResponse(messages: PlaygroundUIMessage[], options?: PlaygroundOptions): Promise<PlaygroundUIMessage>;
+  generateResponse(
+    messages: PlaygroundUIMessage[],
+    options?: PlaygroundOptions
+  ): Promise<PlaygroundUIMessage>;
   clearHistory(): void;
   getHistory(): PlaygroundUIMessage[];
   setOptions(options: PlaygroundOptions): void;
@@ -406,11 +457,11 @@ import type { ModelMessage } from 'ai';
 export function convertToModelMessages(
   messages: vscode.LanguageModelChatMessage[]
 ): ModelMessage[] {
-  return messages.map(msg => {
+  return messages.map((msg) => {
     if (msg.role === vscode.LanguageModelChatMessageRole.User) {
       return {
         role: 'user',
-        content: msg.content.map(part => {
+        content: msg.content.map((part) => {
           if (part instanceof vscode.LanguageModelTextPart) {
             return { type: 'text', text: part.value };
           }
@@ -420,7 +471,7 @@ export function convertToModelMessages(
     } else if (msg.role === vscode.LanguageModelChatMessageRole.Assistant) {
       return {
         role: 'assistant',
-        content: msg.content.map(part => {
+        content: msg.content.map((part) => {
           if (part instanceof vscode.LanguageModelTextPart) {
             return { type: 'text', text: part.value };
           }
@@ -444,10 +495,10 @@ export function convertToModelMessages(
 export function convertFromModelMessages(
   messages: ModelMessage[]
 ): vscode.LanguageModelChatMessage[] {
-  return messages.map(msg => {
+  return messages.map((msg) => {
     if (msg.role === 'user') {
       return vscode.LanguageModelChatMessage.User(
-        msg.content.map(part => {
+        msg.content.map((part) => {
           if (part.type === 'text') {
             return vscode.LanguageModelTextPart.create(part.text);
           }
@@ -456,7 +507,7 @@ export function convertFromModelMessages(
       );
     } else if (msg.role === 'assistant') {
       return vscode.LanguageModelChatMessage.Assistant(
-        msg.content.map(part => {
+        msg.content.map((part) => {
           if (part.type === 'text') {
             return vscode.LanguageModelTextPart.create(part.text);
           }
@@ -472,6 +523,7 @@ export function convertFromModelMessages(
 ```
 
 **Important Notes**:
+
 - These conversion functions are ONLY for Copilot integration
 - Playground uses AI SDK's `convertToModelMessages()` directly
 - No VS Code API dependency in Playground code
@@ -480,25 +532,25 @@ export function convertFromModelMessages(
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    PLAYGROUND (AI SDK Only)                │
+│                    PLAYGROUND (AI SDK Only)                 │
 ├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  PlaygroundUIMessage (UIMessage<PlaygroundMetadata>)       │
+│                                                             │
+│  PlaygroundUIMessage (UIMessage<PlaygroundMetadata>)        │
 │         │                                                   │
 │         │ convertToModelMessages() (AI SDK UI)              │
 │         ↓                                                   │
-│  ModelMessage[] (AI SDK Core)                              │
+│  ModelMessage[] (AI SDK Core)                               │
 │         │                                                   │
-│         │ streamText() (AI SDK Core)                       │
+│         │ streamText() (AI SDK Core)                        │
 │         ↓                                                   │
 │  AI Providers (OpenAI, Anthropic, Custom)                   │
-│                                                              │
+│                                                             │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
 │              COPILOT INTEGRATION (VS Code API)              │
 ├─────────────────────────────────────────────────────────────┤
-│                                                              │
+│                                                             │
 │  LanguageModelChatMessage[] (VS Code API)                   │
 │         │                                                   │
 │         │ convertToModelMessages() (Custom)                 │
@@ -508,7 +560,7 @@ export function convertFromModelMessages(
 │         │ streamText() (AI SDK Core)                        │
 │         ↓                                                   │
 │  AI Providers (OpenAI, Anthropic, Custom)                   │
-│                                                              │
+│                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -523,6 +575,7 @@ export function convertFromModelMessages(
 **Purpose**: Convert UIMessage[] to ModelMessage[] for AI SDK Core
 
 **Usage**:
+
 ```typescript
 import { convertToModelMessages } from 'ai';
 
@@ -540,13 +593,14 @@ const modelMessages = await convertToModelMessages(uiMessages);
 ```
 
 **Output**:
+
 ```typescript
 [
   {
     role: 'user',
     content: [{ type: 'text', text: 'Hello!' }],
   },
-]
+];
 ```
 
 **Note**: Metadata is automatically stripped from ModelMessage (internal format)
@@ -669,10 +723,7 @@ type ToolMessage = InferToolMessage<typeof tools>;
 
 // Infer full UIMessage type
 type GeneratedUIMessage = UIMessage<PlaygroundMetadata> & {
-  parts: Array<
-    | { type: 'text'; text: string }
-    | ToolMessage
-  >;
+  parts: Array<{ type: 'text'; text: string } | ToolMessage>;
 };
 ```
 
@@ -707,17 +758,21 @@ function isTextPart(part: UIMessage['parts'][number]): part is { type: 'text'; t
   return part.type === 'text';
 }
 
-function isToolCallPart(part: UIMessage['parts'][number]): part is { type: 'tool-call'; toolCallId: string; toolName: string; args: any } {
+function isToolCallPart(
+  part: UIMessage['parts'][number]
+): part is { type: 'tool-call'; toolCallId: string; toolName: string; args: any } {
   return part.type === 'tool-call';
 }
 
-function isToolResultPart(part: UIMessage['parts'][number]): part is { type: 'tool-result'; toolCallId: string; result: any } {
+function isToolResultPart(
+  part: UIMessage['parts'][number]
+): part is { type: 'tool-result'; toolCallId: string; result: any } {
   return part.type === 'tool-result';
 }
 
 // Usage
-messages.forEach(message => {
-  message.parts.forEach(part => {
+messages.forEach((message) => {
+  message.parts.forEach((part) => {
     if (isTextPart(part)) {
       console.log('Text:', part.text);
     } else if (isToolCallPart(part)) {
@@ -733,6 +788,95 @@ messages.forEach(message => {
 
 ## Storage and Persistence Types
 
+### Three-Tier Storage Architecture
+
+Addi uses a three-tier storage architecture to separate concerns and enhance security:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Storage Architecture                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────────┐   ┌─────────────────┐   ┌────────────┐ │
+│  │  Config Layer   │   │   Stats Layer   │   │ Secrets    │ │
+│  │  (globalState)  │   │  (globalState)  │   │ (secrets)  │ │
+│  └────────┬────────┘   └────────┬────────┘   └─────┬──────┘ │
+│           │                     │                  │        │
+│           │   Provider/Model    │   Runtime Stats  │ Keys   │
+│           │   Configuration     │   (Local Only)   │        │
+│           │   (Synced)          │                  │        │
+│           │                     │                  │        │
+│           └─────────────────────┴──────────────────┘        │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Config Layer (`addi.providers`)
+
+**Storage**: `globalState` (synced via Settings Sync)
+
+**Purpose**: Persistent provider and model configuration
+
+```typescript
+interface ProviderConfig {
+  id: string;
+  name: string;
+  providerType: 'openai' | 'anthropic' | 'google' | 'deepseek' | 'generic';
+  description?: string;
+  website?: string;
+  apiEndpoint?: string;
+  // apiKey: NOT stored here (moved to Secrets)
+  models: ModelConfig[];
+}
+
+interface ModelConfig {
+  sid: string;
+  id: string;
+  name: string;
+  family: string;
+  version: string;
+  maxInputTokens: number;
+  maxOutputTokens: number;
+  capabilities: ModelCapabilities;
+  requestAdditional?: string;
+  // speedHistory: NOT stored here (moved to Stats)
+}
+```
+
+#### Stats Layer (`addi.providers.stats`)
+
+**Storage**: `globalState` (local only, NOT synced)
+
+**Purpose**: Runtime statistics and performance metrics
+
+```typescript
+interface ProviderStats {
+  [modelSid: string]: ModelStats;
+}
+
+interface ModelStats {
+  speedHistory?: number[]; // Response times in ms
+  averageSpeed?: number; // Calculated average
+  lastUsed?: number; // Timestamp
+  usageCount?: number; // Number of invocations
+}
+```
+
+#### Secrets Layer (`addi.provider.apikey.{providerId}`)
+
+**Storage**: `vscode.SecretStorage` (never synced, encrypted by VS Code)
+
+**Purpose**: Secure API key storage
+
+```typescript
+// Keys follow pattern: addi.provider.apikey.{providerId}
+// Examples:
+//   - addi.provider.apikey.openai
+//   - addi.provider.apikey.my-custom-provider
+```
+
+**Migration**: On first load, any apiKey found in Config Layer is automatically migrated to Secrets Layer and removed from Config Layer.
+
 ### JSON Serialization
 
 **Challenge**: UIMessage parts may contain non-serializable types (e.g., Zod schemas)
@@ -744,7 +888,7 @@ function sanitizeForStorage(message: PlaygroundUIMessage): StoredMessage {
   return {
     id: message.id,
     role: message.role,
-    parts: message.parts.map(part => {
+    parts: message.parts.map((part) => {
       if (part.type === 'text') {
         return part;
       } else if (part.type === 'tool-call') {
@@ -814,6 +958,7 @@ function decryptMessage(encrypted: string, key: Buffer, iv: Buffer): StoredMessa
 ### Step 1: Replace Custom ChatMessage Type
 
 **Before**:
+
 ```typescript
 // Old custom type
 export interface ChatMessage {
@@ -826,6 +971,7 @@ export interface ChatMessage {
 ```
 
 **After**:
+
 ```typescript
 // New AI SDK type
 import { UIMessage } from 'ai';
@@ -841,6 +987,7 @@ export type PlaygroundUIMessage = UIMessage<PlaygroundMetadata>;
 ```
 
 **Action**:
+
 1. Add AI SDK dependency: `npm install ai`
 2. Update type definitions
 3. Update all usages from `ChatMessage` to `PlaygroundUIMessage`
@@ -848,12 +995,14 @@ export type PlaygroundUIMessage = UIMessage<PlaygroundMetadata>;
 ### Step 2: Update Content Access
 
 **Before**:
+
 ```typescript
 const message: ChatMessage = { ... };
 console.log(message.content); // Direct string access
 ```
 
 **After**:
+
 ```typescript
 const message: PlaygroundUIMessage = { ... };
 // Iterate through parts
@@ -871,11 +1020,12 @@ const textContent = message.parts
 ```
 
 **Helper Function**:
+
 ```typescript
 function getMessageText(message: PlaygroundUIMessage): string {
   return message.parts
     .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
-    .map(part => part.text)
+    .map((part) => part.text)
     .join('\n');
 }
 
@@ -887,6 +1037,7 @@ console.log(text);
 ### Step 3: Update Message Creation
 
 **Before**:
+
 ```typescript
 const userMessage: ChatMessage = {
   id: generateId(),
@@ -898,6 +1049,7 @@ const userMessage: ChatMessage = {
 ```
 
 **After**:
+
 ```typescript
 import { generateId } from 'ai';
 
@@ -916,8 +1068,9 @@ const userMessage: PlaygroundUIMessage = {
 ### Step 4: Update AI SDK Usage
 
 **Before**:
+
 ```typescript
-const messages = chatMessages.map(msg => ({
+const messages = chatMessages.map((msg) => ({
   role: msg.role,
   content: msg.content,
 }));
@@ -929,6 +1082,7 @@ const result = streamText({
 ```
 
 **After**:
+
 ```typescript
 import { convertToModelMessages, streamText } from 'ai';
 
@@ -943,6 +1097,7 @@ const result = streamText({
 ### Step 5: Update Streaming Logic
 
 **Before**:
+
 ```typescript
 const response = await chatModel.sendRequest(messages, {});
 const stream = response.stream;
@@ -964,6 +1119,7 @@ const assistantMessage: ChatMessage = {
 ```
 
 **After**:
+
 ```typescript
 import { readUIMessageStream, generateId } from 'ai';
 
@@ -1003,6 +1159,7 @@ if (currentAssistantMessage) {
 ### Step 6: Update Storage
 
 **Before**:
+
 ```typescript
 // Save to storage
 await storageService.saveMessages(messages);
@@ -1012,6 +1169,7 @@ const loadedMessages = await storageService.loadMessages();
 ```
 
 **After**:
+
 ```typescript
 // Convert to stored format before saving
 const storedMessages = messages.map(toStoredMessage);
@@ -1025,6 +1183,7 @@ const messages = loaded.map(fromStoredMessage);
 ### Step 7: Update Webview Communication
 
 **Before**:
+
 ```typescript
 // Send message to webview
 webview.postMessage({
@@ -1039,6 +1198,7 @@ webview.postMessage({
 ```
 
 **After**:
+
 ```typescript
 // Send message to webview (already compatible)
 webview.postMessage({
@@ -1061,6 +1221,7 @@ webview.postMessage({
 ### Step 8: Update Tests
 
 **Before**:
+
 ```typescript
 test('should process messages', () => {
   const messages: ChatMessage[] = [
@@ -1073,6 +1234,7 @@ test('should process messages', () => {
 ```
 
 **After**:
+
 ```typescript
 import { MockLanguageModelV3 } from 'ai/test';
 

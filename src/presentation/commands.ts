@@ -5,7 +5,7 @@ import { ProviderTreeItem, AddiTreeDataProvider } from './views/providerView';
 import { ModelTreeItem } from '../core/providers/AddiChatProvider';
 import { ConfigManager, IdGenerator, UserFeedback } from '../common/utils';
 import { ModelDraft, Provider, Model } from '../common/types';
-import { logger } from '../common/logger';
+import { logger, maskSecret } from '../common/logger';
 // playground logic moved to src/playground.ts
 import PlaygroundManager from './playground';
 
@@ -135,14 +135,16 @@ export class CommandHandler {
     const currentApiKey = item.provider.apiKey || '';
 
     const newApiKey = await UserFeedback.showInputBox({
-      prompt: `Edit API key for "${item.provider.name}" (leave empty to unset)`,
-      value: currentApiKey,
+      prompt: `Edit API key for "${item.provider.name}"`,
+      value: '',
       password: true,
-      placeHolder: 'Please enter the new API key',
+      placeHolder: currentApiKey
+        ? `Current: ${maskSecret(currentApiKey)}`
+        : 'Please enter the new API key',
     });
 
-    if (newApiKey === undefined) {
-      logger.debug('editApiKey canceled', logger.sanitizeProvider(item.provider));
+    if (newApiKey === undefined || newApiKey === '') {
+      logger.debug('editApiKey canceled or empty', logger.sanitizeProvider(item.provider));
       return;
     }
 

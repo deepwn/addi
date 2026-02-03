@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { ConfigManager, InputValidator, TokenFormatter } from '../../common/utils';
+import { maskSecret } from '../../common/logger';
 
 // 模拟vscode.workspace
 const mockWorkspace = {
@@ -123,6 +124,52 @@ suite('Utils Test Suite', () => {
     test('should get confirm delete setting', () => {
       const confirm = ConfigManager.getConfirmDelete();
       assert.strictEqual(confirm, true);
+    });
+  });
+
+  suite('maskSecret', () => {
+    test('should mask long secrets (>=16 chars) with first 4 and last 4 visible', () => {
+      const longKey = 'sk-proj-abc123def456ghi789jkl012';
+      const masked = maskSecret(longKey);
+      assert.ok(masked, 'masked should not be undefined');
+      assert.ok(masked!.startsWith('sk-p'), 'should start with first 4 chars');
+      assert.ok(masked!.endsWith('l012'), 'should end with last 4 chars');
+      assert.ok(masked!.includes('***'), 'should contain masking asterisks');
+      assert.strictEqual(masked!, 'sk-p***l012');  // Fixed: check exact masked value
+    });
+
+    test('should mask medium secrets (8-15 chars) showing only last 4', () => {
+      const mediumKey = 'sk-abc12345';
+      const masked = maskSecret(mediumKey);
+      assert.strictEqual(masked, '***2345');
+    });
+
+    test('should mask short secrets (<8 chars) as all asterisks', () => {
+      const shortKey = 'sk-ab';
+      const masked = maskSecret(shortKey);
+      assert.strictEqual(masked, '***');
+    });
+
+    test('should handle empty string', () => {
+      const masked = maskSecret('');
+      assert.strictEqual(masked, '');
+    });
+
+    test('should handle undefined', () => {
+      const masked = maskSecret(undefined as any);
+      assert.strictEqual(masked, undefined);
+    });
+
+    test('should handle exactly 8 char secrets', () => {
+      const key8 = 'sk-abc123';
+      const masked = maskSecret(key8);
+      assert.strictEqual(masked, '***c123');
+    });
+
+    test('should handle exactly 16 char secrets', () => {
+      const key16 = 'sk-abcdefghijklmnop';
+      const masked = maskSecret(key16);
+      assert.strictEqual(masked, 'sk-a***mnop');
     });
   });
 });

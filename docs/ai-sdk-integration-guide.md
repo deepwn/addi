@@ -1176,6 +1176,90 @@ function renderMessage(message) {
 
 ---
 
+## Middleware System
+
+Addi implements a middleware system for processing AI model messages and responses. This is particularly useful for handling unexpected model behaviors like hallucinated tool calls.
+
+### Middleware Architecture
+
+```typescript
+interface LLMCallContext {
+  provider: Provider;
+  modelId: string;
+  model: Model;
+}
+
+interface MiddlewareResult {
+  messages: ModelMessage[];
+}
+
+interface ResponseProcessor {
+  processResponsePart(
+    part: TextDeltaPart | ToolCallPart | ToolResultPart,
+    context: LLMCallContext
+  ): ProcessingResult;
+}
+```
+
+### ToolCallCompatibilityMiddleware
+
+**Purpose**: Detect and handle hallucinated tool calls in model output
+
+**Features**:
+- Pattern-based content filtering
+- Configurable retry/stop strategies
+- Streaming response processing
+- Per-model configuration
+
+**Usage**:
+```typescript
+const middleware = new ToolCallCompatibilityMiddleware();
+
+// Process messages before sending to model
+const result = await middleware.processMessages(messages, context);
+
+// Process streaming response
+const processedPart = middleware.processResponsePart(delta, context);
+if (processedPart._addiAction === 'retry') {
+  // Trigger retry logic
+}
+```
+
+### ScrubSettings Integration
+
+**Model Configuration**:
+```typescript
+interface ModelCapabilities {
+  imageInput?: boolean;
+  toolCalling?: boolean | number;
+  scrubSettings?: {
+    enabled: boolean;
+    patterns: string[];
+    strategy: 'stop' | 'retry';
+    toolNameGroup?: number;
+  };
+}
+```
+
+**Example Configuration**:
+```typescript
+const model = {
+  id: 'gpt-4',
+  capabilities: {
+    scrubSettings: {
+      enabled: true,
+      patterns: [
+        '<\\s*tool_call[^>]*>.*?<\\s*/\\s*tool_call\\s*>',
+        'DEBUG: .*',
+      ],
+      strategy: 'retry',
+    },
+  },
+};
+```
+
+---
+
 ## Key Benefits
 
 ### 1. Type Safety

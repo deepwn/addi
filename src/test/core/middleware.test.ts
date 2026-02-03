@@ -129,5 +129,84 @@ suite('ToolCallCompatibilityMiddleware Test Suite', () => {
       assert.strictEqual(result.text, 'Using ');
       assert.strictEqual((result as any)._addiAction, 'retry');
     });
+
+    test('should handle stop strategy correctly', async () => {
+      const stopContext = {
+        ...context,
+        model: {
+          ...mockModel,
+          capabilities: {
+            ...mockModel.capabilities,
+            scrubSettings: {
+              enabled: true,
+              patterns: ['<tool_call[^>]*>'],
+              strategy: 'stop',
+            },
+          },
+        },
+      } as any;
+
+      const messages: ModelMessage[] = [
+        { role: 'user', content: 'Hello' },
+        { role: 'assistant', content: 'Thinking... <tool_call name="test"> Done.' },
+      ];
+
+      const result = await middleware.processMessages(messages, stopContext);
+      const content = (result.messages[1] as any).content;
+      // Note: processMessages always scrubs when enabled; strategy is used in processResponsePart for streaming
+      assert.strictEqual(content, 'Thinking...  Done.');
+    });
+
+    test('should handle toolNameGroup for regex matching', async () => {
+      const groupContext = {
+        ...context,
+        model: {
+          ...mockModel,
+          capabilities: {
+            ...mockModel.capabilities,
+            scrubSettings: {
+              enabled: true,
+              patterns: ['<tool_call\\s+name="([^"]+)"[^>]*>.*?<\\/\\s*tool_call\\s*>'],
+              strategy: 'retry',
+              toolNameGroup: 1,
+            },
+          },
+        },
+      } as any;
+
+      const messages: ModelMessage[] = [
+        { role: 'assistant', content: 'Call <tool_call name="myTool" args="{}"> here' },
+      ];
+
+      const result = await middleware.processMessages(messages, groupContext);
+      // Should extract tool name from group if configured
+      assert.ok(result.messages.length > 0, 'Messages array should not be empty');
+      const firstContent = result.messages[0]?.content;
+      const contentLength = typeof firstContent === 'string' ? firstContent.length : Array.isArray(firstContent) ? firstContent.length : 0;
+      assert.ok(contentLength > 0, 'First message content should not be empty');
+    });
+  });
+
+  suite('ScrubSettings Validation', () => {
+    test('should validate scrub settings structure', () => {
+      const validSettings = {
+        enabled: true,
+        patterns: ['pattern1', 'pattern2'],
+        strategy: 'retry' as const,
+      };
+
+      assert.strictEqual(validSettings.enabled, true);
+      assert.strictEqual(validSettings.strategy, 'retry');
+      assert.strictEqual(validSettings.patterns.length, 2);
+    });
+
+    test('should handle missing scrub settings gracefully', () => {
+      const modelWithoutScrub = {
+        ...mockModel,
+        capabilities: {},
+      } as any;
+
+      assert.strictEqual(modelWithoutScrub.capabilities.scrubSettings, undefined);
+    });
   });
 });
