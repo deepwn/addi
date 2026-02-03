@@ -2,6 +2,22 @@
 
 All notable changes to the "addi" extension will be documented in this file.
 
+## [0.0.24] - 2026-02-03
+
+### Added
+
+- **Custom Tools Management**: Added `runTool` command for debugging custom tools directly. Moved `Edit`, `Copy`, and `Delete` actions to a dedicated right-click context menu for better usability.
+- **New Built-in Tools**: Added HTTP request and IP geolocation tools. Enhanced composite action execution with better platform-specific handling.
+- **Middleware System**: Implemented a new middleware system for more robust handling of AI model responses and tool calls.
+
+### Changed
+
+- **Configuration Architecture Redesign**: Complete separation of concerns for data storage:
+  - **Secrets**: Strictly stored in `SecretStorage`.
+  - **Stats**: Runtime execution statistics (speed, usage) stored in `GlobalState` side-channel (not synced).
+  - **Config**: Only static configuration is synced via Settings Sync.
+- **Code Quality**: Improvements in code formatting and readability across the codebase.
+
 ## [0.0.23] - 2026-01-22
 
 ### Added
