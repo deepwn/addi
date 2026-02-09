@@ -4,10 +4,8 @@ import { ProviderModelManager } from '../core/providers/ProviderModelManager';
 import { ProviderTreeItem, AddiTreeDataProvider } from './views/providerView';
 import { ModelTreeItem } from '../core/providers/AddiChatProvider';
 import { ConfigManager, IdGenerator, UserFeedback } from '../common/utils';
-import { ModelDraft, Provider, Model } from '../common/types';
+import { Provider, Model } from '../common/types';
 import { logger, maskSecret } from '../common/logger';
-// playground logic moved to src/playground.ts
-import PlaygroundManager from './playground';
 
 import { EditorViewManager } from './views/editorView';
 import { LLMService } from '../core/llm/llmService';
@@ -25,8 +23,8 @@ export class CommandHandler {
   constructor(
     private readonly manager: ProviderModelManager,
     private readonly treeDataProvider: AddiTreeDataProvider,
-    private readonly context: vscode.ExtensionContext,
-    private readonly llmService: LLMService
+    context: vscode.ExtensionContext,
+    _llmService: LLMService
   ) {
     logger.debug('CommandHandler initialized', {
       hasContext: Boolean(context),
@@ -35,28 +33,6 @@ export class CommandHandler {
 
   public setEditorViewManager(manager: EditorViewManager) {
     this.editorViewManager = manager;
-  }
-
-  async openPlayground(
-    provider: Provider,
-    model: Model | (ModelDraft & { id?: string; name?: string })
-  ): Promise<void> {
-    logger.debug(
-      'Opening playground',
-      {
-        provider: logger.sanitizeProvider(provider),
-        model: logger.sanitizeModel(model as Model),
-      },
-      'Commands'
-    );
-    if (!this.context) {
-      logger.error('openPlayground missing extension context', undefined, 'Commands');
-      throw new Error('No extension context');
-    }
-    const mgr = new PlaygroundManager(this.context, this.llmService);
-    // ensure model has the shape of Model
-    const realModel = model as Model;
-    await mgr.openPlayground(provider, realModel);
   }
 
   async addProvider(): Promise<void> {

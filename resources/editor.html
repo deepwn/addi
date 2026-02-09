@@ -156,12 +156,15 @@
               <option value="anthropic">Anthropic</option>
               <option value="google">Google</option>
               <option value="deepseek">DeepSeek</option>
+              <option value="zhipu-ai">Zhipu AI</option>
+              <option value="minimax">Minimax</option>
               <option value="generic">Generic</option>
             </select>
           </div>
           <div class="form-group">
             <label>API Endpoint</label>
             <input type="text" id="p-endpoint" />
+            <div id="p-endpoint-hint" class="info-text" style="font-size: 0.9em; margin-top: 4px; color: var(--vscode-descriptionForeground);"></div>
           </div>
           <div class="form-group api-key-container">
             <label>API Key</label>
@@ -395,6 +398,24 @@
 
       // Model inputs
       const mName = document.getElementById('m-name');
+      const pEndpointHint = document.getElementById('p-endpoint-hint');
+
+      // --- Hint Logic ---
+      function updateHints() {
+        const type = pType.value;
+        let hint = '';
+        if (type === 'anthropic') {
+           hint = 'Standard: https://api.anthropic.com/v1 <br> Minimax: https://api.minimaxi.com/anthropic/v1 <br> (Please include /v1 but do not include /messages)';
+        } else if (type === 'openai' || type === 'generic' || type === 'zhipu-ai' || type === 'deepseek' || type === 'minimax') {
+           hint = 'Base URL, e.g. https://api.openai.com/v1 <br> (Do not include /chat/completions)';
+        }
+        if (pEndpointHint) {
+          pEndpointHint.innerHTML = hint;
+        }
+      }
+      pType.addEventListener('change', updateHints);
+      // Initialize hints on load if we are editing
+      setTimeout(updateHints, 100);
       const mId = document.getElementById('m-id');
       const mFamily = document.getElementById('m-family');
       const mVersion = document.getElementById('m-version');

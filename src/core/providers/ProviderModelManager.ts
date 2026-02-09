@@ -519,6 +519,8 @@ export class ProviderModelManager {
     try {
       switch (providerType) {
         case 'openai':
+        case 'zhipu-ai':
+        case 'minimax':
         case 'generic': {
           const url = this.resolveModelsUrl(endpoint, 'https://api.openai.com/v1');
           const response = await fetch(url, {

@@ -67,13 +67,6 @@
           "fontCharacter": "\\F358"
         }
       },
-      "use-model-icon": {
-        "description": "Use Model Icon",
-        "default": {
-          "fontPath": "resources/bootstrap-icons.woff",
-          "fontCharacter": "\\F268"
-        }
-      },
       "magic-icon": {
         "description": "Magic Icon",
         "default": {
@@ -196,10 +189,6 @@
           "when": "false"
         },
         {
-          "command": "addi.useModel",
-          "when": "false"
-        },
-        {
           "command": "addi.editApiKey",
           "when": "false"
         },
@@ -261,11 +250,6 @@
           "command": "addi.deleteModel",
           "when": "view == addiProviders && viewItem == model",
           "group": "modify@99"
-        },
-        {
-          "command": "addi.useModel",
-          "when": "view == addiProviders && viewItem == model",
-          "group": "inline"
         },
         {
           "command": "addi.editTool",
@@ -477,13 +461,6 @@
         "category": "Addi"
       },
       {
-        "command": "addi.useModel",
-        "title": "Use Model",
-        "shortTitle": "Use",
-        "icon": "$(use-model-icon)",
-        "category": "Addi"
-      },
-      {
         "command": "addi.editApiKey",
         "title": "Edit API Key",
         "shortTitle": "Key",
@@ -602,6 +579,8 @@
     "@ai-sdk/openai-compatible": "^2.0.28",
     "ai": "^6.0.77",
     "js-yaml": "^4.1.1",
+    "vercel-minimax-ai-provider": "^0.0.2",
+    "zhipu-ai-provider": "^0.2.2",
     "zod": "^4.3.6"
   }
 }

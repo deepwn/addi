@@ -57,7 +57,6 @@ graph TD
 - **Views**: Tree Data Providers (`ProviderView`, `ToolView`) and Webview Managers (`EditorView`).
 - **Commands**: Handles user interactions from the Command Palette and Context Menus.
 - **Entry**: `extension.ts` serves as the bootstrapper, wiring dependencies together.
-- **Playground (Webview)**: High-performance chat interface. Ref: [docs/playground-redesign.md](docs/playground-redesign.md)
 
 ### Layer 2: Core (Middle Bridge)
 

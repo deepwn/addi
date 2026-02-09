@@ -184,17 +184,6 @@ export function activate(context: vscode.ExtensionContext) {
     )
   );
   context.subscriptions.push(
-    vscode.commands.registerCommand('addi.useModel', (item: ModelTreeItem) => {
-      const result = manager.findModel(item.model.sid);
-      if (!result) {
-        void vscode.window.showErrorMessage('Model not found');
-        return;
-      }
-      // open playground
-      void commandHandler.openPlayground(result.provider, result.model);
-    })
-  );
-  context.subscriptions.push(
     vscode.commands.registerCommand('addi.exportConfig', () => commandHandler.exportConfig())
   );
   context.subscriptions.push(

@@ -42,24 +42,6 @@ export interface ToolResultPart {
   result: any;
 }
 
-/**
- * AI SDK UI Message Types
- * Based on @ai-sdk/ui
- */
-export interface UIMessage {
-  id: string;
-  role: 'system' | 'user' | 'assistant';
-  parts: Array<UIPart>;
-  metadata?: Record<string, any>;
-}
-
-export type UIPart =
-  | { type: 'text'; text: string }
-  | { type: 'reasoning'; reasoning: string }
-  | { type: 'image'; image: string; mediaType?: string }
-  | { type: 'tool-call'; toolCallId: string; toolName: string; args: any }
-  | { type: 'tool-result'; toolCallId: string; result: any };
-
 export type ScrubStrategy = 'stop' | 'retry';
 
 export interface ScrubSettings {
@@ -130,7 +112,7 @@ export interface ModelStats {
  */
 export interface Model extends ModelConfig, ModelStats {}
 
-export type ProviderType = 'openai' | 'anthropic' | 'google' | 'deepseek' | 'generic';
+export type ProviderType = 'openai' | 'anthropic' | 'google' | 'deepseek' | 'zhipu-ai' | 'minimax' | 'generic';
 
 /**
  * Persisted configuration for a provider (Synced).

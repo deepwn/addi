@@ -1,60 +1,8 @@
 import * as vscode from 'vscode';
 import { ModelMessage, UserContent, ToolContent, AssistantContent } from 'ai';
 import { logger } from '../../common/logger';
-import { UIMessage } from '../../common/types';
 
 export class MessageConverter {
-  /**
-   * Converts UIMessages to AI SDK Core ModelMessages.
-   */
-  static uiMessagesToCoreMessages(uiMessages: UIMessage[]): ModelMessage[] {
-    return uiMessages.map((msg) => {
-      if (msg.role === 'user') {
-        return {
-          role: 'user',
-          content: msg.parts.map((part) => {
-            if (part.type === 'text') {
-              return { type: 'text', text: part.text };
-            }
-            if (part.type === 'image') {
-              return {
-                type: 'image',
-                image: part.image,
-                mediaType: part.mediaType,
-              };
-            }
-            return { type: 'text', text: '' };
-          }) as UserContent,
-        };
-      } else if (msg.role === 'assistant') {
-        const content: AssistantContent = [];
-        for (const part of msg.parts) {
-          if (part.type === 'text') {
-            content.push({ type: 'text', text: part.text });
-          } else if (part.type === 'reasoning') {
-            content.push({ type: 'reasoning' as any, reasoning: part.reasoning } as any);
-          } else if (part.type === 'tool-call') {
-            content.push({
-              type: 'tool-call',
-              toolCallId: part.toolCallId,
-              toolName: part.toolName,
-              args: part.args,
-            } as any);
-          }
-        }
-        return { role: 'assistant', content };
-      } else if (msg.role === 'system') {
-        const text = msg.parts
-          .filter((p) => p.type === 'text')
-          .map((p: any) => p.text)
-          .join('\n');
-        return { role: 'system', content: text };
-      }
-      // Handle tool role if UIMessage supports it in the future
-      return { role: 'user', content: [] };
-    });
-  }
-
   static async toAiCoreMessages(
     messages: readonly vscode.LanguageModelChatRequestMessage[]
   ): Promise<ModelMessage[]> {
@@ -231,34 +179,6 @@ export class MessageConverter {
     return role === vscode.LanguageModelChatMessageRole.User ? 'user' : 'assistant';
   }
 
-  static extractTextFromMessageParts(parts: readonly unknown[]): string {
-    const textParts: string[] = [];
-    for (const part of parts) {
-      if (this.isImagePart(part)) {
-        continue;
-      }
-      if (typeof part === 'string') {
-        textParts.push(part);
-        continue;
-      }
-      if (part instanceof vscode.LanguageModelTextPart) {
-        textParts.push(part.value ?? '');
-        continue;
-      }
-      if (part && typeof part === 'object') {
-        const value = (part as Record<string, unknown>)['value'];
-        if (typeof value === 'string') {
-          textParts.push(value);
-        }
-      }
-    }
-    return textParts.join('');
-  }
-
-  static isImagePart(part: unknown): part is vscode.LanguageModelDataPart {
-    return part instanceof vscode.LanguageModelDataPart && part.mimeType.startsWith('image/');
-  }
-
   static uint8ArrayToBase64(array: Uint8Array): string {
     return Buffer.from(array).toString('base64');
   }
@@ -335,84 +255,6 @@ export class MessageConverter {
     return undefined;
   }
 
-  static toOpenAiMessages(
-    messages: readonly vscode.LanguageModelChatRequestMessage[]
-  ): Array<Record<string, unknown>> {
-    return messages.map((msg) => {
-      let role = this.mapChatRole(msg.role);
-      if (msg.name === 'system') {
-        role = 'system';
-      }
-      const parts = Array.isArray(msg.content)
-        ? (msg.content as readonly unknown[])
-        : [msg.content];
-      const toolCall = this.extractToolCallFromParts(parts);
-      const toolResult = this.extractToolResultFromParts(parts);
-
-      // Handle content parts (text and images)
-      const contentParts: any[] = [];
-      for (const part of parts) {
-        if (this.isImagePart(part)) {
-          contentParts.push({
-            type: 'image_url',
-            image_url: {
-              url: `data:${part.mimeType};base64,${this.uint8ArrayToBase64(part.data)}`,
-            },
-          });
-        } else {
-          const text = this.extractTextFromMessageParts([part]);
-          if (text) {
-            contentParts.push({ type: 'text', text });
-          }
-        }
-      }
-
-      if (toolCall) {
-        role = 'assistant';
-      } else if (toolResult) {
-        role = 'tool';
-      }
-
-      const entry: Record<string, unknown> = {
-        role,
-      };
-
-      if (toolCall) {
-        const callId = toolCall.id ?? `tool_call_${Math.random().toString(36).slice(2)}`;
-        entry['tool_calls'] = [
-          {
-            type: 'function',
-            id: callId,
-            function: {
-              name: toolCall.name,
-              arguments: toolCall.arguments,
-            },
-          },
-        ];
-        // OpenAI expects null content for tool calls usually, or it can be present.
-        // If we have text content alongside tool call, we should include it?
-        // For now, let's keep existing behavior but use contentParts if available and not tool call.
-        const contentText = this.extractTextFromMessageParts(parts);
-        entry['content'] = contentText || null;
-      } else if (toolResult) {
-        entry['content'] = toolResult.content;
-        if (toolResult.id) {
-          entry['tool_call_id'] = toolResult.id;
-        }
-      } else {
-        // If we have mixed content (images), use array. If only text, use string (for better compatibility).
-        const hasImage = contentParts.some((p) => p.type === 'image_url');
-        if (hasImage) {
-          entry['content'] = contentParts;
-        } else {
-          entry['content'] = this.extractTextFromMessageParts(parts);
-        }
-      }
-
-      return entry;
-    });
-  }
-
   static extractSystemMessage(messages: readonly vscode.LanguageModelChatRequestMessage[]): string {
     for (const msg of messages) {
       if (msg.name === 'system') {
@@ -431,107 +273,6 @@ export class MessageConverter {
       }
     }
     return '';
-  }
-
-  static toAnthropicMessages(
-    messages: readonly vscode.LanguageModelChatRequestMessage[]
-  ): Array<Record<string, unknown>> {
-    const result: Array<Record<string, unknown>> = [];
-    for (const msg of messages) {
-      if (msg.name === 'system') {
-        continue;
-      }
-      const role = this.mapChatRole(msg.role);
-
-      const parts = Array.isArray(msg.content)
-        ? (msg.content as readonly unknown[])
-        : [msg.content];
-      const contentParts: any[] = [];
-
-      for (const part of parts) {
-        if (this.isImagePart(part)) {
-          contentParts.push({
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: part.mimeType,
-              data: this.uint8ArrayToBase64(part.data),
-            },
-          });
-        } else {
-          const text = this.extractTextFromMessageParts([part]);
-          if (text) {
-            contentParts.push({ type: 'text', text });
-          }
-        }
-      }
-
-      const hasImage = contentParts.some((p) => p.type === 'image');
-
-      if (hasImage) {
-        result.push({ role, content: contentParts });
-      } else {
-        const textContent = contentParts.map((p) => p.text).join('');
-        result.push({ role, content: textContent });
-      }
-    }
-    return result;
-  }
-
-  static toGoogleMessages(
-    messages: readonly vscode.LanguageModelChatRequestMessage[]
-  ): Array<{ role: string; parts: Array<Record<string, unknown>> }> {
-    const contents: Array<{ role: string; parts: Array<Record<string, unknown>> }> = [];
-    let currentRole = '';
-    let currentParts: Array<Record<string, unknown>> = [];
-
-    messages.forEach((msg) => {
-      if (msg.name === 'system') {
-        return;
-      }
-      const role = msg.role === vscode.LanguageModelChatMessageRole.User ? 'user' : 'model';
-
-      const parts = Array.isArray(msg.content)
-        ? (msg.content as readonly unknown[])
-        : [msg.content];
-      const msgParts: Array<Record<string, unknown>> = [];
-
-      for (const part of parts) {
-        if (this.isImagePart(part)) {
-          msgParts.push({
-            inline_data: {
-              mime_type: part.mimeType,
-              data: this.uint8ArrayToBase64(part.data),
-            },
-          });
-        } else {
-          const text = this.extractTextFromMessageParts([part]);
-          if (text) {
-            msgParts.push({ text });
-          }
-        }
-      }
-
-      if (role !== currentRole && currentParts.length > 0) {
-        contents.push({
-          role: currentRole,
-          parts: currentParts,
-        });
-        currentParts = [];
-      }
-
-      currentRole = role;
-      currentParts.push(...msgParts);
-    });
-
-    if (currentParts.length > 0) {
-      contents.push({
-        role: currentRole,
-        parts: currentParts,
-      });
-    }
-
-    return contents;
   }
 
   static summarizeMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): {

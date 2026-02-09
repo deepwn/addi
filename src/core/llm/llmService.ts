@@ -51,37 +51,6 @@ export class LLMService {
     );
   }
 
-  /**
-   * AI SDK optimized chat entry point (formerly chatStreamV2).
-   */
-  async chatStream(params: {
-    provider: Provider;
-    model: Model;
-    messages: ModelMessage[];
-    systemMessage?: string;
-    token: vscode.CancellationToken;
-    onProgress: (delta: string) => void;
-    onReasoning?: (delta: string) => void;
-    onStats?: (stats: any) => void;
-  }): Promise<void> {
-    const { provider, model, messages, systemMessage, token, onProgress, onReasoning, onStats } =
-      params;
-    const tools = await this.toolOrchestrator.prepareTools(undefined);
-
-    const progress: vscode.Progress<vscode.LanguageModelResponsePart> = {
-      report: (part) => {
-        if (part instanceof vscode.LanguageModelTextPart) {
-          onProgress(part.value);
-        }
-      },
-    };
-
-    return this.executeDirect(provider, model, messages, systemMessage, tools, progress, token, {
-      onStats: onStats ?? undefined,
-      onReasoning: onReasoning ?? undefined,
-    } as any);
-  }
-
   private async executeDirect(
     provider: Provider,
     model: Model,

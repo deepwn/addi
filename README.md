@@ -48,7 +48,6 @@
 - [命令 Commands](#命令-commands)
 - [配置项 Settings Items](#配置项-settings-items)
 - [配置文件格式 Config Format](#配置文件格式-config-format)
-- [调试游乐场 Debug Playground](#调试游乐场-debug-playground)
 - [常见问题 FAQ](#常见问题-faq)
   - [Q: 为什么我添加的模型在 Copilot 中不可见？](#q-为什么我添加的模型在-copilot-中不可见)
   - [Q: 如何知道我的模型是否正在使用中？](#q-如何知道我的模型是否正在使用中)
@@ -63,7 +62,7 @@
 
 ## 简介 Introduction
 
-Addi 让你在 VS Code 中为 GitHub Copilot 添加自定义 / 第三方 / 自建 **AI Provider 与模型**，并在 Copilot 原生模型选择器中一键切换。它既是一个**模型管理器**，也是一个**交互式调试 Playground**，同时还是一个**快捷构造 MCP 工具**微服务。
+Addi 让你在 VS Code 中为 GitHub Copilot 添加自定义 / 第三方 / 自建 **AI Provider 与模型**，并在 Copilot 原生模型选择器中一键切换。它既是一个**模型管理器**，同时还是一个**快捷构造 MCP 工具**微服务。
 
 > [!Tip]
 > 虽然 vscode 官方有支持自定义模型的计划，但目前仍未开放给大众用户，Addi 作为一个临时解决方案，可以帮助你快速上手并测试各种模型。详见 [Bring Your Own Language Model](https://code.visualstudio.com/docs/copilot/customization/language-models#_bring-your-own-language-model-key) 以及 [Use an OpenAI-Compatible Model](https://code.visualstudio.com/docs/copilot/customization/language-models#_use-an-openaicompatible-model)。
@@ -85,10 +84,8 @@ Addi 让你在 VS Code 中为 GitHub Copilot 添加自定义 / 第三方 / 自�
 | 三层存储架构     | 配置层 / 统计层 / 密钥层分离，提升安全性                      |
 | API 密钥自动脱敏 | 日志和 UI 中自动隐藏敏感信息                                  |
 | 右键上下文操作   | 针对 Provider / Model 的快捷操作                              |
-| Playground 调试  | 发送消息、调节参数、实时查看日志                              |
 | SSE 流式输出     | 支持 OpenAI 及兼容端点增量输出                                |
-| 参数持久化       | 最近一次 Playground 参数自动恢复                              |
-| 测试覆盖         | Streaming / 参数裁剪与持久化测试                              |
+| 测试覆盖         | 单元测试与集成测试覆盖核心逻辑                                |
 | 日志输出         | 专用 output channel 与可调 Log Level                          |
 
 ## 快速开始 Quick Start
@@ -350,7 +347,7 @@ Addi 采用三层存储架构分离关注点并提升安全性：
 interface ProviderConfig {
   id: string;
   name: string;
-  providerType: 'openai' | 'anthropic' | 'generic';
+  providerType: 'openai' | 'anthropic' | 'google' | 'deepseek' | 'zhipu-ai' | 'minimax' | 'generic';
   apiEndpoint?: string;
   defaultModel?: string;
   models: ModelConfig[];
@@ -516,12 +513,6 @@ function maskSecret(secret: string): string {
   }
 ]
 ```
-
-## 调试游乐场 Debug Playground
-
-提供交互式调试界面，发送消息、调节参数、查看日志。现阶段主要用于测试与调试自定义模型参数。
-
-支持设定参数：Temperature / Top P / Max Output Tokens / Presence Penalty / Frequency Penalty / System Prompt。参数在 workspaceState 中持久化。OpenAI 兼容端点支持 SSE 流式增量输出，可中途取消（AbortController）。不支持流的 Provider 自动回退普通请求。
 
 ## 常见问题 FAQ
 
