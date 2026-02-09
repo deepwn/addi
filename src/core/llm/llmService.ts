@@ -171,8 +171,9 @@ export class LLMService {
             if (!shouldRetry && !shouldStop && reasoning) {
               if (onReasoning) {
                 onReasoning(reasoning);
+              } else {
+                progress.report(new vscode.LanguageModelTextPart(reasoning));
               }
-              progress.report(new vscode.LanguageModelTextPart(reasoning));
             }
           }
 
@@ -335,9 +336,10 @@ export class LLMService {
           case 'reasoning-delta':
             if (onReasoning) {
               onReasoning(part.text);
+            } else {
+              // Still report to VS Code progress for compatibility
+              progress.report(new vscode.LanguageModelTextPart(part.text));
             }
-            // Still report to VS Code progress for compatibility
-            progress.report(new vscode.LanguageModelTextPart(part.text));
             break;
           case 'tool-call':
             progress.report(
