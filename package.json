@@ -3,7 +3,7 @@
   "icon": "resources/icon-bg.min.png",
   "displayName": "Addi",
   "description": "add more custom AI providers and models for your copilot",
-  "version": "0.0.24",
+  "version": "0.0.25",
   "publisher": "deepwn",
   "repository": {
     "type": "git",
@@ -14,7 +14,7 @@
     "url": "https://github.com/deepwn/addi/issues"
   },
   "engines": {
-    "vscode": "^1.108.0"
+    "vscode": "^1.109.0"
   },
   "keywords": [
     "AI",
@@ -358,6 +358,13 @@
           "default": "",
           "description": "Path to the Addi MCP Server binary. If empty, defaults to ~/.addi/bin/addi-mcp-server."
         },
+        "addi.mcp.registryBaseRepo": {
+          "type": "string",
+          "default": "deepwn/addi",
+          "pattern": "^[\\w.-]+\\/[\\w.-]+$",
+          "patternErrorMessage": "Must be in 'owner/repo' format (e.g. deepwn/addi), containing only alphanumeric characters, dots, hyphens, and underscores.",
+          "description": "GitHub repository (owner/repo) to fetch MCP server releases from."
+        },
         "addi.maxToolChainSteps": {
           "type": "number",
           "default": 100,
@@ -554,8 +561,7 @@
     "languageModelChatProviders": [
       {
         "vendor": "addi-provider",
-        "displayName": "Addi",
-        "managementCommand": "addi.manage"
+        "displayName": "Addi"
       }
     ]
   },
@@ -575,8 +581,8 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.2.0",
-    "@types/vscode": "^1.108.1",
+    "@types/node": "^25.2.2",
+    "@types/vscode": "^1.109.0",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
     "@vscode/test-cli": "^0.0.12",
@@ -589,12 +595,12 @@
     "@vscode/vsce": "^3.7.1"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.35",
-    "@ai-sdk/deepseek": "^2.0.17",
-    "@ai-sdk/google": "^3.0.20",
-    "@ai-sdk/openai": "^3.0.25",
-    "@ai-sdk/openai-compatible": "^2.0.26",
-    "ai": "^6.0.67",
+    "@ai-sdk/anthropic": "^3.0.39",
+    "@ai-sdk/deepseek": "^2.0.18",
+    "@ai-sdk/google": "^3.0.22",
+    "@ai-sdk/openai": "^3.0.26",
+    "@ai-sdk/openai-compatible": "^2.0.28",
+    "ai": "^6.0.77",
     "js-yaml": "^4.1.1",
     "zod": "^4.3.6"
   }

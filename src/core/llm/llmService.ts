@@ -42,7 +42,12 @@ export class LLMService {
       tools,
       progress,
       token,
-      { onStats } as any
+      {
+        onStats,
+        onReasoning: (delta: string) => {
+          progress.report(new vscode.LanguageModelTextPart(delta));
+        },
+      } as any
     );
   }
 

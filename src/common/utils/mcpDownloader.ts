@@ -26,10 +26,14 @@ export class McpDownloader {
     const arch = process.arch === 'x64' ? 'amd64' : process.arch;
     const releaseName = `mcp-server-${platform}-${arch}${platform === 'windows' ? '.exe' : ''}`;
 
+    const repo = this.getConfiguredRepo();
+    const baseUrl = `https://api.github.com/repos/${repo}/releases`;
+
     // 1. Try to get specific version if provided
     if (baseVersion) {
       const releaseTag = `v${baseVersion}`;
-      const apiUrl = `https://api.github.com/repos/deepwn/addi/releases/tags/${releaseTag}`;
+      // Construct tag URL: https://api.github.com/repos/{owner}/{repo}/releases/tags/{tag}
+      const apiUrl = `${baseUrl}/tags/${releaseTag}`;
       try {
         const apiRes = await fetch(apiUrl, {
           headers: { 'User-Agent': 'VSCode-Addi-Extension' },
@@ -54,7 +58,8 @@ export class McpDownloader {
     // 2. List recent releases and find the latest one with assets
     try {
       logger.info('Searching for the latest release with binary assets...');
-      const apiUrl = `https://api.github.com/repos/deepwn/addi/releases`;
+      // Use configured base URL. See note above about structure.
+      const apiUrl = baseUrl;
       const apiRes = await fetch(apiUrl, {
         headers: { 'User-Agent': 'VSCode-Addi-Extension' },
       });
@@ -163,8 +168,9 @@ export class McpDownloader {
 
     // 2. Fallback to checksums.txt
     try {
+      const repo = this.getConfiguredRepo();
       const releaseTag = `v${info.version}`;
-      const apiUrl = `https://api.github.com/repos/deepwn/addi/releases/tags/${releaseTag}`;
+      const apiUrl = `https://api.github.com/repos/${repo}/releases/tags/${releaseTag}`;
       const apiRes = await fetch(apiUrl, { headers: { 'User-Agent': 'VSCode-Addi-Extension' } });
       if (apiRes.ok) {
         const releaseData = (await apiRes.json()) as any;
@@ -227,5 +233,20 @@ export class McpDownloader {
       }
     }
     return null;
+  }
+
+  private static getConfiguredRepo(): string {
+    const config = vscode.workspace.getConfiguration('addi');
+    let repo = config.get<string>('mcp.registryBaseRepo', 'deepwn/addi');
+
+    // Validate repo format: owner/repo
+    // Allow alphanumeric, underscore, hyphen, dot. Must contain exactly one slash.
+    if (!repo || !/^[\w.-]+\/[\w.-]+$/.test(repo)) {
+      logger.warn(
+        `Invalid 'addi.mcp.registryBaseRepo' format: "${repo}". Expected "owner/repo". Using default "deepwn/addi".`
+      );
+      repo = 'deepwn/addi';
+    }
+    return repo;
   }
 }

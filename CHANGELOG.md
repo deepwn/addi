@@ -2,6 +2,20 @@
 
 All notable changes to the "addi" extension will be documented in this file.
 
+## [0.0.25] - 2026-02-09
+
+### Added
+
+- **Migration Guide**: Added [documentation](docs/migration_management_command.md) for researching about migrating from `managementCommand` to `configuration` for chat model providers to handle configuration management in a more native and secure way.
+- **Custom MCP Registry**: Added `addi.mcp.registryBaseRepo` setting to allow downloading Addi MCP Server from custom GitHub repositories.
+
+### Changed
+
+- **VS Code Compatibility**: Removed deprecated `managementCommand` property in preparation for VS Code 1.109+ changes. Minimum VS Code version bumped to `^1.109.0`.
+- **Reasoning Support**: Enhanced LLM service to forward model reasoning ("thinking") output to the chat interface.
+- **MCP Downloader**: Updated to support the new custom registry configuration.
+- **Dependencies**: Updated `ai-sdk` packages, `vscode` types, `mcp-server` mods, and other dependencies to latest versions.
+
 ## [0.0.24] - 2026-02-03
 
 ### Added
