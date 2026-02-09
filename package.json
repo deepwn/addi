@@ -42,7 +42,8 @@
   ],
   "enabledApiProposals": [
     "contribLanguageModelToolSets",
-    "languageModelCapabilities"
+    "languageModelCapabilities",
+    "languageModelThinkingPart"
   ],
   "main": "./dist/extension.js",
   "contributes": {

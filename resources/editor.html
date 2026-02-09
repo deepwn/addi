@@ -223,144 +223,6 @@
             <textarea id="m-req-additional" placeholder='{"stream": "false"}'></textarea>
             <div class="info-text">Additional JSON properties to merge into the request body.</div>
           </div>
-
-          <div
-            style="
-              margin-top: 20px;
-              padding-top: 15px;
-              border-top: 1px solid var(--vscode-widget-border);
-            "
-          >
-            <div class="form-group">
-              <label style="display: flex; align-items: center; gap: 6px">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="currentColor"
-                  style="color: var(--vscode-infoForeground)"
-                >
-                  <path
-                    d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm.5 13H7v-2h1.5v2zm0-3.5H7V3h1.5v6.5z"
-                  />
-                </svg>
-                Unexpected Behavior Handling
-              </label>
-              <div style="margin-top: 6px">
-                <span class="info-text"
-                  >This is a preview feature that may have breaking changes or be deprecated in
-                  future versions</span
-                >
-              </div>
-            </div>
-            <div class="form-group checkbox-group">
-              <input type="checkbox" id="m-scrub-enabled" />
-              <label for="m-scrub-enabled">Allow handling unexpected tool calls in output</label>
-            </div>
-            <div id="scrub-details" class="hidden">
-              <div class="form-group">
-                <label>Scrub Patterns (Regex, one per line)</label>
-                <textarea id="m-scrub-patterns" placeholder="</?tool_call[^>]*>"></textarea>
-                <div class="info-text">
-                  Messages or deltas matching these regexes will be processed.
-                </div>
-                <div id="pattern-error" class="error-text hidden"></div>
-              </div>
-
-              <div class="form-group">
-                <label>RegExp Flags</label>
-                <div style="display: flex; gap: 15px; margin-top: 5px">
-                  <label
-                    style="
-                      font-weight: normal;
-                      font-size: 0.85em;
-                      display: flex;
-                      align-items: center;
-                      gap: 4px;
-                    "
-                  >
-                    <input type="checkbox" id="re-flag-g" checked disabled /> Global (g)
-                  </label>
-                  <label
-                    style="
-                      font-weight: normal;
-                      font-size: 0.85em;
-                      display: flex;
-                      align-items: center;
-                      gap: 4px;
-                    "
-                  >
-                    <input type="checkbox" id="re-flag-i" /> Ignore Case (i)
-                  </label>
-                  <label
-                    style="
-                      font-weight: normal;
-                      font-size: 0.85em;
-                      display: flex;
-                      align-items: center;
-                      gap: 4px;
-                    "
-                  >
-                    <input type="checkbox" id="re-flag-s" /> DotAll (s)
-                  </label>
-                  <label
-                    style="
-                      font-weight: normal;
-                      font-size: 0.85em;
-                      display: flex;
-                      align-items: center;
-                      gap: 4px;
-                    "
-                  >
-                    <input type="checkbox" id="re-flag-m" /> Multiline (m)
-                  </label>
-                </div>
-                <div class="info-text">Flags applied to all patterns above.</div>
-              </div>
-
-              <div class="form-group">
-                <label>Tool Name Capture Group (Optional)</label>
-                <input type="number" id="m-scrub-tool-group" min="0" placeholder="e.g. 1 for $1" />
-                <div class="info-text">
-                  If patterns use (capturing groups), specify which index contains the tool name to
-                  force it during retry. 0 means full match.
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label>Test Content (Optional)</label>
-                <textarea
-                  id="m-scrub-test-text"
-                  placeholder="Enter sample text to test pattern matching...&#10;Example: <tool_call>This is a test</tool_call>"
-                ></textarea>
-                <div class="info-text">
-                  Enter text to test if patterns match. Matches will be highlighted in the result
-                  below.
-                </div>
-              </div>
-
-              <div class="form-group" id="test-result-container">
-                <label>Test Result</label>
-                <div
-                  id="m-scrub-test-result"
-                  class="preview-box"
-                  style="
-                    min-height: 80px;
-                    font-family: var(--vscode-editor-font-family);
-                    white-space: pre-wrap;
-                    overflow-x: auto;
-                  "
-                ></div>
-              </div>
-              <div class="form-group">
-                <label>Action on Detection</label>
-                <select id="m-scrub-strategy">
-                  <option value="retry">Retry (Clean & force tool call)</option>
-                  <option value="stop">Stop (Clean & terminate)</option>
-                </select>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div class="button-row">
@@ -424,20 +286,6 @@
       const mVision = document.getElementById('m-vision');
       const mTools = document.getElementById('m-tools');
       const mReqAdd = document.getElementById('m-req-additional');
-
-      // Compatibility options inputs
-      const mScrubEnabled = document.getElementById('m-scrub-enabled');
-      const mScrubDetails = document.getElementById('scrub-details');
-      const mScrubPatterns = document.getElementById('m-scrub-patterns');
-      const mScrubStrategy = document.getElementById('m-scrub-strategy');
-      const mScrubTestText = document.getElementById('m-scrub-test-text');
-      const mScrubTestResult = document.getElementById('m-scrub-test-result');
-      const mScrubToolGroup = document.getElementById('m-scrub-tool-group');
-      const patternError = document.getElementById('pattern-error');
-
-      const reFlagI = document.getElementById('re-flag-i');
-      const reFlagS = document.getElementById('re-flag-s');
-      const reFlagM = document.getElementById('re-flag-m');
 
       // Preview elements
       const reqPreview = document.getElementById('req-preview');
@@ -527,14 +375,6 @@
       mVision.addEventListener('change', updatePreviews);
       mTools.addEventListener('change', updatePreviews);
 
-      // Add listeners for real-time regex testing
-      mScrubPatterns.addEventListener('input', validateAndTestPatterns);
-      mScrubTestText.addEventListener('input', validateAndTestPatterns);
-      mScrubToolGroup.addEventListener('input', validateAndTestPatterns);
-      [reFlagI, reFlagS, reFlagM].forEach((el) =>
-        el.addEventListener('change', validateAndTestPatterns)
-      );
-
       window.addEventListener('message', (event) => {
         const message = event.data;
         switch (message.type) {
@@ -616,35 +456,9 @@
 
           mReqAdd.value = data.requestAdditional || '';
 
-          // Compatibility options
-          const scrub = (data.capabilities && data.capabilities.scrubSettings) || {
-            enabled: false,
-            patterns: [],
-            strategy: 'retry',
-          };
-          mScrubEnabled.checked = !!scrub.enabled;
-          mScrubPatterns.value = (scrub.patterns || []).join('\n');
-          mScrubStrategy.value = scrub.strategy || 'retry';
-          mScrubToolGroup.value = scrub.toolNameGroup !== undefined ? scrub.toolNameGroup : '';
-          mScrubTestText.value = ''; // Clear test text on load
-
-          // Set flags
-          const flags = scrub.flags || 'g';
-          reFlagI.checked = flags.includes('i');
-          reFlagS.checked = flags.includes('s');
-          reFlagM.checked = flags.includes('m');
-          if (mScrubEnabled.checked) show(mScrubDetails);
-          else hide(mScrubDetails);
-          validateAndTestPatterns(); // Validate patterns on load
-
           updatePreviews();
         }
       }
-
-      mScrubEnabled.addEventListener('change', () => {
-        if (mScrubEnabled.checked) show(mScrubDetails);
-        else hide(mScrubDetails);
-      });
 
       pApiKey.addEventListener('input', () => {
         pApiKeyTouched = true;
@@ -655,157 +469,6 @@
       }
       function hide(el) {
         el.classList.add('hidden');
-      }
-
-      // HTML escape function to prevent XSS attacks
-      function escapeHtml(text) {
-        const map = {
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#039;',
-        };
-        return text.replace(/[&<>"']/g, function (m) {
-          return map[m];
-        });
-      }
-
-      function getSelectedFlags() {
-        let f = 'g';
-        if (reFlagI.checked) f += 'i';
-        if (reFlagS.checked) f += 's';
-        if (reFlagM.checked) f += 'm';
-        return f;
-      }
-
-      // Real-time regex validation and testing
-      function validateAndTestPatterns() {
-        const patternsText = mScrubPatterns.value;
-        const testText = mScrubTestText.value;
-        const flags = getSelectedFlags();
-        const patternLines = patternsText
-          .split('\n')
-          .map((s) => s.trim())
-          .filter((s) => !!s);
-
-        // Clear previous error
-        hide(patternError);
-        patternError.textContent = '';
-        mScrubPatterns.style.borderColor = '';
-
-        if (patternLines.length === 0) {
-          mScrubTestResult.innerHTML =
-            '<span style="color: var(--vscode-descriptionForeground);">No patterns to test</span>';
-          return { valid: true, patterns: [] };
-        }
-
-        // Validate each pattern
-        const validPatterns = [];
-        const errors = [];
-
-        for (let i = 0; i < patternLines.length; i++) {
-          const patternStr = patternLines[i];
-          try {
-            // Test if the pattern is valid, use current selected flags
-            new RegExp(patternStr, flags);
-            validPatterns.push(new RegExp(patternStr, flags));
-          } catch (e) {
-            const errorMsg = e.message || 'Invalid regex';
-            errors.push(`Line ${i + 1}: "${patternStr}" - ${errorMsg}`);
-          }
-        }
-
-        // Show errors if any
-        if (errors.length > 0) {
-          show(patternError);
-          patternError.textContent = errors.join('\n');
-          mScrubPatterns.style.borderColor = 'var(--vscode-inputValidation-errorBorder)';
-        }
-
-        // Test patterns against text if provided
-        if (testText.trim()) {
-          let matches = [];
-          let detectedTool = null;
-          const toolGroupIdx = mScrubToolGroup.value !== '' ? parseInt(mScrubToolGroup.value) : -1;
-
-          // Find all matches with context
-          for (const pattern of validPatterns) {
-            let match;
-            pattern.lastIndex = 0; // Reset for global matching
-            while ((match = pattern.exec(testText)) !== null) {
-              matches.push({
-                start: match.index,
-                end: match.index + match[0].length,
-                text: match[0],
-              });
-
-              // Try to extract tool name from capture group if requested
-              if (toolGroupIdx >= 0 && match[toolGroupIdx] && !detectedTool) {
-                detectedTool = match[toolGroupIdx];
-              }
-            }
-          }
-
-          if (matches.length > 0) {
-            // Sort and merge overlapping matches
-            matches.sort((a, b) => a.start - b.start);
-            const mergedMatches = [];
-            if (matches.length > 0) {
-              let current = matches[0];
-              for (let i = 1; i < matches.length; i++) {
-                if (matches[i].start < current.end) {
-                  current.end = Math.max(current.end, matches[i].end);
-                } else {
-                  mergedMatches.push(current);
-                  current = matches[i];
-                }
-              }
-              mergedMatches.push(current);
-            }
-
-            // Build highlighted HTML
-            let resultHtml = '';
-            let lastIdx = 0;
-            for (const match of mergedMatches) {
-              resultHtml += escapeHtml(testText.substring(lastIdx, match.start));
-              resultHtml +=
-                '<span style="background-color: var(--vscode-editor-findMatchHighlightBackground); color: var(--vscode-editorFindMatchForeground);">' +
-                escapeHtml(testText.substring(match.start, match.end)) +
-                '</span>';
-              lastIdx = match.end;
-            }
-            resultHtml += escapeHtml(testText.substring(lastIdx));
-
-            let statusMsg = matches.length + ' match(es) found';
-            if (detectedTool) {
-              statusMsg += ' for tool: <code style="background: var(--vscode-textCodeBlock-background); padding: 0 4px;">' + escapeHtml(detectedTool) + '</code>';
-            }
-
-            mScrubTestResult.innerHTML =
-              resultHtml +
-              '\n\n<span style="color: var(--vscode-testing-iconPassed);">' +
-              statusMsg +
-              '</span>';
-          } else {
-            mScrubTestResult.innerHTML =
-              escapeHtml(testText) +
-              '\n\n<span style="color: var(--vscode-descriptionForeground);">No matches found</span>';
-          }
-        } else {
-          if (validPatterns.length > 0) {
-            mScrubTestResult.innerHTML =
-              '<span style="color: var(--vscode-descriptionForeground);">Enter test content above to see matching results</span>';
-          } else {
-            mScrubTestResult.innerHTML =
-              '<span style="color: var(--vscode-errorForeground);">Fix pattern errors to enable testing</span>';
-          }
-        }
-
-        return {
-          valid: errors.length === 0,
-          patterns: patternLines,
-        };
       }
 
       btnSave.addEventListener('click', () => {
@@ -823,20 +486,6 @@
             },
           });
         } else if (!modelForm.classList.contains('hidden')) {
-          // Validate regex patterns before saving
-          const validation = validateAndTestPatterns();
-          if (mScrubEnabled.checked && !validation.valid) {
-            // Don't save if there are invalid patterns
-            vscode.postMessage({
-              type: 'showError',
-              payload: {
-                message:
-                  'Please fix the invalid regex patterns before saving. See the error message below the pattern input.',
-              },
-            });
-            return;
-          }
-
           vscode.postMessage({
             type: 'saveModel',
             payload: {
@@ -849,16 +498,6 @@
               imageInput: mVision.checked,
               toolCalling: mTools.checked,
               requestAdditional: mReqAdd.value,
-              scrubSettings: {
-                enabled: mScrubEnabled.checked,
-                patterns: mScrubPatterns.value
-                  .split('\n')
-                  .map((s) => s.trim())
-                  .filter((s) => !!s),
-                strategy: mScrubStrategy.value,
-                flags: getSelectedFlags(),
-                toolNameGroup: mScrubToolGroup.value !== '' ? parseInt(mScrubToolGroup.value) : undefined,
-              },
             },
           });
         }

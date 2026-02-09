@@ -329,41 +329,6 @@ suite('ProviderModelManager Test Suite', () => {
     }, /Model ID is required/);
   });
 
-  test('should handle provider with scrubSettings capability', async () => {
-    const provider = await manager.addProvider({
-      name: 'Test Provider',
-      providerType: 'generic',
-      apiEndpoint: 'https://example.com',
-    });
-    const model = await manager.addModel(provider.id, {
-      id: 'test-model',
-      name: 'Test Model',
-      family: 'Test Family',
-      version: '1.0.0',
-      maxInputTokens: 4096,
-      maxOutputTokens: 1024,
-      capabilities: {
-        imageInput: true,
-        toolCalling: true,
-        scrubSettings: {
-          enabled: true,
-          patterns: ['<tool_call>', 'DEBUG: .*'],
-          strategy: 'retry',
-        },
-      },
-    });
-
-    assert.notStrictEqual(model, null);
-    if (model) {
-      assert.strictEqual(model.capabilities?.scrubSettings?.enabled, true);
-      assert.strictEqual(model.capabilities?.scrubSettings?.strategy, 'retry');
-      assert.ok(model.capabilities?.scrubSettings?.patterns?.length === 2);
-    }
-
-    const providers = manager.getProviders();
-    assert.strictEqual(providers[0]?.models.length, 1);
-  });
-
   test('should handle legacy capability fields normalization', async () => {
     const provider = await manager.addProvider({
       name: 'Test Provider',

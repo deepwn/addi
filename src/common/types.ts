@@ -42,20 +42,9 @@ export interface ToolResultPart {
   result: any;
 }
 
-export type ScrubStrategy = 'stop' | 'retry';
-
-export interface ScrubSettings {
-  enabled: boolean;
-  patterns: string[];
-  strategy: ScrubStrategy;
-  flags?: string;
-  toolNameGroup?: number; // Capture group index for tool name extraction
-}
-
 export interface ModelCapabilities {
   imageInput?: boolean;
   toolCalling?: boolean | number;
-  scrubSettings?: ScrubSettings;
 }
 
 export interface RemoteModelInfo {

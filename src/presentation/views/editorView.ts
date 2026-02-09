@@ -373,7 +373,6 @@ export class EditorViewManager {
       capabilities: {
         imageInput: data.imageInput,
         toolCalling: data.toolCalling,
-        scrubSettings: data.scrubSettings,
       },
     };
 
