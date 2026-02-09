@@ -72,11 +72,11 @@ export class AIProviderRegistry {
           }
           // Handle headers as Headers object or plain object
           if (finalOptions.headers instanceof Headers) {
-             if (!finalOptions.headers.has('User-Agent')) {
-                finalOptions.headers.set('User-Agent', 'VSCode-Addi-Extension');
-             }
+            if (!finalOptions.headers.has('User-Agent')) {
+              finalOptions.headers.set('User-Agent', 'VSCode-Addi-Extension');
+            }
           } else if (!finalOptions.headers['User-Agent'] && !finalOptions.headers['user-agent']) {
-             finalOptions.headers['User-Agent'] = 'VSCode-Addi-Extension';
+            finalOptions.headers['User-Agent'] = 'VSCode-Addi-Extension';
           }
 
           const response = await fetchFn(url, finalOptions);
@@ -218,10 +218,10 @@ export class AIProviderRegistry {
       create: (p) => {
         const settings: any = {};
         if (p.apiEndpoint) {
-         // Manual mode: User must provide the correct baseURL.
-         // e.g. https://api.minimaxi.com/anthropic/v1
-         // We only strip /messages because the SDK adds it.
-         settings.baseURL = p.apiEndpoint.replace(/\/messages\/?$/, '');
+          // Manual mode: User must provide the correct baseURL.
+          // e.g. https://api.minimaxi.com/anthropic/v1
+          // We only strip /messages because the SDK adds it.
+          settings.baseURL = p.apiEndpoint.replace(/\/messages\/?$/, '');
         }
         if (p.apiKey) {
           settings.apiKey = p.apiKey;

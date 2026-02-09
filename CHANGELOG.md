@@ -4,17 +4,38 @@ All notable changes to the "addi" extension will be documented in this file.
 
 ## [0.0.25] - 2026-02-09
 
+> [!WARNING]
+> **Breaking Change**: The Playground feature has been completely removed from the extension to streamline the architecture and focus on core functionalities. And we are removing deprecated `managementCommand` property in favor of `configuration` for chat model providers (not migrate yet). Please refer to the [Migration Guide](docs/migration_management_command.md) for details.
+
 ### Added
 
-- **Migration Guide**: Added [documentation](docs/migration_management_command.md) for researching about migrating from `managementCommand` to `configuration` for chat model providers to handle configuration management in a more native and secure way.
+- **Migration Guide**: Researching about migrating from `managementCommand` to `configuration` for chat model providers to handle configuration management in a more native and secure way. (not implemented yet, will evaluate after VS Code API is stable)
 - **Custom MCP Registry**: Added `addi.mcp.registryBaseRepo` setting to allow downloading Addi MCP Server from custom GitHub repositories.
+- **New AI Providers**: Added support for Zhipu AI and Minimax providers in the AI Provider Registry.
+- **Optimization Plan**: Added [documentation](docs/optimization_plan.md) outlining future architecture improvements and optimization strategies.
+
+### Removed
+
+- **Playground Feature**: Completely removed the Playground feature and all related code to streamline the extension architecture. This includes:
+  - Deleted `PlaygroundManager` and associated files
+  - Removed `openPlayground` command and related command registrations
+  - Cleaned up `UIMessage` and related types from common types
+  - Removed deprecated `chatStream` method from `LLMService`
+  - Removed unused message conversion logic from `messageConverter`
 
 ### Changed
 
 - **VS Code Compatibility**: Removed deprecated `managementCommand` property in preparation for VS Code 1.109+ changes. Minimum VS Code version bumped to `^1.109.0`.
 - **Reasoning Support**: Enhanced LLM service to forward model reasoning ("thinking") output to the chat interface.
 - **MCP Downloader**: Updated to support the new custom registry configuration.
+- **ProviderModelManager**: Updated to support new providers (Zhipu AI, Minimax).
+- **Editor Resources**: Enhanced editor HTML resources with improvements.
+- **Type System Design**: Updated [type system documentation](docs/type-system-design.md) to reflect architectural changes.
 - **Dependencies**: Updated `ai-sdk` packages, `vscode` types, `mcp-server` mods, and other dependencies to latest versions.
+
+### Fixed
+
+- **Progress Reporting**: Fixed progress reporting for reasoning output in `LLMService` to ensure proper UI feedback during model thinking.
 
 ## [0.0.24] - 2026-02-03
 

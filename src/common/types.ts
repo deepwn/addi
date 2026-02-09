@@ -112,7 +112,14 @@ export interface ModelStats {
  */
 export interface Model extends ModelConfig, ModelStats {}
 
-export type ProviderType = 'openai' | 'anthropic' | 'google' | 'deepseek' | 'zhipu-ai' | 'minimax' | 'generic';
+export type ProviderType =
+  | 'openai'
+  | 'anthropic'
+  | 'google'
+  | 'deepseek'
+  | 'zhipu-ai'
+  | 'minimax'
+  | 'generic';
 
 /**
  * Persisted configuration for a provider (Synced).

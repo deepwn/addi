@@ -1,4 +1,4 @@
-# 迁移指南: 从 managementCommand 到 configuration (VS Code Chat Model Provider)
+# 迁移指南&评估: 从 managementCommand 到 configuration (VS Code Chat Model Provider)
 
 VS Code 1.109 引入了新的 Chat Model Provider 配置机制（目前为 Proposed API），旨在替代旧的 `managementCommand` 属性。本指南详细说明如何进行迁移。
 
@@ -290,3 +290,5 @@ vscode.lm.registerLanguageModelChatProvider('addi-provider', {
 > 2026年2月9日
 
 短期内可能更适合继续使用现有的自定义管理界面，等待 API 稳定后再评估全面迁移的可行性和最佳方案。
+
+或许需要增加对 ``
