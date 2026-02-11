@@ -246,106 +246,162 @@ export class LLMService {
 
   /**
    * Process and report a response part to VS Code UI.
+   * 
+   * AI SDK已经处理了thinking/reasoning的提取工作。
+   * 我们只需要正确转换到VSCode API格式。
    */
   private processResponsePart(
     part: any,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     options: ExecutionOptions
   ): void {
-    switch (part.type) {
-      case 'text-delta':
-        progress.report(new vscode.LanguageModelTextPart(part.text));
-        break;
-
-      case 'reasoning-delta':
-        // Use LanguageModelThinkingPart for reasoning content
-        if (options.onReasoning) {
-          options.onReasoning(part.text);
-        } else {
-          progress.report(
-            new vscode.LanguageModelThinkingPart(
-              part.text
-            ) as unknown as vscode.LanguageModelResponsePart
-          );
-        }
-        break;
-
-      case 'tool-call':
+    // Handler map for different stream part types
+    const handlers: Record<string, (part: any) => void> = {
+      // 文本内容
+      'text-delta': (p) => {
+        progress.report(new vscode.LanguageModelTextPart(p.textDelta));
+      },
+      
+      // Thinking/Reasoning内容 - AI SDK已提取
+      'reasoning-delta': (p) => {
+        this.handleThinkingDelta(p, progress, options);
+      },
+      
+      // Thinking签名 - 加密内容，通常不需要直接显示
+      'reasoning-signature': (p) => {
+        this.handleThinkingSignature(p);
+      },
+      
+      // Thinking流结束标记
+      'reasoning-complete': (p) => {
+        this.handleThinkingComplete(p);
+      },
+      
+      // 工具调用
+      'tool-call': (p) => {
         progress.report(
           new vscode.LanguageModelToolCallPart(
-            part.toolCallId,
-            part.toolName,
-            part.args || part.input
+            p.toolCallId,
+            p.toolName,
+            p.args || p.input
           )
         );
-        break;
-
-      case 'tool-result':
-        const toolRes = part.result || part.output;
+      },
+      
+      // 工具结果
+      'tool-result': (p) => {
+        const toolRes = p.result || p.output;
         const res = typeof toolRes === 'string' ? toolRes : JSON.stringify(toolRes);
         progress.report(
-          new vscode.LanguageModelToolResultPart(part.toolCallId, [
+          new vscode.LanguageModelToolResultPart(p.toolCallId, [
             new vscode.LanguageModelTextPart(res),
           ])
         );
-        break;
+      },
+      
+      // 错误处理
+      'error': (p) => {
+        this.handleError(p.error);
+      },
+    };
+
+    const handler = handlers[part.type];
+    if (handler) {
+      handler(part);
+    } else {
+      // 未知类型，记录日志但不影响处理
+      logger.debug('Unknown stream part type:', part.type);
     }
   }
 
   /**
-   * Extract reasoning/thinking content from various possible locations in the response.
+   * 处理thinking delta内容
+   * AI SDK已提取reasoning内容，我们只需要正确转换
+   */
+  private handleThinkingDelta(
+    part: any,
+    progress: vscode.Progress<vscode.LanguageModelResponsePart>,
+    options: ExecutionOptions
+  ): void {
+    const reasoningDelta = part.reasoningDelta;
+    
+    if (!reasoningDelta) {
+      return;
+    }
+    
+    // 创建VSCode格式的thinking part
+    const thinkingPart = new vscode.LanguageModelThinkingPart(
+      reasoningDelta,
+      part.id,
+      part.metadata
+    );
+    
+    // 通知回调（如果有）
+    if (options.onReasoning) {
+      options.onReasoning(reasoningDelta);
+    }
+    
+    // 报告给UI
+    progress.report(thinkingPart as any);
+  }
+
+  /**
+   * 处理thinking签名
+   * 通常用于验证，不需要直接显示给用户
+   */
+  private handleThinkingSignature(part: any): void {
+    if (part.signature) {
+      logger.debug('Thinking signature received:', part.signature.substring(0, 20) + '...');
+    }
+  }
+
+  /**
+   * 处理thinking流结束
+   * 可以在这里做清理或最终处理
+   */
+  private handleThinkingComplete(_part: any): void {
+    logger.info('Reasoning stream completed');
+  }
+
+  /**
+   * Extract reasoning/thinking content from step response.
+   * 
+   * 对于非流式响应，AI SDK会在steps中包含thinking内容。
+   * 这个方法简化了提取逻辑，直接从标准字段获取。
    */
   private extractReasoningContent(step: any): string {
-    // Priority order for reasoning content fields
-    const reasoningFields = [
-      'reasoning_details', // MiniMax and some OpenAI-compatible providers
-      'reasoning', // Standard AI SDK format
-      'thinking', // Some providers
-    ];
-
-    for (const field of reasoningFields) {
-      const content = step[field];
-      if (!content) {
-        continue;
-      }
-
-      // Handle string format
-      if (typeof content === 'string') {
-        return content;
-      }
-
-      // Handle array format (common in AI SDK responses)
-      if (Array.isArray(content)) {
-        const texts = content
-          .map((item) => {
-            if (typeof item === 'string') {
-              return item;
-            }
-            if (typeof item === 'object') {
-              // Handle various possible object structures
-              return item.text || item.content || item.value || JSON.stringify(item);
-            }
-            return String(item);
-          })
-          .filter(Boolean);
-
-        if (texts.length > 0) {
-          return texts.join('\n');
-        }
-      }
-
-      // Handle object format
-      if (typeof content === 'object') {
-        // Try common object structures
-        return content.text || content.content || content.value || JSON.stringify(content);
-      }
+    // AI SDK的steps中，reasoning内容通常在以下字段：
+    const reasoning = step.reasoning || step.thinking || step.reasoning_details;
+    
+    if (!reasoning) {
+      return '';
     }
-
+    
+    // 处理字符串格式
+    if (typeof reasoning === 'string') {
+      return reasoning;
+    }
+    
+    // 处理数组格式
+    if (Array.isArray(reasoning)) {
+      return reasoning
+        .map(item => {
+          if (typeof item === 'string') {return item;}
+          if (typeof item === 'object') {
+            return item.text || item.content || item.value || '';
+          }
+          return String(item);
+        })
+        .filter(Boolean)
+        .join('\n');
+    }
+    
     return '';
   }
 
   /**
    * Process reasoning/thinking content from a step.
+   * 对于非流式响应，AI SDK已将thinking内容放在step中。
    */
   private processReasoning(
     step: any,
@@ -358,15 +414,13 @@ export class LLMService {
       return;
     }
 
-    // Report reasoning using LanguageModelThinkingPart
+    // 简化处理，直接创建thinking part
+    const thinkingPart = new vscode.LanguageModelThinkingPart(reasoning);
+    
     if (options.onReasoning) {
       options.onReasoning(reasoning);
     } else {
-      progress.report(
-        new vscode.LanguageModelThinkingPart(
-          reasoning
-        ) as unknown as vscode.LanguageModelResponsePart
-      );
+      progress.report(thinkingPart as any);
     }
   }
 

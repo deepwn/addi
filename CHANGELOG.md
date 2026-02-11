@@ -2,6 +2,28 @@
 
 All notable changes to the "addi" extension will be documented in this file.
 
+## [0.0.26] - 2026-02-10
+
+> [!NOTE]
+> This release focuses on streamlining the architecture by removing deprecated features and aligning documentation with actual implementation. The Playground feature has been fully removed, and complex unexpected behavior handling has been simplified.
+
+### Changed
+
+- **Simplified Architecture**: Removed the Playground feature and all associated code to focus on core provider/model management and VS Code Copilot integration.
+- **Middleware Simplification**: Streamlined middleware system documentation to reflect actual implementation (removed references to deprecated ScrubSettings and ToolCallCompatibilityMiddleware).
+- **Documentation Cleanup**: Updated README and design documents to accurately reflect current codebase state.
+- **Type System**: Removed Playground-specific types (PlaygroundUIMessage, StoredMessage, WebviewMessage) from documentation to match production code.
+
+### Removed
+
+- **Unexpected Behavior Handling**: Removed complex ScrubSettings-based filtering system from documentation as it is not implemented in the current architecture.
+- **ToolCallCompatibilityMiddleware**: Removed from documentation as this middleware does not exist in the current implementation.
+
+### Fixed
+
+- **Documentation Accuracy**: Corrected discrepancies between design documents and actual production code implementations.
+- **Type Definitions**: Removed references to non-existent types from type-system-design.md.
+
 ## [0.0.25] - 2026-02-09
 
 > [!WARNING]
@@ -134,7 +156,7 @@ All notable changes to the "addi" extension will be documented in this file.
 
 ### Fixed
 
-- Optimization: Build a map of toolCallId -> toolName once to avoid O(N\*M) lookups when processing tool calls.
+- **Optimization**: Build a map of toolCallId -> toolName once to avoid O(N*M) lookups when processing tool calls.
 
 ## [0.0.18] - 2026-01-09
 
