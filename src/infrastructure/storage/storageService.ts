@@ -7,6 +7,7 @@ export class StorageService implements IStorageService {
   private static readonly STORAGE_KEY = 'addi.providers';
   private static readonly STATS_STORAGE_KEY = 'addi.providers.stats';
   private secretsCache: Map<string, string> = new Map();
+  private pendingSecretFetch: Set<string> = new Set();
   private syncEnabled = false;
   private readonly _onDidUpdate = new vscode.EventEmitter<void>();
   public readonly onDidUpdate = this._onDidUpdate.event;
@@ -25,6 +26,39 @@ export class StorageService implements IStorageService {
         this._onDidUpdate.fire();
       }
     });
+
+    // Handle settings sync events by refreshing when relevant configuration changes
+    this.context.subscriptions.push(
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('addi')) {
+          this._onDidUpdate.fire();
+        }
+      })
+    );
+  }
+
+  /**
+   * Fetches a secret in the background and updates the cache.
+   * Useful when new providers arrive via sync.
+   */
+  private async fetchSecretAsync(providerId: string) {
+    if (this.pendingSecretFetch.has(providerId)) {
+      return;
+    }
+
+    this.pendingSecretFetch.add(providerId);
+    try {
+      const secret = await this.context.secrets.get(`addi.provider.apikey.${providerId}`);
+      if (secret) {
+        this.secretsCache.set(providerId, secret);
+        // Fire update event to let the UI refresh with the newly loaded secret
+        this._onDidUpdate.fire();
+      }
+    } catch (error) {
+      logger.error(`Failed to fetch sync secret for ${providerId}`, error);
+    } finally {
+      this.pendingSecretFetch.delete(providerId);
+    }
   }
 
   /**
@@ -172,6 +206,9 @@ export class StorageService implements IStorageService {
         if (secret !== undefined) {
           provider.apiKey = secret;
         }
+      } else {
+        // Background fetch for newly arrived providers via sync
+        void this.fetchSecretAsync(config.id);
       }
 
       // 2. Attach Model Stats
@@ -281,6 +318,13 @@ export class StorageService implements IStorageService {
 
     // --- 4. Save Config (Synced) ---
     await this.context.globalState.update(StorageService.STORAGE_KEY, configToSave);
+
+    // Pulse a configuration key to force sync notifications on other devices
+    if (this.isSettingsSyncEnabled()) {
+      void vscode.workspace
+        .getConfiguration('addi')
+        .update('syncSignal', Date.now(), vscode.ConfigurationTarget.Global);
+    }
 
     this._onDidUpdate.fire();
   }

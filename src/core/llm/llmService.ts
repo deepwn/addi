@@ -246,7 +246,7 @@ export class LLMService {
 
   /**
    * Process and report a response part to VS Code UI.
-   * 
+   *
    * AI SDK已经处理了thinking/reasoning的提取工作。
    * 我们只需要正确转换到VSCode API格式。
    */
@@ -261,33 +261,29 @@ export class LLMService {
       'text-delta': (p) => {
         progress.report(new vscode.LanguageModelTextPart(p.textDelta));
       },
-      
+
       // Thinking/Reasoning内容 - AI SDK已提取
       'reasoning-delta': (p) => {
         this.handleThinkingDelta(p, progress, options);
       },
-      
+
       // Thinking签名 - 加密内容，通常不需要直接显示
       'reasoning-signature': (p) => {
         this.handleThinkingSignature(p);
       },
-      
+
       // Thinking流结束标记
       'reasoning-complete': (p) => {
         this.handleThinkingComplete(p);
       },
-      
+
       // 工具调用
       'tool-call': (p) => {
         progress.report(
-          new vscode.LanguageModelToolCallPart(
-            p.toolCallId,
-            p.toolName,
-            p.args || p.input
-          )
+          new vscode.LanguageModelToolCallPart(p.toolCallId, p.toolName, p.args || p.input)
         );
       },
-      
+
       // 工具结果
       'tool-result': (p) => {
         const toolRes = p.result || p.output;
@@ -298,9 +294,9 @@ export class LLMService {
           ])
         );
       },
-      
+
       // 错误处理
-      'error': (p) => {
+      error: (p) => {
         this.handleError(p.error);
       },
     };
@@ -324,23 +320,23 @@ export class LLMService {
     options: ExecutionOptions
   ): void {
     const reasoningDelta = part.reasoningDelta;
-    
+
     if (!reasoningDelta) {
       return;
     }
-    
+
     // 创建VSCode格式的thinking part
     const thinkingPart = new vscode.LanguageModelThinkingPart(
       reasoningDelta,
       part.id,
       part.metadata
     );
-    
+
     // 通知回调（如果有）
     if (options.onReasoning) {
       options.onReasoning(reasoningDelta);
     }
-    
+
     // 报告给UI
     progress.report(thinkingPart as any);
   }
@@ -365,28 +361,30 @@ export class LLMService {
 
   /**
    * Extract reasoning/thinking content from step response.
-   * 
+   *
    * 对于非流式响应，AI SDK会在steps中包含thinking内容。
    * 这个方法简化了提取逻辑，直接从标准字段获取。
    */
   private extractReasoningContent(step: any): string {
     // AI SDK的steps中，reasoning内容通常在以下字段：
     const reasoning = step.reasoning || step.thinking || step.reasoning_details;
-    
+
     if (!reasoning) {
       return '';
     }
-    
+
     // 处理字符串格式
     if (typeof reasoning === 'string') {
       return reasoning;
     }
-    
+
     // 处理数组格式
     if (Array.isArray(reasoning)) {
       return reasoning
-        .map(item => {
-          if (typeof item === 'string') {return item;}
+        .map((item) => {
+          if (typeof item === 'string') {
+            return item;
+          }
           if (typeof item === 'object') {
             return item.text || item.content || item.value || '';
           }
@@ -395,7 +393,7 @@ export class LLMService {
         .filter(Boolean)
         .join('\n');
     }
-    
+
     return '';
   }
 
@@ -416,7 +414,7 @@ export class LLMService {
 
     // 简化处理，直接创建thinking part
     const thinkingPart = new vscode.LanguageModelThinkingPart(reasoning);
-    
+
     if (options.onReasoning) {
       options.onReasoning(reasoning);
     } else {

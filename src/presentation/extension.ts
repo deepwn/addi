@@ -32,6 +32,15 @@ export function activate(context: vscode.ExtensionContext) {
   const mcpService = McpServerService.getInstance(context);
   const toolManager = new CustomToolManager();
 
+  const applySettingsSyncPreference = () => {
+    const config = vscode.workspace.getConfiguration('addi');
+    const enableSync = config.get<boolean>('saveConfigToSettingsSync', true);
+    storageService.setSettingsSync(Boolean(enableSync));
+    logger.debug('Updated settings sync preference', { enableSync });
+  };
+
+  applySettingsSyncPreference();
+
   context.subscriptions.push(new vscode.Disposable(() => mcpService.dispose()));
   mcpService
     .initialize()
@@ -49,24 +58,10 @@ export function activate(context: vscode.ExtensionContext) {
   const mcpIntegration = new McpExtensionIntegration(context, mcpService, toolManager);
   mcpIntegration.register();
 
-  const applySettingsSyncPreference = () => {
-    const config = vscode.workspace.getConfiguration('addi');
-    const enableSync = config.get<boolean>('saveConfigToSettingsSync', true);
-    manager.setSettingsSync(Boolean(enableSync));
-    logger.debug('Updated settings sync preference', { enableSync });
-  };
-
-  applySettingsSyncPreference();
-
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('addi.saveConfigToSettingsSync')) {
+      if (event.affectsConfiguration('addi')) {
         applySettingsSyncPreference();
-      }
-      if (
-        event.affectsConfiguration('addi.sortRule') ||
-        event.affectsConfiguration('addi.sortTarget')
-      ) {
         treeDataProvider.refresh();
       }
     })

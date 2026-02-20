@@ -156,7 +156,7 @@ All notable changes to the "addi" extension will be documented in this file.
 
 ### Fixed
 
-- **Optimization**: Build a map of toolCallId -> toolName once to avoid O(N*M) lookups when processing tool calls.
+- **Optimization**: Build a map of toolCallId -> toolName once to avoid O(N\*M) lookups when processing tool calls.
 
 ## [0.0.18] - 2026-01-09
 
