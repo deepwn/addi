@@ -103,6 +103,7 @@ export function activate(context: vscode.ExtensionContext) {
   const treeView = vscode.window.createTreeView('addiProviders', {
     treeDataProvider,
     showCollapseAll: true,
+    canSelectMany: true,
   });
   context.subscriptions.push(treeView);
 
@@ -176,6 +177,17 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('addi.deleteModel', (item: ModelTreeItem) =>
       commandHandler.deleteModel(item)
+    )
+  );
+  // Batch operations for multiple selection
+  context.subscriptions.push(
+    vscode.commands.registerCommand('addi.deleteModels', (items: ModelTreeItem[]) =>
+      commandHandler.deleteModels(items)
+    )
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('addi.batchEditModels', (items: ModelTreeItem[]) =>
+      commandHandler.batchEditModels(items)
     )
   );
   context.subscriptions.push(

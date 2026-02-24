@@ -381,6 +381,11 @@ export class EditorViewManager {
       (modelData as any).speedHistory = [this._detectedSpeed];
     }
 
+    // Default toolCalling to true for new models
+    if (modelData.capabilities && modelData.capabilities.toolCalling === undefined) {
+      modelData.capabilities.toolCalling = true;
+    }
+
     if (this._viewState.mode === 'create') {
       // For new models, don't set speedHistory (no history yet)
       if (this._detectedSpeed) {

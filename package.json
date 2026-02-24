@@ -204,6 +204,14 @@
         {
           "command": "addi.copyModel",
           "when": "false"
+        },
+        {
+          "command": "addi.deleteModels",
+          "when": "false"
+        },
+        {
+          "command": "addi.batchEditModels",
+          "when": "false"
         }
       ],
       "view/item/context": [
@@ -251,6 +259,16 @@
           "command": "addi.deleteModel",
           "when": "view == addiProviders && viewItem == model",
           "group": "modify@99"
+        },
+        {
+          "command": "addi.deleteModels",
+          "when": "view == addiProviders && viewItem == model",
+          "group": "modify@98"
+        },
+        {
+          "command": "addi.batchEditModels",
+          "when": "view == addiProviders && viewItem == model",
+          "group": "modify@97"
         },
         {
           "command": "addi.editTool",

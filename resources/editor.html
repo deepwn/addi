@@ -448,11 +448,12 @@
           mOutput.value = formatToken(data.maxOutputTokens);
 
           mVision.checked = !!(data.capabilities && data.capabilities.imageInput);
-          mTools.checked = !!(
-            data.capabilities &&
-            (data.capabilities.toolCalling === true ||
-              typeof data.capabilities.toolCalling === 'number')
+          // Default toolCalling to true for new models, otherwise use existing value
+          const hasToolCalling = data.capabilities && (
+            data.capabilities.toolCalling === true ||
+            typeof data.capabilities.toolCalling === 'number'
           );
+          mTools.checked = isCreate ? true : !!hasToolCalling;
 
           mReqAdd.value = data.requestAdditional || '';
 
