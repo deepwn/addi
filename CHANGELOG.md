@@ -2,6 +2,25 @@
 
 All notable changes to the "addi" extension will be documented in this file.
 
+## [0.0.27] - 2026-02-24
+
+### Added
+
+- **Batch Operations**: Added batch operations support for model management including batch editing and deletion of multiple models.
+- **Streaming Stats**: Added internal flag for streaming stats reporting and enhanced token counting in executeStreaming.
+- **Default Tool Calling**: New models now have default toolCalling enabled for improved functionality.
+
+### Changed
+
+- **API Key Management**: Renamed `editApiKey` command to `setApiKey` and updated related functionality.
+- **Provider Commands**: Updated provider commands and enhanced API key handling in UI.
+- **Token Limits**: Updated token limits and adjusted formatting in configuration default values.
+- **Icon**: Removed custom icon from package.json and icon file.
+
+### Fixed
+
+- **EditView Bug**: Fixed bug when batch editing and deletion of multi models.
+
 ## [0.0.26] - 2026-02-10
 
 > [!NOTE]
