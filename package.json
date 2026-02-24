@@ -53,36 +53,7 @@
         "label": "Addi MCP Server"
       }
     ],
-    "icons": {
-      "config-export-icon": {
-        "description": "Config Export Icon",
-        "default": {
-          "fontPath": "resources/bootstrap-icons.woff",
-          "fontCharacter": "\\F29B"
-        }
-      },
-      "config-import-icon": {
-        "description": "Config Import Icon",
-        "default": {
-          "fontPath": "resources/bootstrap-icons.woff",
-          "fontCharacter": "\\F358"
-        }
-      },
-      "magic-icon": {
-        "description": "Magic Icon",
-        "default": {
-          "fontPath": "resources/bootstrap-icons.woff",
-          "fontCharacter": "\\F675"
-        }
-      },
-      "radar-icon": {
-        "description": "Radar Icon",
-        "default": {
-          "fontPath": "resources/bootstrap-icons.woff",
-          "fontCharacter": "\\F8CF"
-        }
-      }
-    },
+    "icons": {},
     "viewsContainers": {
       "activitybar": [
         {
@@ -190,7 +161,7 @@
           "when": "false"
         },
         {
-          "command": "addi.editApiKey",
+          "command": "addi.setApiKey",
           "when": "false"
         },
         {
@@ -218,9 +189,9 @@
           "group": "inline@1"
         },
         {
-          "command": "addi.editApiKey",
-          "when": "view == addiProviders && viewItem == provider",
-          "group": "inline@2"
+          "command": "addi.setApiKey",
+          "when": "view == addiProviders && viewItem == provider-no-key",
+          "group": "inline@0"
         },
         {
           "command": "addi.editProvider",
@@ -467,8 +438,8 @@
         "category": "Addi"
       },
       {
-        "command": "addi.editApiKey",
-        "title": "Edit API Key",
+        "command": "addi.setApiKey",
+        "title": "Set Api Key",
         "shortTitle": "Key",
         "icon": "$(key)",
         "category": "Addi"
@@ -477,21 +448,21 @@
         "command": "addi.pullProviderModels",
         "title": "Pull Models List",
         "shortTitle": "Pull Models",
-        "icon": "$(radar-icon)",
+        "icon": "$(radio-tower)",
         "category": "Addi"
       },
       {
         "command": "addi.exportConfig",
         "title": "Export Configuration",
         "shortTitle": "Export",
-        "icon": "$(config-export-icon)",
+        "icon": "$(clone)",
         "category": "Addi"
       },
       {
         "command": "addi.importConfig",
         "title": "Import Configuration",
         "shortTitle": "Import",
-        "icon": "$(config-import-icon)",
+        "icon": "$(cloud-upload)",
         "category": "Addi"
       },
       {
@@ -532,12 +503,6 @@
         "command": "addi.cancelDetails",
         "title": "Cancel",
         "icon": "$(close)",
-        "category": "Addi"
-      },
-      {
-        "command": "addi.verifyDetails",
-        "title": "Auto-Detect Parameters",
-        "icon": "$(magic-icon)",
         "category": "Addi"
       }
     ],

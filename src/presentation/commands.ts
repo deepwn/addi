@@ -106,12 +106,12 @@ export class CommandHandler {
     }
   }
 
-  async editApiKey(item: ProviderTreeItem): Promise<void> {
-    logger.debug('Executing editApiKey', item.provider.id, 'Commands');
+  async setApiKey(item: ProviderTreeItem): Promise<void> {
+    logger.debug('Executing setApiKey', item.provider.id, 'Commands');
     const currentApiKey = item.provider.apiKey || '';
 
     const newApiKey = await UserFeedback.showInputBox({
-      prompt: `Edit API key for "${item.provider.name}"`,
+      prompt: `Set Api Key for "${item.provider.name}"`,
       value: '',
       password: true,
       placeHolder: currentApiKey
@@ -120,7 +120,7 @@ export class CommandHandler {
     });
 
     if (newApiKey === undefined || newApiKey === '') {
-      logger.debug('editApiKey canceled or empty', logger.sanitizeProvider(item.provider));
+      logger.debug('setApiKey canceled or empty', logger.sanitizeProvider(item.provider));
       return;
     }
 
@@ -132,13 +132,13 @@ export class CommandHandler {
         logger.info('Provider API key updated', logger.sanitizeProvider(item.provider));
       } else {
         UserFeedback.showError('Failed to update API key');
-        logger.warn('editApiKey manager returned false', logger.sanitizeProvider(item.provider));
+        logger.warn('setApiKey manager returned false', logger.sanitizeProvider(item.provider));
       }
     } catch (error) {
       UserFeedback.showError(
         `Failed to update API key: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
-      logger.error('editApiKey failed', {
+      logger.error('setApiKey failed', {
         error: error instanceof Error ? error.message : String(error),
       });
     }

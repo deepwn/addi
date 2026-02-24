@@ -7,11 +7,10 @@ export class ProviderTreeItem extends vscode.TreeItem {
   constructor(public provider: Provider) {
     super(provider.name, vscode.TreeItemCollapsibleState.Collapsed);
     this.id = provider.id;
-    this.contextValue = 'provider';
-
-    // Show warning icon if API key is missing
+    
+    // Set contextValue based on whether API key exists
     const hasApiKey = provider.apiKey && provider.apiKey.trim() !== '';
-    this.iconPath = new vscode.ThemeIcon(hasApiKey ? 'key' : 'warning');
+    this.contextValue = hasApiKey ? 'provider' : 'provider-no-key';
 
     if (provider.description) {
       this.description = provider.description;

@@ -158,17 +158,17 @@ Model 是具体的 AI 模型实例，每个 Model 绑定到特定的 Provider：
 | `addi.editProvider`       | 编辑供应商          |
 | `addi.deleteProvider`     | 删除供应商          |
 | `addi.copyProvider`       | 复制供应商          |
-| `addi.editApiKey`         | 编辑 API Key        |
+| `addi.setApiKey`          | 设置 API Key        |
 | `addi.pullProviderModels` | 从 API 拉取模型列表 |
 
 **模型命令：**
 
 | 命令                | 说明     |
-| ------------------ | -------- |
-| `addi.addModel`    | 添加模型 |
+| ------------------- | -------- |
+| `addi.addModel`     | 添加模型 |
 | `addi.editModels`   | 编辑模型 |
 | `addi.deleteModels` | 删除模型 |
-| `addi.copyModel`   | 复制模型 |
+| `addi.copyModel`    | 复制模型 |
 
 **工具命令：**
 
@@ -189,11 +189,10 @@ Model 是具体的 AI 模型实例，每个 Model 绑定到特定的 Provider：
 
 **详情编辑命令：**
 
-| 命令                 | 说明             |
-| -------------------- | ---------------- |
-| `addi.verifyDetails` | 自动检测模型参数 |
-| `addi.saveDetails`   | 保存详情         |
-| `addi.cancelDetails` | 取消编辑         |
+| 命令                 | 说明     |
+| -------------------- | -------- |
+| `addi.saveDetails`   | 保存详情 |
+| `addi.cancelDetails` | 取消编辑 |
 
 **调试命令：**
 

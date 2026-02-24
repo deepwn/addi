@@ -160,8 +160,8 @@ export function activate(context: vscode.ExtensionContext) {
     )
   );
   context.subscriptions.push(
-    vscode.commands.registerCommand('addi.editApiKey', (item: ProviderTreeItem) =>
-      commandHandler.editApiKey(item)
+    vscode.commands.registerCommand('addi.setApiKey', (item: ProviderTreeItem) =>
+      commandHandler.setApiKey(item)
     )
   );
   // Unified commands - handle both single and multi-select internally
