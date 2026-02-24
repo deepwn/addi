@@ -106,9 +106,9 @@ export interface Model extends ModelConfig, ModelStats {}
  * This simplifies provider selection to 4 main types.
  */
 export type ProviderType =
-  | 'openai-completions'   // OpenAI (/completions) - Most common, used by OpenAI, DeepSeek, local models, etc.
-  | 'openai-responses'     // OpenAI (/responses) - Newer API with built-in tool support
-  | 'anthropic-messages'   // Anthropic (/messages)
+  | 'openai-completions' // OpenAI (/completions) - Most common, used by OpenAI, DeepSeek, local models, etc.
+  | 'openai-responses' // OpenAI (/responses) - Newer API with built-in tool support
+  | 'anthropic-messages' // Anthropic (/messages)
   | 'google-generateContent'; // Google (/name:generateContent)
 
 /**

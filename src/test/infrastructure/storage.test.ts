@@ -77,7 +77,7 @@ suite('StorageService Test Suite', () => {
     const provider: Provider = {
       id: 'p1',
       name: 'Test',
-      providerType: 'openai',
+      providerType: 'openai-completions',
       apiKey: 'secret-key-123',
       models: [
         {
@@ -146,7 +146,7 @@ suite('StorageService Test Suite', () => {
       {
         id: 'p1',
         name: 'Init',
-        providerType: 'generic',
+        providerType: 'openai-completions',
         apiKey: 'initial-key',
         models: [],
       },
@@ -158,7 +158,7 @@ suite('StorageService Test Suite', () => {
       {
         id: 'p1',
         name: 'Updated',
-        providerType: 'generic',
+        providerType: 'openai-completions',
         models: [],
       },
     ]);
@@ -173,7 +173,7 @@ suite('StorageService Test Suite', () => {
       {
         id: 'p1',
         name: 'Init',
-        providerType: 'generic',
+        providerType: 'openai-completions',
         apiKey: 'initial-key',
         models: [],
       },
@@ -184,7 +184,7 @@ suite('StorageService Test Suite', () => {
       {
         id: 'p1',
         name: 'Updated',
-        providerType: 'generic',
+        providerType: 'openai-completions',
         apiKey: 'new-key',
         models: [],
       },

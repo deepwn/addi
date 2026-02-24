@@ -159,10 +159,7 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       return;
     }
 
-    if (
-      (!provider.apiEndpoint || provider.apiEndpoint.trim() === '') &&
-      provider.providerType === 'generic'
-    ) {
+    if (!provider.apiEndpoint || provider.apiEndpoint.trim() === '') {
       logger.warn('Provider missing API endpoint', logger.sanitizeProvider(provider));
       progress.report(new vscode.LanguageModelTextPart('unconfigured API endpoint.'));
       return;

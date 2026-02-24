@@ -7,7 +7,7 @@ export class ProviderTreeItem extends vscode.TreeItem {
   constructor(public provider: Provider) {
     super(provider.name, vscode.TreeItemCollapsibleState.Collapsed);
     this.id = provider.id;
-    
+
     // Set contextValue based on whether API key exists
     const hasApiKey = provider.apiKey && provider.apiKey.trim() !== '';
     this.contextValue = hasApiKey ? 'provider' : 'provider-no-key';

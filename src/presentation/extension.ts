@@ -188,21 +188,24 @@ export function activate(context: vscode.ExtensionContext) {
     )
   );
   context.subscriptions.push(
-    vscode.commands.registerCommand('addi.deleteModels', (item: ModelTreeItem | ModelTreeItem[]) => {
-      let items: ModelTreeItem[] = [];
-      if (Array.isArray(item)) {
-        items = item as ModelTreeItem[];
-      } else if (item) {
-        items = [item as ModelTreeItem];
-      }
-      if (items.length <= 1) {
-        const sel = treeView.selection as ModelTreeItem[];
-        if (sel && sel.length > 1) {
-          items = sel;
+    vscode.commands.registerCommand(
+      'addi.deleteModels',
+      (item: ModelTreeItem | ModelTreeItem[]) => {
+        let items: ModelTreeItem[] = [];
+        if (Array.isArray(item)) {
+          items = item as ModelTreeItem[];
+        } else if (item) {
+          items = [item as ModelTreeItem];
         }
+        if (items.length <= 1) {
+          const sel = treeView.selection as ModelTreeItem[];
+          if (sel && sel.length > 1) {
+            items = sel;
+          }
+        }
+        commandHandler.deleteModels(items);
       }
-      commandHandler.deleteModels(items);
-    })
+    )
   );
   context.subscriptions.push(
     vscode.commands.registerCommand('addi.exportConfig', () => commandHandler.exportConfig())

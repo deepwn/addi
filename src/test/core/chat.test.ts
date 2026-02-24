@@ -7,7 +7,7 @@ let LLMService: any;
 const provider: any = {
   id: 'test-provider',
   name: 'test',
-  providerType: 'generic',
+  providerType: 'openai-completions',
   models: [],
 };
 

@@ -19,7 +19,7 @@ suite('Extension Integration Test Suite', () => {
       // 创建供应商和模型
       const provider = await manager.addProvider({
         name: 'Test Provider',
-        providerType: 'generic',
+        providerType: 'openai-completions',
         description: 'Test Description',
         website: 'https://example.com',
         apiEndpoint: 'https://api.example.com',

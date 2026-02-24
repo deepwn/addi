@@ -127,7 +127,7 @@ export class AIProviderRegistry {
       label: 'OpenAI (/responses)',
       create: (p) => {
         const settings: any = {};
-        
+
         if (p.apiEndpoint) {
           settings.baseURL = p.apiEndpoint.replace(/\/responses\/?$/, '');
         }
@@ -135,7 +135,7 @@ export class AIProviderRegistry {
           settings.apiKey = p.apiKey;
         }
         settings.fetch = createDebugFetch();
-        
+
         return createOpenAI(settings);
       },
     });

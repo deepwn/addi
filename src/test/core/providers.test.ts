@@ -43,7 +43,7 @@ suite('ProviderModelManager Test Suite', () => {
   test('should add provider', async () => {
     const provider = await manager.addProvider({
       name: 'Test Provider',
-      providerType: 'generic',
+      providerType: 'openai-completions',
       description: 'Test Description',
       website: 'https://example.com',
       apiEndpoint: 'https://api.example.com',
@@ -64,7 +64,7 @@ suite('ProviderModelManager Test Suite', () => {
   test('should update provider', async () => {
     const provider = await manager.addProvider({
       name: 'Test Provider',
-      providerType: 'generic',
+      providerType: 'openai-completions',
       description: 'Test Description',
       website: 'https://example.com',
       apiEndpoint: 'https://api.example.com',
@@ -85,7 +85,7 @@ suite('ProviderModelManager Test Suite', () => {
   test('should delete provider', async () => {
     const provider = await manager.addProvider({
       name: 'Test Provider',
-      providerType: 'generic',
+      providerType: 'openai-completions',
       description: 'Test Description',
       website: 'https://example.com',
       apiEndpoint: 'https://api.example.com',
@@ -101,7 +101,7 @@ suite('ProviderModelManager Test Suite', () => {
   test('should add model to provider', async () => {
     const provider = await manager.addProvider({
       name: 'Test Provider',
-      providerType: 'generic',
+      providerType: 'openai-completions',
       description: 'Test Description',
       website: 'https://example.com',
       apiEndpoint: 'https://api.example.com',
@@ -133,7 +133,7 @@ suite('ProviderModelManager Test Suite', () => {
   test('should update model', async () => {
     const provider = await manager.addProvider({
       name: 'Test Provider',
-      providerType: 'generic',
+      providerType: 'openai-completions',
       description: 'Test Description',
       website: 'https://example.com',
       apiEndpoint: 'https://api.example.com',
@@ -167,7 +167,7 @@ suite('ProviderModelManager Test Suite', () => {
   test('should delete model', async () => {
     const provider = await manager.addProvider({
       name: 'Test Provider',
-      providerType: 'generic',
+      providerType: 'openai-completions',
       description: 'Test Description',
       website: 'https://example.com',
       apiEndpoint: 'https://api.example.com',
@@ -199,7 +199,7 @@ suite('ProviderModelManager Test Suite', () => {
   test('should find model', async () => {
     const provider = await manager.addProvider({
       name: 'Test Provider',
-      providerType: 'generic',
+      providerType: 'openai-completions',
       description: 'Test Description',
       website: 'https://example.com',
       apiEndpoint: 'https://api.example.com',
@@ -234,7 +234,7 @@ suite('ProviderModelManager Test Suite', () => {
     const legacyProvider = {
       id: 'legacy-p',
       name: 'Legacy Provider',
-      providerType: 'generic',
+      providerType: 'openai-completions',
       models: [
         {
           sid: 'm1',
@@ -273,17 +273,17 @@ suite('ProviderModelManager Test Suite', () => {
     await assert.rejects(async () => {
       await manager.addProvider({
         name: '',
-        providerType: 'generic',
+        providerType: 'openai-completions',
         apiEndpoint: 'https://example.com',
       });
     }, /Provider name is required/);
   });
 
-  test('should validate generic provider endpoint', async () => {
+  test('should validate openai-completions provider endpoint', async () => {
     await assert.rejects(async () => {
       await manager.addProvider({
         name: 'Test',
-        providerType: 'generic',
+        providerType: 'openai-completions',
         apiEndpoint: '',
       });
     }, /API Endpoint is required/);
@@ -292,7 +292,7 @@ suite('ProviderModelManager Test Suite', () => {
   test('should validate model name', async () => {
     const provider = await manager.addProvider({
       name: 'Test Provider',
-      providerType: 'generic',
+      providerType: 'openai-completions',
       apiEndpoint: 'https://example.com',
     });
 
@@ -312,7 +312,7 @@ suite('ProviderModelManager Test Suite', () => {
   test('should validate model id', async () => {
     const provider = await manager.addProvider({
       name: 'Test Provider',
-      providerType: 'generic',
+      providerType: 'openai-completions',
       apiEndpoint: 'https://example.com',
     });
 
@@ -332,7 +332,7 @@ suite('ProviderModelManager Test Suite', () => {
   test('should handle legacy capability fields normalization', async () => {
     const provider = await manager.addProvider({
       name: 'Test Provider',
-      providerType: 'generic',
+      providerType: 'openai-completions',
       apiEndpoint: 'https://example.com',
     });
     const model = await manager.addModel(provider.id, {
