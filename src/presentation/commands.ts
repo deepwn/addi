@@ -245,8 +245,7 @@ export class CommandHandler {
               const normalizedRemoteInput = normalizeRemoteToken(remote.maxInputTokens);
               if (
                 normalizedRemoteInput !== undefined &&
-                normalizedRemoteInput !== existing.maxInputTokens &&
-                existing.maxInputTokens === defaultMaxInputTokens
+                normalizedRemoteInput !== existing.maxInputTokens
               ) {
                 existing.maxInputTokens = normalizedRemoteInput;
                 changed = true;
@@ -255,38 +254,15 @@ export class CommandHandler {
               const normalizedRemoteOutput = normalizeRemoteToken(remote.maxOutputTokens);
               if (
                 normalizedRemoteOutput !== undefined &&
-                normalizedRemoteOutput !== existing.maxOutputTokens &&
-                existing.maxOutputTokens === defaultMaxOutputTokens
+                normalizedRemoteOutput !== existing.maxOutputTokens
               ) {
                 existing.maxOutputTokens = normalizedRemoteOutput;
                 changed = true;
               }
 
               if (remote.capabilities) {
-                const currentCaps = existing.capabilities ?? {};
-                const nextCaps: Model['capabilities'] = { ...currentCaps };
-                let capsChanged = false;
-
-                if (
-                  remote.capabilities.imageInput !== undefined &&
-                  currentCaps.imageInput !== remote.capabilities.imageInput
-                ) {
-                  nextCaps.imageInput = remote.capabilities.imageInput;
-                  capsChanged = true;
-                }
-
-                if (
-                  remote.capabilities.toolCalling !== undefined &&
-                  currentCaps.toolCalling !== remote.capabilities.toolCalling
-                ) {
-                  nextCaps.toolCalling = remote.capabilities.toolCalling;
-                  capsChanged = true;
-                }
-
-                if (capsChanged) {
-                  existing.capabilities = nextCaps;
-                  changed = true;
-                }
+                existing.capabilities = { ...remote.capabilities };
+                changed = true;
               }
 
               if (changed) {

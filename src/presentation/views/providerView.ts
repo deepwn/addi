@@ -9,11 +9,18 @@ export class ProviderTreeItem extends vscode.TreeItem {
     this.id = provider.id;
     this.contextValue = 'provider';
 
+    // Show warning icon if API key is missing
+    const hasApiKey = provider.apiKey && provider.apiKey.trim() !== '';
+    this.iconPath = new vscode.ThemeIcon(hasApiKey ? 'key' : 'warning');
+
     if (provider.description) {
       this.description = provider.description;
     }
 
     let tooltip = `${provider.name} (${provider.models.length} models)`;
+    if (!hasApiKey) {
+      tooltip += `\nAPI key not configured yet. Please set it up to use this provider.`;
+    }
     if (provider.description) {
       tooltip += `\nDescription: ${provider.description}`;
     }

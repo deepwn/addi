@@ -74,9 +74,13 @@ export class AddiChatProvider implements vscode.LanguageModelChatProvider {
       silent: options.silent,
       providerCount: providers.length,
     });
-    const filterProviders = options.silent
-      ? providers.filter((p) => p.apiKey && p.apiKey.trim() !== '')
-      : providers;
+    // Always expose available providers to the caller. Previously we filtered out
+    // providers when `options.silent` was true if they lacked an `apiKey`. That
+    // caused transient misses when secrets were still loading from SecretStorage
+    // (the StorageService fetches secrets asynchronously). Returning providers
+    // unconditionally ensures the host UI (e.g. Copilot) can list and select
+    // models; requests will still fail later if the provider is unconfigured.
+    const filterProviders = providers;
     logger.debug('Filtered providers for chat information', {
       original: providers.length,
       filtered: filterProviders.length,

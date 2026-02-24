@@ -208,12 +208,12 @@
       ],
       "view/item/context": [
         {
-          "command": "addi.pullProviderModels",
+          "command": "addi.addModel",
           "when": "view == addiProviders && viewItem == provider",
           "group": "inline@0"
         },
         {
-          "command": "addi.addModel",
+          "command": "addi.pullProviderModels",
           "when": "view == addiProviders && viewItem == provider",
           "group": "inline@1"
         },
@@ -310,8 +310,7 @@
         "addi.syncSignal": {
           "type": "number",
           "default": 0,
-          "description": "Internal signal used to trigger sync across devices",
-          "scope": "application"
+          "description": "(DO_NOT_CHANGE) Internal signal used to trigger sync across devices"
         },
         "addi.sortRule": {
           "type": "string",
