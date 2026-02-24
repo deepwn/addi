@@ -279,13 +279,13 @@
       "properties": {
         "addi.defaultMaxInputTokens": {
           "type": "number",
-          "default": 4096,
-          "description": "Max input tokens"
+          "default": 60000,
+          "description": "Max input tokens (60k)"
         },
         "addi.defaultMaxOutputTokens": {
           "type": "number",
-          "default": 1024,
-          "description": "Max output tokens"
+          "default": 128000,
+          "description": "Max output tokens (128k)"
         },
         "addi.defaultModelFamily": {
           "type": "string",
@@ -567,11 +567,11 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "^25.3.0",
     "@types/vscode": "^1.109.0",
-    "@typescript-eslint/eslint-plugin": "^8.56.0",
-    "@typescript-eslint/parser": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
-    "eslint": "^9.39.2",
+    "eslint": "^9.39.3",
     "lint-staged": "^15.5.2",
     "prettier": "^3.8.1",
     "rimraf": "^6.1.3",
@@ -582,9 +582,9 @@
     "@ai-sdk/anthropic": "^3.0.46",
     "@ai-sdk/deepseek": "^2.0.20",
     "@ai-sdk/google": "^3.0.30",
-    "@ai-sdk/openai": "^3.0.30",
+    "@ai-sdk/openai": "^3.0.31",
     "@ai-sdk/openai-compatible": "^2.0.30",
-    "ai": "^6.0.94",
+    "ai": "^6.0.97",
     "js-yaml": "^4.1.1",
     "vercel-minimax-ai-provider": "^0.0.2",
     "zhipu-ai-provider": "^0.2.2",

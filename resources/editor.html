@@ -303,13 +303,13 @@
           { role: 'user', content: 'Hello' },
         ],
         stream: true,
-        max_tokens: 1024,
+        max_tokens: 128000,
       };
 
       // Token formatter logic
       function formatToken(val) {
         if (!val) return '';
-        if (val >= 1024) return val / 1024 + 'k';
+        if (val >= 1000) return val / 1000 + 'k';
         return val.toString();
       }
 

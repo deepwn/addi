@@ -22,11 +22,11 @@ export class ConfigManager {
   }
 
   static getDefaultMaxInputTokens(): number {
-    return this.getConfiguration().get<number>('defaultMaxInputTokens', 4096);
+    return this.getConfiguration().get<number>('defaultMaxInputTokens', 60000);
   }
 
   static getDefaultMaxOutputTokens(): number {
-    return this.getConfiguration().get<number>('defaultMaxOutputTokens', 1024);
+    return this.getConfiguration().get<number>('defaultMaxOutputTokens', 128000);
   }
 
   static getDefaultModelFamily(): string {
@@ -43,9 +43,9 @@ export class ConfigManager {
 }
 
 export class TokenFormatter {
-  private static readonly LIMIT = 1024 * 1024 * 4;
+  private static readonly LIMIT = 1000 * 1000 * 4;
   private static readonly MULTIPLIERS: Record<string, number> = {
-    k: 1024,
+    k: 1000,
   };
 
   static parse(input: string | number | undefined | null): number | undefined {
@@ -98,8 +98,8 @@ export class TokenFormatter {
             .replace(/\.([0-9]*[1-9])0+$/, '.$1');
     };
 
-    if (value >= 1024) {
-      return `${formatNum(value / 1024)}k`;
+    if (value >= 1000) {
+      return `${formatNum(value / 1000)}k`;
     }
     return Math.floor(value).toString();
   }

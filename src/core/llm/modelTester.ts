@@ -290,8 +290,8 @@ export class ModelTester {
     onProgress?.('Probing max_tokens limit via binary search...');
 
     // Coarse search (Reverse)
-    // 128k, 64k, 32k, 16k, 8k, 4k
-    const coarsePoints = [131072, 65536, 32768, 16384, 8192, 4096];
+    // 512k, 256k, 128k, 64k, 32k, 16k, 8k, 4k
+    const coarsePoints = [512000, 256000, 128000, 64000, 32000, 16000, 8000, 4000];
     let high = 0;
     let low = 0;
 
@@ -304,8 +304,8 @@ export class ModelTester {
       if (success) {
         high = point;
         if (point === coarsePoints[0]) {
-          // If the highest point (128k) succeeds, it's possible the API ignores max_tokens.
-          // In this case, returning 128k is safer than 512k.
+          // If the highest point (128000) succeeds, it's possible the API ignores max_tokens.
+          // In this case, returning 128000 is safer than 512000.
           return point;
         }
         low = point;

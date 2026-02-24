@@ -205,10 +205,10 @@ Model 是具体的 AI 模型实例，每个 Model 绑定到特定的 Provider：
 
 **基础配置：**
 
-| Setting                         | 默认    | 说明                      |
-| ------------------------------- | ------- | ------------------------- |
-| `addi.defaultMaxInputTokens`    | 4096    | 默认最大输入 tokens       |
-| `addi.defaultMaxOutputTokens`   | 1024    | 默认最大输出 tokens       |
+| Setting                         | 默认     | 说明                      |
+| ------------------------------- | -------- | ------------------------- |
+| `addi.defaultMaxInputTokens`    | 60000    | 默认最大输入 tokens (60k) |
+| `addi.defaultMaxOutputTokens`   | 128000   | 默认最大输出 tokens (128k) |
 | `addi.defaultModelFamily`       | "Addi"  | 默认模型 family           |
 | `addi.defaultModelVersion`      | "1.0.0" | 默认模型 version          |
 | `addi.confirmDelete`            | true    | 删除前确认                |

@@ -9,8 +9,8 @@ const mockWorkspace = {
     return {
       get: (key: string, defaultValue?: unknown) => {
         const config: Record<string, unknown> = {
-          'addi.defaultMaxInputTokens': 4096,
-          'addi.defaultMaxOutputTokens': 1024,
+          'addi.defaultMaxInputTokens': 60000,
+          'addi.defaultMaxOutputTokens': 128000,
           'addi.defaultModelVersion': '1.0.0',
           'addi.confirmDelete': true,
         };
@@ -54,8 +54,8 @@ suite('Utils Test Suite', () => {
     });
 
     test('should validate tokens', () => {
-      assert.strictEqual(InputValidator.validateTokens('4096'), null);
-      assert.strictEqual(InputValidator.validateTokens('1024'), null);
+      assert.strictEqual(InputValidator.validateTokens('60000'), null);
+      assert.strictEqual(InputValidator.validateTokens('128000'), null);
       assert.strictEqual(
         InputValidator.validateTokens('0'),
         'Token count must be a positive integer'
@@ -75,9 +75,9 @@ suite('Utils Test Suite', () => {
     test('should parse valid inputs', () => {
       assert.strictEqual(TokenFormatter.parse(100), 100);
       assert.strictEqual(TokenFormatter.parse('100'), 100);
-      assert.strictEqual(TokenFormatter.parse('1k'), 1024);
-      assert.strictEqual(TokenFormatter.parse('1.5k'), 1536);
-      assert.strictEqual(TokenFormatter.parse(' 2 k '), 2048);
+      assert.strictEqual(TokenFormatter.parse('1k'), 1000);
+      assert.strictEqual(TokenFormatter.parse('1.5k'), 1500);
+      assert.strictEqual(TokenFormatter.parse(' 2 k '), 2000);
     });
 
     test('should return undefined for invalid inputs', () => {
@@ -91,29 +91,29 @@ suite('Utils Test Suite', () => {
 
     test('should format values', () => {
       assert.strictEqual(TokenFormatter.format(100), '100');
-      assert.strictEqual(TokenFormatter.format(1024), '1k');
-      assert.strictEqual(TokenFormatter.format(1536), '1.5k');
-      assert.strictEqual(TokenFormatter.format(2048), '2k');
+      assert.strictEqual(TokenFormatter.format(1000), '1k');
+      assert.strictEqual(TokenFormatter.format(1500), '1.5k');
+      assert.strictEqual(TokenFormatter.format(2000), '2k');
       assert.strictEqual(TokenFormatter.format(0), '');
       assert.strictEqual(TokenFormatter.format(undefined), '');
     });
 
     test('should format detailed values', () => {
       assert.strictEqual(TokenFormatter.formatDetailed(100), '100');
-      assert.strictEqual(TokenFormatter.formatDetailed(1024), '1024 (1k)');
-      assert.strictEqual(TokenFormatter.formatDetailed(1536), '1536 (1.5k)');
+      assert.strictEqual(TokenFormatter.formatDetailed(1000), '1000 (1k)');
+      assert.strictEqual(TokenFormatter.formatDetailed(1500), '1500 (1.5k)');
     });
   });
 
   suite('ConfigManager', () => {
     test('should get default max input tokens', () => {
       const tokens = ConfigManager.getDefaultMaxInputTokens();
-      assert.strictEqual(tokens, 4096);
+      assert.strictEqual(tokens, 60000);
     });
 
     test('should get default max output tokens', () => {
       const tokens = ConfigManager.getDefaultMaxOutputTokens();
-      assert.strictEqual(tokens, 1024);
+      assert.strictEqual(tokens, 128000);
     });
 
     test('should get default model version', () => {
