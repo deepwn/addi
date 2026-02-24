@@ -277,13 +277,7 @@
           "type": "boolean",
           "default": true,
           "description": "Whether to save the addi configuration to the vscode settings sync cloud"
-        },
-        "addi.syncSignal": {
-          "type": "number",
-          "default": 0,
-          "description": "(DO_NOT_CHANGE) Internal signal used to trigger sync across devices"
-        },
-        "addi.sortRule": {
+        },"addi.sortRule": {
           "type": "string",
           "enum": [
             "none",

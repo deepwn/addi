@@ -317,14 +317,8 @@ export class StorageService implements IStorageService {
     await this.saveExtendedData(providers);
 
     // --- 4. Save Config (Synced) ---
+    // Updating the synced key automatically triggers Settings Sync to push to other devices
     await this.context.globalState.update(StorageService.STORAGE_KEY, configToSave);
-
-    // Pulse a configuration key to force sync notifications on other devices
-    if (this.isSettingsSyncEnabled()) {
-      void vscode.workspace
-        .getConfiguration('addi')
-        .update('syncSignal', Date.now(), vscode.ConfigurationTarget.Global);
-    }
 
     this._onDidUpdate.fire();
   }
