@@ -2,6 +2,18 @@
 
 All notable changes to the "addi" extension will be documented in this file.
 
+## [0.0.28] - 2026-02-25
+
+### Added
+
+- **ProviderType Changed**: Using an easy read and friendly types name and showing the last segment of this type's URL. E.g.: `OpenAI (/responses)`. It's a breaking change for providerType but we are still supporting the old configuration and will auto migrate it when user export configuration or update provider configuration.
+
+### Fixed
+
+- **Editor Load Race Condition**: Fixed an issue where the editor webview might not receive initial data due to a timing issue between the extension and webview initialization. Added a ready signal handshake to ensure the form populates correctly on first load.
+
+- **Some minor bug fixes and performance improvements**.
+
 ## [0.0.27] - 2026-02-24
 
 ### Added
