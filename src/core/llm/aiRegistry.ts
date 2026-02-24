@@ -4,9 +4,6 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createDeepSeek } from '@ai-sdk/deepseek';
-import { createZhipu } from 'zhipu-ai-provider';
-import { createMinimax } from 'vercel-minimax-ai-provider';
 import { Provider } from '../../common/types';
 import { logger } from '../../common/logger';
 
@@ -98,13 +95,12 @@ export class AIProviderRegistry {
       };
     };
 
-    // OpenAI
-    const openAIFactory: ProviderFactory = {
-      id: 'openai',
-      label: 'OpenAI',
+    // OpenAI (/completions) - Most common, used by OpenAI, DeepSeek, local models, etc.
+    this.register({
+      id: 'openai-completions',
+      label: 'OpenAI (/completions)',
       create: (p) => {
         const settings: any = {};
-        // Detect if using a custom endpoint (Proxy / Enterprise / Compatible Service)
         const isCustomEndpoint = p.apiEndpoint && !p.apiEndpoint.includes('api.openai.com');
 
         if (p.apiEndpoint) {
@@ -115,10 +111,7 @@ export class AIProviderRegistry {
         }
         settings.fetch = createDebugFetch();
 
-        // 智能优化：Smart Fallback for Custom Endpoints
-        // 如果用户选择了 "OpenAI" 类型但使用的是自定义 Endpoint（如 OneAPI、LocalAI、DeepSeek 等），
-        // 自动降级使用 createOpenAICompatible。它对非标准 Header 和响应格式的兼容性更好，
-        // 避免了官方 SDK 严格的 Header 检查（如 OpenAI-Organization）导致的错误。
+        // Smart Fallback: use createOpenAICompatible for custom endpoints
         if (isCustomEndpoint) {
           settings.name = 'openai-proxy';
           return createOpenAICompatible(settings);
@@ -126,95 +119,31 @@ export class AIProviderRegistry {
 
         return createOpenAI(settings);
       },
-    };
-    this.register(openAIFactory);
-
-    // DeepSeek
-    this.register({
-      id: 'deepseek',
-      label: 'DeepSeek',
-      create: (p) => {
-        const settings: any = {
-          name: 'deepseek',
-        };
-        if (p.apiKey) {
-          settings.apiKey = p.apiKey;
-        }
-
-        // Use createOpenAICompatible for DeepSeek to ensure reasoning_content support
-        // and better compatibility with latest features.
-        if (p.apiEndpoint) {
-          settings.baseURL = p.apiEndpoint.replace(/\/chat\/completions\/?$/, '');
-        } else {
-          settings.baseURL = 'https://api.deepseek.com';
-        }
-        settings.fetch = createDebugFetch();
-        return createDeepSeek(settings);
-      },
     });
 
-    // Zhipu AI
+    // OpenAI (/responses) - Newer API with built-in tool support
     this.register({
-      id: 'zhipu-ai',
-      label: 'Zhipu AI',
+      id: 'openai-responses',
+      label: 'OpenAI (/responses)',
       create: (p) => {
         const settings: any = {};
-        if (p.apiKey) {
-          settings.apiKey = p.apiKey;
-        }
+        
         if (p.apiEndpoint) {
-          settings.baseURL = p.apiEndpoint.replace(/\/chat\/completions\/?$/, '');
-        }
-        settings.fetch = createDebugFetch();
-        return createZhipu(settings);
-      },
-    });
-    //Minimax
-    this.register({
-      id: 'minimax',
-      label: 'Minimax',
-      create: (p) => {
-        const settings: any = {};
-        if (p.apiKey) {
-          settings.apiKey = p.apiKey;
-        }
-        if (p.apiEndpoint) {
-          // Minimax provider might expect specific base URL handling
-          settings.baseURL = p.apiEndpoint.replace(/\/chat\/completions\/?$/, '');
-        }
-        settings.fetch = createDebugFetch();
-        return createMinimax(settings);
-      },
-    });
-
-    //
-    // Generic (OpenAI Compatible)
-    // Use createOpenAICompatible for better compatibility with non-OpenAI providers
-    this.register({
-      id: 'generic',
-      label: 'Generic (OpenAI Compatible)',
-      create: (p) => {
-        const settings: any = {
-          name: 'generic',
-        };
-        if (p.apiEndpoint) {
-          settings.baseURL = p.apiEndpoint.replace(/\/chat\/completions\/?$/, '');
+          settings.baseURL = p.apiEndpoint.replace(/\/responses\/?$/, '');
         }
         if (p.apiKey) {
           settings.apiKey = p.apiKey;
         }
-
-        // Add debug fetch to log actual URLs
         settings.fetch = createDebugFetch();
-
-        return createOpenAICompatible(settings);
+        
+        return createOpenAI(settings);
       },
     });
 
-    // Anthropic
+    // Anthropic (/messages)
     this.register({
-      id: 'anthropic',
-      label: 'Anthropic',
+      id: 'anthropic-messages',
+      label: 'Anthropic (/messages)',
       create: (p) => {
         const settings: any = {};
         if (p.apiEndpoint) {
@@ -231,10 +160,10 @@ export class AIProviderRegistry {
       },
     });
 
-    // Google
+    // Google (/name:generateContent)
     this.register({
-      id: 'google',
-      label: 'Google Gemini',
+      id: 'google-generateContent',
+      label: 'Google (/name:generateContent)',
       create: (p) => {
         const settings: any = {};
         if (p.apiEndpoint) {

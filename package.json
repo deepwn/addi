@@ -277,7 +277,8 @@
           "type": "boolean",
           "default": true,
           "description": "Whether to save the addi configuration to the vscode settings sync cloud"
-        },"addi.sortRule": {
+        },
+        "addi.sortRule": {
           "type": "string",
           "enum": [
             "none",
@@ -538,14 +539,11 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.46",
-    "@ai-sdk/deepseek": "^2.0.20",
     "@ai-sdk/google": "^3.0.30",
     "@ai-sdk/openai": "^3.0.31",
     "@ai-sdk/openai-compatible": "^2.0.30",
     "ai": "^6.0.97",
     "js-yaml": "^4.1.1",
-    "vercel-minimax-ai-provider": "^0.0.2",
-    "zhipu-ai-provider": "^0.2.2",
     "zod": "^4.3.6"
   }
 }

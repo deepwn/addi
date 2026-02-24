@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Model, Provider, ModelDraft, RemoteModelInfo } from '../../common/types';
+import { Model, Provider, ProviderType, ModelDraft, RemoteModelInfo } from '../../common/types';
 import { IStorageService } from '../../common/interfaces';
 import { ConfigManager, IdGenerator, InputValidator } from '../../common/utils';
 import { logger } from '../../common/logger';
@@ -80,16 +80,42 @@ export class ProviderModelManager {
     let critical = false;
 
     for (const provider of providers) {
-      if (!provider.providerType) {
+      // Normalize legacy provider types to new API-based types
+      // CAN BE REMOVE AFTER VERSION 1.0 - This is to ensure older persisted data remains compatible with the new provider type system.
+      if (provider.providerType) {
+        const legacyMapping: Record<string, ProviderType> = {
+          openai: 'openai-completions',
+          deepseek: 'openai-completions',
+          'zhipu-ai': 'openai-completions',
+          minimax: 'openai-completions',
+          generic: 'openai-completions',
+          anthropic: 'anthropic-messages',
+          google: 'google-generateContent',
+        };
+        const newType = legacyMapping[provider.providerType];
+        if (newType && newType !== provider.providerType) {
+          provider.providerType = newType;
+          mutated = true;
+        }
+      } else {
+        // Infer type from endpoint if not set
         const endpoint = (provider.apiEndpoint || '').toLowerCase();
-        if (endpoint.includes('openai.com')) {
-          provider.providerType = 'openai';
-        } else if (endpoint.includes('anthropic.com')) {
-          provider.providerType = 'anthropic';
-        } else if (endpoint.includes('googleapis.com')) {
-          provider.providerType = 'google';
+        if (
+          endpoint.includes('openai.com') ||
+          endpoint.includes('anthropic.com') ||
+          endpoint.includes('googleapis.com')
+        ) {
+          // Default to the appropriate API type based on endpoint
+          if (endpoint.includes('anthropic.com')) {
+            provider.providerType = 'anthropic-messages';
+          } else if (endpoint.includes('googleapis.com')) {
+            provider.providerType = 'google-generateContent';
+          } else {
+            provider.providerType = 'openai-completions';
+          }
         } else {
-          provider.providerType = 'generic';
+          // Default for custom endpoints
+          provider.providerType = 'openai-completions';
         }
         mutated = true;
         // Provider type inference is useful to persist but not strictly critical for ID stability.
@@ -266,16 +292,14 @@ export class ProviderModelManager {
       id: IdGenerator.generate(),
       models: [],
     };
-    // 确保 providerType 存在
+    // Ensure providerType exists - default to openai-completions
     if (!newProvider.providerType) {
-      newProvider.providerType = 'generic';
+      newProvider.providerType = 'openai-completions';
     }
 
-    if (
-      newProvider.providerType === 'generic' &&
-      (!newProvider.apiEndpoint || !newProvider.apiEndpoint.trim())
-    ) {
-      throw new Error('API Endpoint is required for Generic provider');
+    // All providers require an API endpoint
+    if (!newProvider.apiEndpoint || !newProvider.apiEndpoint.trim()) {
+      throw new Error('API Endpoint is required');
     }
 
     providers.push(newProvider);
@@ -301,14 +325,11 @@ export class ProviderModelManager {
       }
 
       if (!updatedProvider.providerType) {
-        updatedProvider.providerType = 'generic';
+        updatedProvider.providerType = 'openai-completions';
       }
 
-      if (
-        updatedProvider.providerType === 'generic' &&
-        (!updatedProvider.apiEndpoint || !updatedProvider.apiEndpoint.trim())
-      ) {
-        throw new Error('API Endpoint is required for Generic provider');
+      if (!updatedProvider.apiEndpoint || !updatedProvider.apiEndpoint.trim()) {
+        throw new Error('API Endpoint is required');
       }
 
       providers[index] = updatedProvider;
@@ -605,10 +626,9 @@ export class ProviderModelManager {
 
     try {
       switch (providerType) {
-        case 'openai':
-        case 'zhipu-ai':
-        case 'minimax':
-        case 'generic': {
+        // OpenAI (/completions) or OpenAI (/responses) - Both use OpenAI's models API
+        case 'openai-completions':
+        case 'openai-responses': {
           const url = this.resolveModelsUrl(endpoint, 'https://api.openai.com/v1');
           const response = await fetch(url, {
             method: 'GET',
@@ -657,7 +677,9 @@ export class ProviderModelManager {
           }
           return models;
         }
-        case 'anthropic': {
+
+        // Anthropic (/messages) - Uses x-api-key header
+        case 'anthropic-messages': {
           const baseUrl = this.normalizeBaseUrl(endpoint, 'https://api.anthropic.com');
           const url = this.buildUrl(baseUrl, '/v1/models');
           const response = await fetch(url, {
@@ -722,7 +744,9 @@ export class ProviderModelManager {
           }
           return models;
         }
-        case 'google': {
+
+        // Google (/name:generateContent) - Uses API key as query parameter
+        case 'google-generateContent': {
           const baseUrl = this.normalizeBaseUrl(
             endpoint,
             'https://generativelanguage.googleapis.com/v1beta'
@@ -790,7 +814,9 @@ export class ProviderModelManager {
           }
           return models;
         }
+
         default:
+          logger.warn('Unknown provider type for model fetching', { providerType });
           return [];
       }
     } catch (e: unknown) {
