@@ -16,6 +16,8 @@ interface ExecutionOptions {
     | ((stats: { firstTokenTime: number; endTime: number; tokenCount: number }) => void)
     | undefined;
   onReasoning?: ((delta: string) => void) | undefined;
+  // Internal flag to prevent duplicate stats reporting in streaming mode
+  _streamingReported?: boolean;
 }
 
 // ============================================================================
@@ -151,7 +153,9 @@ export class LLMService {
       temperature: additionalParams['temperature'],
       topP: additionalParams['topP'],
       onFinish: ({ usage }: any) => {
-        if (options.onStats && usage) {
+        // Note: In streaming mode, timing is already captured in executeStreaming.
+        // This callback only fires for non-streaming mode to ensure we still get stats.
+        if (options.onStats && usage && !options._streamingReported) {
           options.onStats({
             firstTokenTime: Date.now(),
             endTime: Date.now(),
@@ -197,6 +201,7 @@ export class LLMService {
     let firstTokenTime: number | undefined;
     const result = await streamText({ ...options, abortSignal: abortController.signal });
 
+    let tokenCount = 0;
     for await (const part of result.fullStream) {
       if (!firstTokenTime) {
         firstTokenTime = Date.now();
@@ -205,8 +210,26 @@ export class LLMService {
         break;
       }
 
+      // Count text tokens (approximate: each character is roughly 0.25 tokens for English)
+      // For more accurate counting, we'd need the actual token count from the model
+      // Note: AI SDK text-delta part has 'text' property, not 'textDelta'
+      if (part.type === 'text-delta' && part.text) {
+        tokenCount += Math.ceil(part.text.length / 4);
+      }
+
       // Process the response part
       this.processResponsePart(part, progress, executionOptions);
+    }
+
+    // Report stats after streaming completes
+    if (executionOptions.onStats && firstTokenTime) {
+      const endTime = Date.now();
+      executionOptions._streamingReported = true;
+      executionOptions.onStats({
+        firstTokenTime,
+        endTime,
+        tokenCount,
+      });
     }
   }
 
