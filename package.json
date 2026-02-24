@@ -182,11 +182,11 @@
           "when": "false"
         },
         {
-          "command": "addi.editModel",
+          "command": "addi.editModels",
           "when": "false"
         },
         {
-          "command": "addi.deleteModel",
+          "command": "addi.deleteModels",
           "when": "false"
         },
         {
@@ -203,14 +203,6 @@
         },
         {
           "command": "addi.copyModel",
-          "when": "false"
-        },
-        {
-          "command": "addi.deleteModels",
-          "when": "false"
-        },
-        {
-          "command": "addi.batchEditModels",
           "when": "false"
         }
       ],
@@ -246,7 +238,7 @@
           "group": "modify@99"
         },
         {
-          "command": "addi.editModel",
+          "command": "addi.editModels",
           "when": "view == addiProviders && viewItem == model",
           "group": "modify@1"
         },
@@ -256,19 +248,9 @@
           "group": "modify@2"
         },
         {
-          "command": "addi.deleteModel",
-          "when": "view == addiProviders && viewItem == model",
-          "group": "modify@99"
-        },
-        {
           "command": "addi.deleteModels",
           "when": "view == addiProviders && viewItem == model",
-          "group": "modify@98"
-        },
-        {
-          "command": "addi.batchEditModels",
-          "when": "view == addiProviders && viewItem == model",
-          "group": "modify@97"
+          "group": "modify@99"
         },
         {
           "command": "addi.editTool",
@@ -298,12 +280,12 @@
         "addi.defaultMaxInputTokens": {
           "type": "number",
           "default": 60000,
-          "description": "Max input tokens (60k)"
+          "description": "Max input tokens"
         },
         "addi.defaultMaxOutputTokens": {
           "type": "number",
-          "default": 128000,
-          "description": "Max output tokens (128k)"
+          "default": 80000,
+          "description": "Max output tokens"
         },
         "addi.defaultModelFamily": {
           "type": "string",
@@ -423,15 +405,15 @@
         "category": "Addi"
       },
       {
-        "command": "addi.editModel",
-        "title": "Edit Model",
+        "command": "addi.editModels",
+        "title": "Edit Model(s)",
         "shortTitle": "Edit",
         "icon": "$(edit)",
         "category": "Addi"
       },
       {
-        "command": "addi.deleteModel",
-        "title": "Delete Model",
+        "command": "addi.deleteModels",
+        "title": "Delete Model(s)",
         "shortTitle": "Delete",
         "icon": "$(trash)",
         "category": "Addi"

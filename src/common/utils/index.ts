@@ -26,7 +26,7 @@ export class ConfigManager {
   }
 
   static getDefaultMaxOutputTokens(): number {
-    return this.getConfiguration().get<number>('defaultMaxOutputTokens', 128000);
+    return this.getConfiguration().get<number>('defaultMaxOutputTokens', 80000);
   }
 
   static getDefaultModelFamily(): string {

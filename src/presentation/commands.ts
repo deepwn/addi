@@ -3,7 +3,7 @@ import * as crypto from 'crypto';
 import { ProviderModelManager } from '../core/providers/ProviderModelManager';
 import { ProviderTreeItem, AddiTreeDataProvider } from './views/providerView';
 import { ModelTreeItem } from '../core/providers/AddiChatProvider';
-import { ConfigManager, IdGenerator, UserFeedback, TokenFormatter } from '../common/utils';
+import { ConfigManager, IdGenerator, UserFeedback } from '../common/utils';
 import { Provider, Model } from '../common/types';
 import { logger, maskSecret } from '../common/logger';
 
@@ -209,6 +209,19 @@ export class CommandHandler {
           const defaultMaxInputTokens = ConfigManager.getDefaultMaxInputTokens();
           const defaultMaxOutputTokens = ConfigManager.getDefaultMaxOutputTokens();
 
+          // Normalize remote token values that may be reported using 1024-based units
+          const normalizeRemoteToken = (v: number | undefined): number | undefined => {
+            if (v === undefined || v === null) {
+              return undefined;
+            }
+            // If value is an exact multiple of 1024, assume provider used 1024-based units
+            // and convert to 1000-based friendly value (e.g. 60*1024 -> 60*1000 = 60000)
+            if (v % 1024 === 0) {
+              return Math.round((v / 1024) * 1000);
+            }
+            return v;
+          };
+
           for (const remote of remoteModels) {
             if (!remote.id) {
               continue;
@@ -229,21 +242,23 @@ export class CommandHandler {
                 changed = true;
               }
 
+              const normalizedRemoteInput = normalizeRemoteToken(remote.maxInputTokens);
               if (
-                remote.maxInputTokens !== undefined &&
-                remote.maxInputTokens !== existing.maxInputTokens &&
+                normalizedRemoteInput !== undefined &&
+                normalizedRemoteInput !== existing.maxInputTokens &&
                 existing.maxInputTokens === defaultMaxInputTokens
               ) {
-                existing.maxInputTokens = remote.maxInputTokens;
+                existing.maxInputTokens = normalizedRemoteInput;
                 changed = true;
               }
 
+              const normalizedRemoteOutput = normalizeRemoteToken(remote.maxOutputTokens);
               if (
-                remote.maxOutputTokens !== undefined &&
-                remote.maxOutputTokens !== existing.maxOutputTokens &&
+                normalizedRemoteOutput !== undefined &&
+                normalizedRemoteOutput !== existing.maxOutputTokens &&
                 existing.maxOutputTokens === defaultMaxOutputTokens
               ) {
-                existing.maxOutputTokens = remote.maxOutputTokens;
+                existing.maxOutputTokens = normalizedRemoteOutput;
                 changed = true;
               }
 
@@ -293,8 +308,9 @@ export class CommandHandler {
               name: remote.name?.trim() || remote.id,
               family: remoteFamily || defaultFamily,
               version: defaultVersion,
-              maxInputTokens: remote.maxInputTokens ?? defaultMaxInputTokens,
-              maxOutputTokens: remote.maxOutputTokens ?? defaultMaxOutputTokens,
+              maxInputTokens: normalizeRemoteToken(remote.maxInputTokens) ?? defaultMaxInputTokens,
+              maxOutputTokens:
+                normalizeRemoteToken(remote.maxOutputTokens) ?? defaultMaxOutputTokens,
               capabilities: remoteCapabilities,
             };
 
@@ -375,68 +391,19 @@ export class CommandHandler {
     }
   }
 
-  async editModel(item: ModelTreeItem): Promise<void> {
-    logger.info('Command editModel invoked', {
-      model: logger.sanitizeModel(item.model),
-    });
+  async editModels(items: ModelTreeItem[]): Promise<void> {
+    if (!items || items.length === 0) {
+      return;
+    }
+
+    const count = items.length;
+    logger.info('Command editModels invoked', { count });
+
+    // Open editor panel for both single and multiple items
     if (this.editorViewManager) {
-      this.editorViewManager.openEditor(item, 'edit');
+      this.editorViewManager.openEditor(items, 'edit');
     } else {
       UserFeedback.showError('Editor view manager not initialized');
-    }
-  }
-
-  async deleteModel(item: ModelTreeItem): Promise<void> {
-    logger.info('Command deleteModel invoked', logger.sanitizeModel(item.model));
-
-    if (ConfigManager.getConfirmDelete()) {
-      const deleteOption: vscode.MessageItem = { title: 'Delete' };
-      const deleteDontAskOption: vscode.MessageItem = { title: "Delete and don't ask again" };
-      const cancelOption: vscode.MessageItem = { title: 'Cancel', isCloseAffordance: true };
-
-      const selection = await vscode.window.showWarningMessage(
-        `Are you sure you want to delete the model "${item.model.name}"?`,
-        { modal: true },
-        deleteOption,
-        deleteDontAskOption,
-        cancelOption
-      );
-
-      if (selection === deleteDontAskOption) {
-        await vscode.workspace
-          .getConfiguration('addi')
-          .update('confirmDelete', false, vscode.ConfigurationTarget.Global);
-        void vscode.window.showInformationMessage(
-          'Delete confirmation disabled. You can re-enable it in settings.'
-        );
-      }
-
-      if (selection !== deleteOption && selection !== deleteDontAskOption) {
-        logger.debug('deleteModel canceled by user', logger.sanitizeModel(item.model));
-        return;
-      }
-    }
-
-    try {
-      await UserFeedback.showProgress('Deleting model...', async (_progress, _token) => {
-        const success = await this.manager.deleteModel(item.model.sid);
-        if (success) {
-          this.treeDataProvider.refresh();
-          // Editor closing logic omitted for now
-          UserFeedback.showInfo(`Model "${item.model.name}" deleted successfully`);
-          logger.info('Model deleted', logger.sanitizeModel(item.model));
-        } else {
-          UserFeedback.showError('Failed to delete model');
-          logger.warn('deleteModel manager returned false', logger.sanitizeModel(item.model));
-        }
-      });
-    } catch (error) {
-      UserFeedback.showError(
-        `Failed to delete model: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-      logger.error('deleteModel failed', {
-        error: error instanceof Error ? error.message : String(error),
-      });
     }
   }
 
@@ -454,8 +421,13 @@ export class CommandHandler {
       const deleteDontAskOption: vscode.MessageItem = { title: "Delete and don't ask again" };
       const cancelOption: vscode.MessageItem = { title: 'Cancel', isCloseAffordance: true };
 
+      const message =
+        count === 1 && items[0]
+          ? `Are you sure you want to delete the model "${items[0].model.name}"?`
+          : `Are you sure you want to delete ${count} model(s)?`;
+
       const selection = await vscode.window.showWarningMessage(
-        `Are you sure you want to delete ${count} model(s)?`,
+        message,
         { modal: true },
         deleteOption,
         deleteDontAskOption,
@@ -478,14 +450,9 @@ export class CommandHandler {
     }
 
     try {
-      await UserFeedback.showProgress('Deleting models...', async (_progress, _token) => {
-        let deletedCount = 0;
-        for (const item of items) {
-          const success = await this.manager.deleteModel(item.model.sid);
-          if (success) {
-            deletedCount++;
-          }
-        }
+      await UserFeedback.showProgress('Deleting model(s)...', async (_progress, _token) => {
+        const sids = items.map((i) => i.model.sid);
+        const deletedCount = await this.manager.deleteModels(sids);
         this.treeDataProvider.refresh();
         UserFeedback.showInfo(`${deletedCount} model(s) deleted successfully`);
         logger.info('Models deleted', { count: deletedCount });
@@ -495,105 +462,6 @@ export class CommandHandler {
         `Failed to delete models: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
       logger.error('deleteModels failed', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  async batchEditModels(items: ModelTreeItem[]): Promise<void> {
-    if (!items || items.length === 0) {
-      return;
-    }
-
-    const count = items.length;
-    logger.info('Command batchEditModels invoked', { count });
-
-    // Show input dialog for batch editing
-    const maxInputTokens = await vscode.window.showInputBox({
-      prompt: 'Max Input Tokens (leave empty to skip)',
-      placeHolder: 'e.g. 60k or 60000',
-      validateInput: (value) => {
-        if (!value) {
-          return undefined; // Allow empty
-        }
-        const parsed = TokenFormatter.parse(value);
-        return parsed ? undefined : 'Invalid token format';
-      },
-    });
-
-    if (maxInputTokens === undefined) {
-      return; // User cancelled
-    }
-
-    const maxOutputTokens = await vscode.window.showInputBox({
-      prompt: 'Max Output Tokens (leave empty to skip)',
-      placeHolder: 'e.g. 128k or 128000',
-      validateInput: (value) => {
-        if (!value) {
-          return undefined; // Allow empty
-        }
-        const parsed = TokenFormatter.parse(value);
-        return parsed ? undefined : 'Invalid token format';
-      },
-    });
-
-    if (maxOutputTokens === undefined) {
-      return; // User cancelled
-    }
-
-    const enableTools = await vscode.window.showQuickPick(['Enable', 'Disable', 'No Change'], {
-      prompt: 'Tool Calling Capability',
-      placeHolder: 'Select an action',
-    });
-
-    if (!enableTools) {
-      return; // User cancelled
-    }
-
-    const inputValue = maxInputTokens ? TokenFormatter.parse(maxInputTokens) : undefined;
-    const outputValue = maxOutputTokens ? TokenFormatter.parse(maxOutputTokens) : undefined;
-
-    try {
-      await UserFeedback.showProgress('Updating models...', async (_progress, _token) => {
-        let updatedCount = 0;
-        for (const item of items) {
-          const result = this.manager.findModel(item.model.sid);
-          if (!result) {
-            continue;
-          }
-
-          const updates: Partial<Model> = {};
-          if (inputValue !== undefined) {
-            updates.maxInputTokens = inputValue;
-          }
-          if (outputValue !== undefined) {
-            updates.maxOutputTokens = outputValue;
-          }
-          if (enableTools !== 'No Change') {
-            updates.capabilities = {
-              ...item.model.capabilities,
-              toolCalling: enableTools === 'Enable',
-            };
-          }
-
-          const success = await this.manager.updateModel(
-            result.provider.id,
-            item.model.sid,
-            updates as any
-          );
-          if (success) {
-            updatedCount++;
-          }
-        }
-        this.treeDataProvider.refresh();
-        UserFeedback.showInfo(`${updatedCount} model(s) updated successfully`);
-        logger.info('Models batch edited', { count: updatedCount });
-      });
-    } catch (error) {
-      UserFeedback.showError(
-        `Failed to update models: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-      logger.error('batchEditModels failed', {
         error: error instanceof Error ? error.message : String(error),
       });
     }

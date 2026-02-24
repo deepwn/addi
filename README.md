@@ -163,11 +163,11 @@ Model 是具体的 AI 模型实例，每个 Model 绑定到特定的 Provider：
 
 **模型命令：**
 
-| 命令               | 说明     |
+| 命令                | 说明     |
 | ------------------ | -------- |
 | `addi.addModel`    | 添加模型 |
-| `addi.editModel`   | 编辑模型 |
-| `addi.deleteModel` | 删除模型 |
+| `addi.editModels`   | 编辑模型 |
+| `addi.deleteModels` | 删除模型 |
 | `addi.copyModel`   | 复制模型 |
 
 **工具命令：**
@@ -205,10 +205,10 @@ Model 是具体的 AI 模型实例，每个 Model 绑定到特定的 Provider：
 
 **基础配置：**
 
-| Setting                         | 默认     | 说明                      |
-| ------------------------------- | -------- | ------------------------- |
-| `addi.defaultMaxInputTokens`    | 60000    | 默认最大输入 tokens (60k) |
-| `addi.defaultMaxOutputTokens`   | 128000   | 默认最大输出 tokens (128k) |
+| Setting                         | 默认    | 说明                      |
+| ------------------------------- | ------- | ------------------------- |
+| `addi.defaultMaxInputTokens`    | 60000   | 默认最大输入 tokens (60k) |
+| `addi.defaultMaxOutputTokens`   | 80000   | 默认最大输出 tokens (80k) |
 | `addi.defaultModelFamily`       | "Addi"  | 默认模型 family           |
 | `addi.defaultModelVersion`      | "1.0.0" | 默认模型 version          |
 | `addi.confirmDelete`            | true    | 删除前确认                |

@@ -12,6 +12,7 @@ export class EditorViewManager {
   public static readonly viewType = 'addiEditor';
   private _panel: vscode.WebviewPanel | undefined;
   private _currentItem: ProviderTreeItem | ModelTreeItem | undefined;
+  private _currentItems: ModelTreeItem[] = []; // For batch editing
   private _currentProvider: Provider | undefined;
   private _lastVerifiedData: string | undefined;
   private _detectedSpeed: number | undefined;
@@ -20,6 +21,8 @@ export class EditorViewManager {
     type: 'provider' | 'model';
     parentId?: string;
     prefillData?: any;
+    isBatch?: boolean; // Flag for batch edit mode
+    batchCount?: number; // Number of items in batch
   } = { mode: 'edit', type: 'provider' };
 
   constructor(
@@ -29,7 +32,7 @@ export class EditorViewManager {
   ) {}
 
   public async openEditor(
-    item: ProviderTreeItem | ModelTreeItem | undefined,
+    item: ProviderTreeItem | ModelTreeItem | ModelTreeItem[] | undefined,
     mode: 'edit' | 'create',
     parentId?: string,
     prefillData?: any
@@ -86,14 +89,33 @@ export class EditorViewManager {
   }
 
   private _updatePanelContent(
-    item: ProviderTreeItem | ModelTreeItem | undefined,
+    item: ProviderTreeItem | ModelTreeItem | ModelTreeItem[] | undefined,
     mode: 'edit' | 'create',
     parentId?: string,
     prefillData?: any
   ) {
+    // Handle array of items for batch editing
+    this._currentItems = [];
+    if (Array.isArray(item)) {
+      this._currentItems = item;
+      // If more than 1 item, use batch mode (name/id not editable)
+      // If 1 item, treat as single edit (name/id editable)
+      if (item.length > 1) {
+        item = undefined; // Will use batch data
+      } else if (item.length === 1) {
+        item = item[0]; // Single item, use existing logic
+      } else {
+        item = undefined;
+      }
+    }
+
     this._currentItem = item;
     this._lastVerifiedData = undefined;
     this._detectedSpeed = undefined;
+
+    // Determine if we're in batch mode (more than 1 item)
+    const isBatchMode = this._currentItems.length > 1;
+    const batchCount = this._currentItems.length;
 
     if (item instanceof ProviderTreeItem) {
       this._currentProvider = item.provider;
@@ -104,13 +126,22 @@ export class EditorViewManager {
         : undefined;
     } else if (mode === 'create' && parentId) {
       this._currentProvider = this._manager.getProviders().find((p) => p.id === parentId);
+    } else if (isBatchMode && this._currentItems.length > 0) {
+      // For batch mode, get provider from first item
+      const firstItem = this._currentItems[0];
+      if (firstItem) {
+        const pId = this._getParentProviderId(firstItem);
+        this._currentProvider = pId
+          ? this._manager.getProviders().find((p) => p.id === pId)
+          : undefined;
+      }
     } else {
       this._currentProvider = undefined;
     }
 
     const type =
       item instanceof ProviderTreeItem || (mode === 'create' && !parentId) ? 'provider' : 'model';
-    this._viewState = { mode, type, prefillData };
+    this._viewState = { mode, type, prefillData, isBatch: isBatchMode, batchCount };
     if (parentId) {
       this._viewState.parentId = parentId;
     }
@@ -119,7 +150,9 @@ export class EditorViewManager {
     if (mode === 'create') {
       title = `Create ${type === 'provider' ? 'Provider' : 'Model'}`;
     } else {
-      if (item instanceof ProviderTreeItem) {
+      if (isBatchMode) {
+        title = `Edit ${batchCount} Models`;
+      } else if (item instanceof ProviderTreeItem) {
         title = `Edit ${item.provider.name}`;
       } else if (item instanceof ModelTreeItem) {
         title = `Edit ${item.model.name}`;
@@ -138,6 +171,14 @@ export class EditorViewManager {
           maxOutputTokens: ConfigManager.getDefaultMaxOutputTokens(),
         };
       }
+    } else if (isBatchMode) {
+      // For batch mode, send placeholder data
+      dataToSend = {
+        name: `Selected ${batchCount} models`,
+        id: `Selected ${batchCount} models`,
+        isBatchMode: true,
+        batchCount: batchCount,
+      };
     } else {
       if (item instanceof ProviderTreeItem) {
         // Clone provider and inject masked API key for UI display
@@ -157,6 +198,8 @@ export class EditorViewManager {
         mode: mode,
         item: {
           type: type,
+          isBatchMode: isBatchMode,
+          batchCount: batchCount,
           data: dataToSend,
           parentId:
             parentId ||
@@ -408,6 +451,13 @@ export class EditorViewManager {
       return;
     }
 
+    // Handle batch mode
+    if (this._viewState.isBatch && this._currentItems.length > 0) {
+      await this._saveBatchModels(modelData);
+      return;
+    }
+
+    // Single model edit mode
     if (!this._currentItem || !(this._currentItem instanceof ModelTreeItem)) {
       return;
     }
@@ -434,6 +484,30 @@ export class EditorViewManager {
       this._panel?.dispose();
     } else {
       vscode.window.showErrorMessage('Failed to update model.');
+    }
+  }
+
+  private async _saveBatchModels(modelData: Partial<Model>) {
+    if (!this._currentProvider) {
+      vscode.window.showErrorMessage('No provider context found for batch update.');
+      return;
+    }
+
+    const parentId = this._currentProvider.id;
+
+    // Don't include name/id in batch update - those are handled per-model
+    const { name, id, version, ...batchUpdateData } = modelData;
+
+    try {
+      const sids = this._currentItems.map((i) => i.model.sid);
+      const updatedCount = await this._manager.updateModels(parentId, sids, batchUpdateData as any);
+      vscode.window.showInformationMessage(`${updatedCount} model(s) updated successfully.`);
+      this._refreshTree();
+      this._panel?.dispose();
+    } catch (e) {
+      vscode.window.showErrorMessage(
+        `Failed to update models: ${e instanceof Error ? e.message : String(e)}`
+      );
     }
   }
 

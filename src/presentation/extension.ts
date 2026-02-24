@@ -164,10 +164,23 @@ export function activate(context: vscode.ExtensionContext) {
       commandHandler.editApiKey(item)
     )
   );
+  // Unified commands - handle both single and multi-select internally
   context.subscriptions.push(
-    vscode.commands.registerCommand('addi.editModel', (item: ModelTreeItem) =>
-      commandHandler.editModel(item)
-    )
+    vscode.commands.registerCommand('addi.editModels', (item: ModelTreeItem | ModelTreeItem[]) => {
+      let items: ModelTreeItem[] = [];
+      if (Array.isArray(item)) {
+        items = item as ModelTreeItem[];
+      } else if (item) {
+        items = [item as ModelTreeItem];
+      }
+      if (items.length <= 1) {
+        const sel = treeView.selection as ModelTreeItem[];
+        if (sel && sel.length > 1) {
+          items = sel;
+        }
+      }
+      commandHandler.editModels(items);
+    })
   );
   context.subscriptions.push(
     vscode.commands.registerCommand('addi.copyModel', (item: ModelTreeItem) =>
@@ -175,20 +188,21 @@ export function activate(context: vscode.ExtensionContext) {
     )
   );
   context.subscriptions.push(
-    vscode.commands.registerCommand('addi.deleteModel', (item: ModelTreeItem) =>
-      commandHandler.deleteModel(item)
-    )
-  );
-  // Batch operations for multiple selection
-  context.subscriptions.push(
-    vscode.commands.registerCommand('addi.deleteModels', (items: ModelTreeItem[]) =>
-      commandHandler.deleteModels(items)
-    )
-  );
-  context.subscriptions.push(
-    vscode.commands.registerCommand('addi.batchEditModels', (items: ModelTreeItem[]) =>
-      commandHandler.batchEditModels(items)
-    )
+    vscode.commands.registerCommand('addi.deleteModels', (item: ModelTreeItem | ModelTreeItem[]) => {
+      let items: ModelTreeItem[] = [];
+      if (Array.isArray(item)) {
+        items = item as ModelTreeItem[];
+      } else if (item) {
+        items = [item as ModelTreeItem];
+      }
+      if (items.length <= 1) {
+        const sel = treeView.selection as ModelTreeItem[];
+        if (sel && sel.length > 1) {
+          items = sel;
+        }
+      }
+      commandHandler.deleteModels(items);
+    })
   );
   context.subscriptions.push(
     vscode.commands.registerCommand('addi.exportConfig', () => commandHandler.exportConfig())

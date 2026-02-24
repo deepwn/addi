@@ -138,6 +138,26 @@
         max-height: 800px;
         overflow-y: auto;
       }
+      .batch-disabled input,
+      .batch-disabled select {
+        background: var(--vscode-disabledForeground);
+        color: var(--vscode-disabledForeground);
+        cursor: not-allowed;
+      }
+      .batch-disabled label::after {
+        content: " (batch mode - not editable)";
+        font-size: 0.8em;
+        font-weight: normal;
+        color: var(--vscode-descriptionForeground);
+      }
+      .header-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .header-row h2 {
+        margin: 0;
+      }
     </style>
   </head>
   <body>
@@ -182,12 +202,15 @@
         </div>
 
         <div id="model-form" class="hidden">
-          <div class="header"><h2>Model Details</h2></div>
-          <div class="form-group">
+          <div class="header">
+            <h2 id="model-form-title">Model Details</h2>
+            <span id="batch-indicator" class="hidden" style="color: var(--vscode-descriptionForeground); font-size: 0.9em;">(Batch Edit)</span>
+          </div>
+          <div class="form-group" id="m-name-group">
             <label>Name</label>
             <input type="text" id="m-name" />
           </div>
-          <div class="form-group">
+          <div class="form-group" id="m-id-group">
             <label>Model ID (Remote)</label>
             <input type="text" id="m-id" />
           </div>
@@ -280,6 +303,8 @@
       setTimeout(updateHints, 100);
       const mId = document.getElementById('m-id');
       const mFamily = document.getElementById('m-family');
+      const mNameGroup = document.getElementById('m-name-group');
+      const mIdGroup = document.getElementById('m-id-group');
       const mVersion = document.getElementById('m-version');
       const mInput = document.getElementById('m-input-tokens');
       const mOutput = document.getElementById('m-output-tokens');
@@ -306,11 +331,15 @@
         max_tokens: 128000,
       };
 
-      // Token formatter logic
+      // Token formatter logic - use 1000 as K multiplier (not 1024)
       function formatToken(val) {
         if (!val) return '';
-        if (val >= 1000) return val / 1000 + 'k';
-        return val.toString();
+        const num = Number(val);
+        if (isNaN(num)) return '';
+        if (num >= 1000) {
+          return (num / 1000) + 'k';
+        }
+        return num.toString();
       }
 
       function updatePreviews() {
@@ -436,12 +465,48 @@
         } else if (item.type === 'model') {
           show(modelForm);
           hide(providerForm);
-          show(btnVerify);
-          show(previewCol);
+          
+          const isBatchMode = item.isBatchMode;
+          const batchCount = item.batchCount || 0;
+          
+          // Handle batch mode UI
+          // batchCount > 1 means batch edit (name/id not editable)
+          // batchCount === 1 means single edit (name/id editable)
+          const batchIndicator = document.getElementById('batch-indicator');
+          const modelFormTitle = document.getElementById('model-form-title');
+          const mNameEl = document.getElementById('m-name');
+          const mIdEl = document.getElementById('m-id');
+          
+          if (batchCount > 1) {
+            // Batch mode: disable name and ID, hide verify button
+            hide(btnVerify);
+            show(batchIndicator);
+            mNameEl.disabled = true;
+            mIdEl.disabled = true;
+            if (mNameGroup) mNameGroup.classList.add('batch-disabled');
+            if (mIdGroup) mIdGroup.classList.add('batch-disabled');
+            modelFormTitle.textContent = `Edit ${batchCount} Models`;
+          } else {
+            // Single edit mode (including when 1 item is passed via array)
+            show(btnVerify);
+            hide(batchIndicator);
+            mNameEl.disabled = false;
+            mIdEl.disabled = false;
+            if (mNameGroup) mNameGroup.classList.remove('batch-disabled');
+            if (mIdGroup) mIdGroup.classList.remove('batch-disabled');
+            modelFormTitle.textContent = 'Model Details';
+          }
 
           const data = item.data;
-          mName.value = data.name || '';
-          mId.value = data.id || '';
+          // For batch mode (2+ items), show the count instead of actual name/id
+          if (batchCount > 1) {
+            const label = `Selected ${batchCount} models`;
+            mName.value = label;
+            mId.value = label;
+          } else {
+            mName.value = data.name || '';
+            mId.value = data.id || '';
+          }
           mFamily.value = data.family || 'addi';
           mVersion.value = data.version || '1.0.0';
           mInput.value = formatToken(data.maxInputTokens);
@@ -487,11 +552,16 @@
             },
           });
         } else if (!modelForm.classList.contains('hidden')) {
+          const mNameEl = document.getElementById('m-name');
+          const mIdEl = document.getElementById('m-id');
+          const isBatchMode = mNameEl.disabled && mIdEl.disabled;
+          
           vscode.postMessage({
             type: 'saveModel',
             payload: {
               name: mName.value,
               id: mId.value,
+              isBatchMode: isBatchMode,
               family: mFamily.value,
               version: mVersion.value,
               maxInputTokens: mInput.value,

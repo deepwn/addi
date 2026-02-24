@@ -10,7 +10,7 @@ const mockWorkspace = {
       get: (key: string, defaultValue?: unknown) => {
         const config: Record<string, unknown> = {
           'addi.defaultMaxInputTokens': 60000,
-          'addi.defaultMaxOutputTokens': 128000,
+          'addi.defaultMaxOutputTokens': 80000,
           'addi.defaultModelVersion': '1.0.0',
           'addi.confirmDelete': true,
         };

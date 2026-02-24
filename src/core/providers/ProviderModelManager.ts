@@ -424,6 +424,71 @@ export class ProviderModelManager {
     return false;
   }
 
+  async updateModels(
+    providerId: string,
+    modelSids: string[],
+    modelData: Partial<ModelDraft>
+  ): Promise<number> {
+    const providers = this.getProviders();
+    const providerIndex = providers.findIndex((p) => p.id === providerId);
+    if (providerIndex < 0) {
+      logger.warn('Attempted batch update on missing provider', { providerId });
+      return 0;
+    }
+
+    let updatedCount = 0;
+    const models = providers[providerIndex]!.models;
+
+    for (const sid of modelSids) {
+      const modelIndex = models.findIndex((m) => m.sid === sid);
+      if (modelIndex < 0) {
+        continue;
+      }
+
+      const existingModel = models[modelIndex]!;
+
+      if (modelData.name !== undefined && InputValidator.validateName(modelData.name)) {
+        throw new Error('Model name cannot be empty');
+      }
+      if (modelData.id !== undefined && (!modelData.id || !modelData.id.trim())) {
+        throw new Error('Model ID cannot be empty');
+      }
+
+      const updatedModel: Model = {
+        sid: existingModel.sid,
+        id: (modelData.id ?? existingModel.id)?.trim() || existingModel.id,
+        name: modelData.name ?? existingModel.name,
+        family: modelData.family ?? existingModel.family,
+        version: modelData.version ?? existingModel.version,
+        maxInputTokens: modelData.maxInputTokens ?? existingModel.maxInputTokens,
+        maxOutputTokens: modelData.maxOutputTokens ?? existingModel.maxOutputTokens,
+        capabilities: this.normalizeCapabilities(
+          modelData.capabilities,
+          existingModel.capabilities
+        ),
+        ...((modelData.requestAdditional ?? existingModel.requestAdditional)
+          ? { requestAdditional: modelData.requestAdditional ?? existingModel.requestAdditional }
+          : {}),
+        ...((modelData.speedHistory ?? existingModel.speedHistory)
+          ? { speedHistory: modelData.speedHistory ?? existingModel.speedHistory }
+          : {}),
+        ...((modelData.averageSpeed ?? existingModel.averageSpeed) !== undefined
+          ? { averageSpeed: modelData.averageSpeed ?? existingModel.averageSpeed }
+          : {}),
+      };
+
+      providers[providerIndex]!.models[modelIndex] = updatedModel;
+      updatedCount++;
+    }
+
+    if (updatedCount > 0) {
+      await this.saveProviders(providers);
+      logger.info('Models batch updated', { providerId, count: updatedCount });
+    }
+
+    return updatedCount;
+  }
+
   async updateModelSpeed(providerId: string, modelSid: string, speed: number): Promise<void> {
     logger.debug('updateModelSpeed called', { providerId, modelSid, speed });
     const providers = this.getProviders();
@@ -473,6 +538,33 @@ export class ProviderModelManager {
     }
 
     return deleted;
+  }
+
+  async deleteModels(modelSids: string[]): Promise<number> {
+    if (!Array.isArray(modelSids) || modelSids.length === 0) {
+      return 0;
+    }
+    const providers = this.getProviders();
+    const sidSet = new Set(modelSids);
+    let deletedCount = 0;
+
+    for (const provider of providers) {
+      provider.models = provider.models.filter((m) => {
+        if (sidSet.has(m.sid)) {
+          deletedCount++;
+          return false;
+        }
+        return true;
+      });
+      // continue to next provider to remove models across providers
+    }
+
+    if (deletedCount > 0) {
+      await this.saveProviders(providers);
+      logger.info('Models batch deleted', { count: deletedCount });
+    }
+
+    return deletedCount;
   }
 
   findModel(modelSid: string): { provider: Provider; model: Model } | null {
