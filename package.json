@@ -195,17 +195,17 @@
         },
         {
           "command": "addi.editProvider",
-          "when": "view == addiProviders && viewItem == provider",
+          "when": "view == addiProviders && (viewItem == provider-no-key || viewItem == provider)",
           "group": "modify@1"
         },
         {
           "command": "addi.copyProvider",
-          "when": "view == addiProviders && viewItem == provider",
+          "when": "view == addiProviders && (viewItem == provider-no-key || viewItem == provider)",
           "group": "modify@2"
         },
         {
           "command": "addi.deleteProvider",
-          "when": "view == addiProviders && viewItem == provider",
+          "when": "view == addiProviders && (viewItem == provider-no-key || viewItem == provider)",
           "group": "modify@99"
         },
         {
@@ -350,14 +350,14 @@
       },
       {
         "command": "addi.editProvider",
-        "title": "Edit Provider",
+        "title": "Edit",
         "shortTitle": "Edit",
         "icon": "$(edit)",
         "category": "Addi"
       },
       {
         "command": "addi.deleteProvider",
-        "title": "Delete Provider",
+        "title": "Delete",
         "shortTitle": "Delete",
         "icon": "$(trash)",
         "category": "Addi"
@@ -371,28 +371,28 @@
       },
       {
         "command": "addi.editModels",
-        "title": "Edit Model(s)",
+        "title": "Edit",
         "shortTitle": "Edit",
         "icon": "$(edit)",
         "category": "Addi"
       },
       {
         "command": "addi.deleteModels",
-        "title": "Delete Model(s)",
+        "title": "Delete",
         "shortTitle": "Delete",
         "icon": "$(trash)",
         "category": "Addi"
       },
       {
         "command": "addi.copyProvider",
-        "title": "Copy Provider",
+        "title": "Copy",
         "shortTitle": "Copy",
         "icon": "$(copy)",
         "category": "Addi"
       },
       {
         "command": "addi.copyModel",
-        "title": "Copy Model",
+        "title": "Copy",
         "shortTitle": "Copy",
         "icon": "$(copy)",
         "category": "Addi"

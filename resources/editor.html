@@ -89,6 +89,49 @@
         color: var(--vscode-descriptionForeground);
         margin-top: 4px;
       }
+      .label-with-info {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .label-with-info .info-icon {
+        cursor: help;
+        opacity: 0.6;
+        font-size: 0.9em;
+      }
+      .label-with-info .info-icon:hover {
+        opacity: 1;
+      }
+      .tooltip {
+        position: relative;
+        display: inline-block;
+      }
+      .tooltip .tooltip-text {
+        visibility: hidden;
+        width: 280px;
+        background-color: var(--vscode-editorWidget-background);
+        color: var(--vscode-editor-foreground);
+        text-align: left;
+        border-radius: 6px;
+        padding: 10px;
+        position: absolute;
+        z-index: 1;
+        bottom: 125%;
+        left: 50%;
+        margin-left: -140px;
+        opacity: 0;
+        transition: opacity 0.3s;
+        font-size: 0.85em;
+        font-weight: normal;
+        line-height: 1.4;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        border: 1px solid var(--vscode-widget-border);
+        white-space: pre-wrap;
+      }
+      .tooltip:hover .tooltip-text {
+        visibility: visible;
+        opacity: 1;
+      }
       .error-text {
         font-size: 0.85em;
         color: var(--vscode-errorForeground);
@@ -170,7 +213,13 @@
             <input type="text" id="p-name" />
           </div>
           <div class="form-group">
-            <label>Type</label>
+            <div class="label-with-info">
+              <label>API Type</label>
+              <span class="tooltip">
+                <span class="info-icon">ⓘ</span>
+                <span class="tooltip-text" id="p-type-tooltip"></span>
+              </span>
+            </div>
             <select id="p-type">
               <option value="openai-completions">OpenAI (/completions)</option>
               <option value="openai-responses">OpenAI (/responses)</option>
@@ -179,13 +228,18 @@
             </select>
           </div>
           <div class="form-group">
-            <label>API Endpoint</label>
+            <div class="label-with-info">
+              <label>API Endpoint</label>
+              <span class="tooltip">
+                <span class="info-icon">ⓘ</span>
+                <span class="tooltip-text" id="p-endpoint-tooltip"></span>
+              </span>
+            </div>
             <input type="text" id="p-endpoint" />
-            <div id="p-endpoint-hint" class="info-text" style="font-size: 0.9em; margin-top: 4px; color: var(--vscode-descriptionForeground);"></div>
           </div>
           <div class="form-group api-key-container">
             <label>API Key</label>
-            <input type="password" id="p-apikey" placeholder="Leave empty to keep unchanged" />
+            <input type="password" id="p-apikey" placeholder="Enter API key" />
             <div id="p-key-hint" class="info-text" style="font-family: monospace; color: var(--vscode-textPreformat-foreground); overflow-wrap: break-word;"></div>
           </div>
           <div class="form-group">
@@ -280,21 +334,26 @@
 
       // Model inputs
       const mName = document.getElementById('m-name');
-      const pEndpointHint = document.getElementById('p-endpoint-hint');
 
       // --- Hint Logic ---
+      const pEndpointTooltip = document.getElementById('p-endpoint-tooltip');
+      const pTypeTooltip = document.getElementById('p-type-tooltip');
+      const typeTooltipText = 'Can quickly determine type based on API path:\n• /chat/completions → OpenAI (/completions)\n• /responses → OpenAI (/responses)\n• /messages → Anthropic (/messages)\n• /name:generateContent → Google';
+      if (pTypeTooltip) {
+        pTypeTooltip.textContent = typeTooltipText;
+      }
       function updateHints() {
         const type = pType.value;
         let hint = '';
         if (type === 'anthropic-messages') {
-           hint = 'Standard: https://api.anthropic.com/v1 <br> (Please include /v1 but do not include /messages)';
+           hint = 'Standard: https://api.anthropic.com/v1\n(Please include /v1 but do not include /messages)';
         } else if (type === 'openai-completions' || type === 'openai-responses') {
-           hint = 'Base URL, e.g. https://api.openai.com/v1 <br> (Do not include /chat/completions or /responses)';
+           hint = 'Base URL, e.g. https://api.openai.com/v1\n(Do not include /chat/completions or /responses)';
         } else if (type === 'google-generateContent') {
            hint = 'Base URL, e.g. https://generativelanguage.googleapis.com/v1beta';
         }
-        if (pEndpointHint) {
-          pEndpointHint.innerHTML = hint;
+        if (pEndpointTooltip) {
+          pEndpointTooltip.textContent = hint;
         }
       }
       pType.addEventListener('change', updateHints);
@@ -428,7 +487,7 @@
 
         show(contentContainer);
 
-        const isCreate = mode === 'create';
+        const isCreate = !item?.data?.id;
 
         if (item.type === 'provider') {
           show(providerForm);
@@ -456,7 +515,7 @@
           if (data.maskedApiKey) {
             pApiKey.placeholder = `Current: ${data.maskedApiKey}`;
           } else {
-            pApiKey.placeholder = isCreate ? 'Required' : 'Leave empty to keep unchanged';
+            pApiKey.placeholder = 'Enter API key';
           }
 
           pDesc.value = data.description || '';
