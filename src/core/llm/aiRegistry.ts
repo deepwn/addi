@@ -202,7 +202,8 @@ export class AIProviderRegistry {
   ): LanguageModel {
     AIProviderRegistry.ensureInitialized();
 
-    const modelId = typeof modelOrId === "string" ? modelOrId : modelOrId.id;
+    const requestedModelId =
+      typeof modelOrId === "string" ? modelOrId : modelOrId.id;
     let model =
       typeof modelOrId === "object" ? (modelOrId as Model) : undefined;
 
@@ -214,6 +215,9 @@ export class AIProviderRegistry {
     ) {
       model = provider.models.find((m) => m.id === modelOrId);
     }
+
+    // Prefer remote model ID for provider API calls (id is local storage UUID).
+    const modelId = model?.rid?.trim() || requestedModelId;
 
     // 尝试获取对应的工厂，如果找不到则默认使用 openai (兼容模式)
     let factory = AIProviderRegistry.factories[provider.providerType];
