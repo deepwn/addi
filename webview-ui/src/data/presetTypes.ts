@@ -5,6 +5,10 @@ export interface PresetProfile {
   label: string;
   description: string;
   defaults?: Partial<Record<string, unknown>>;
+  /** Optional coding plan endpoint (some providers have separate coding subscription tiers) */
+  codingUrl?: string;
+  /** Optional coding plan model list endpoint */
+  codingListApi?: string;
 }
 
 export interface ProviderPreset {

@@ -3,11 +3,13 @@ import type { ByokProvider } from '../../services/byokTypes';
 import { getProviderDefaults } from '../../services/byokTypes';
 import type { ProviderModelManager } from '../../core/providers/ProviderModelManager';
 import { ModelTreeItem } from './treeItems';
+import { resolveProviderTreeIcon } from './providerIcons';
 
 export class ProviderTreeItem extends vscode.TreeItem {
   constructor(
     public provider: ByokProvider,
     public hasApiKey = false,
+    extensionUri?: vscode.Uri,
   ) {
     super(provider.name, vscode.TreeItemCollapsibleState.Collapsed);
     this.id = provider.name;
@@ -18,10 +20,12 @@ export class ProviderTreeItem extends vscode.TreeItem {
       this.contextValue = 'provider-no-key';
     }
 
-    // Show sync icon if listApi is configured
-    const defaults = getProviderDefaults(provider);
-    if (defaults.listApi) {
-      this.iconPath = new vscode.ThemeIcon('sync');
+    // Resolve provider brand icon (grayscale logo) from URL/vendor matching
+    if (extensionUri) {
+      const icon = resolveProviderTreeIcon(provider, extensionUri);
+      if (icon) {
+        this.iconPath = icon;
+      }
     }
 
     const modelCount = provider.models?.length ?? 0;
@@ -36,6 +40,7 @@ export class ProviderTreeItem extends vscode.TreeItem {
       tooltip += `\n${vscode.l10n.t('⚠ API key not configured yet.')}`;
     }
 
+    const defaults = getProviderDefaults(provider);
     if (defaults.listApi) {
       tooltip += `\n${vscode.l10n.t('📡 listApi: {0}', defaults.listApi)}`;
     }
@@ -49,7 +54,10 @@ export class AddiTreeDataProvider implements vscode.TreeDataProvider<vscode.Tree
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<vscode.TreeItem | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  constructor(private manager: ProviderModelManager) {}
+  constructor(
+    private manager: ProviderModelManager,
+    private readonly _extensionUri?: vscode.Uri,
+  ) {}
 
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
     return element;
@@ -64,7 +72,7 @@ export class AddiTreeDataProvider implements vscode.TreeDataProvider<vscode.Tree
       const providers = this.manager.getProviders();
       return providers.map((p) => {
         const hasApiKey = !!p.apiKey?.trim();
-        return new ProviderTreeItem(p, hasApiKey);
+        return new ProviderTreeItem(p, hasApiKey, this._extensionUri);
       });
     }
 

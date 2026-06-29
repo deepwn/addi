@@ -22,6 +22,7 @@ bunfig.toml
 **/*.map
 **/*.ts
 !**/*.min.(svg|png|jpg|jpeg|gif)
+!resources/provider-icons/**
 release/**
 .lintstagedrc.json
 addi-config.json

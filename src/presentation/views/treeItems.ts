@@ -16,13 +16,6 @@ export class ModelTreeItem extends vscode.TreeItem {
 
     this.contextValue = hasApiKey ? 'model' : 'model-no-key';
 
-    // Set icon based on toolCalling support
-    if (model.toolCalling) {
-      this.iconPath = new vscode.ThemeIcon('comment-discussion');
-    } else {
-      this.iconPath = new vscode.ThemeIcon('warning');
-    }
-
     const capabilityHints: string[] = [];
     if (model.toolCalling) capabilityHints.push('tool');
     if (model.thinking) capabilityHints.push('think');

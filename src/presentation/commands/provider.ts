@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { BaseCommandHandler } from './base';
+import { BaseCommandHandler, resolveApiKey } from './base';
 import type { ProviderTreeItem } from '../views/providerView';
 import { getProviderDefaults } from '../../services/byokTypes';
 import { fetchProviderModels } from '../../services/remoteModelFetcher';
@@ -55,7 +55,7 @@ export class ProviderCommandHandler extends BaseCommandHandler {
 
     if (!defaults.listApi) {
       vscode.window.showWarningMessage(
-        vscode.l10n.t('Provider "{0}" has no listApi configured. Set it in the provider _default settings.', provider.name),
+        vscode.l10n.t('Provider "{0}" has no listApi configured. Set it in the provider _addi settings.', provider.name),
       );
       return;
     }
@@ -67,14 +67,12 @@ export class ProviderCommandHandler extends BaseCommandHandler {
       return;
     }
 
-    // Resolve API key
-    const apiKey = provider.apiKey.startsWith('${input:')
-      ? undefined
-      : provider.apiKey.trim();
+    // Resolve API key (handles ${input:...} secret references)
+    const apiKey = await resolveApiKey(provider.apiKey, provider.name, this.context);
 
     if (!apiKey) {
       vscode.window.showWarningMessage(
-        vscode.l10n.t('Cannot resolve API key for provider "{0}". Secret references (${{input:...}}) cannot be resolved for direct API calls.', provider.name),
+        vscode.l10n.t('Cannot resolve API key for provider "{0}". Please enter the key when prompted.', provider.name),
       );
       return;
     }

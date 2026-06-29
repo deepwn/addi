@@ -71,39 +71,48 @@ export interface ByokProvider {
   apiType?: ByokApiType;
   /** List of models */
   models?: ByokModel[];
-  /** Provider-level settings */
+  /** Provider-level settings (BYOK standard) */
   settings?: Record<string, Record<string, unknown>>;
+  /**
+   * Addi-private provider default settings.
+   * Stored at provider root level to avoid polluting the BYOK settings schema.
+   */
+  _addi_defaults?: Record<string, unknown>;
 }
 
 /** Top-level chatLanguageModels.json format (array of providers) */
 export type ByokConfig = ByokProvider[];
 
 /**
- * Provider-level `_default` settings for models.
+ * Addi-private provider default settings stored in `_addi_defaults`.
  * Used as fallback values when creating new models under this provider.
+ *
+ * Note: `url` and `listApi` are visually presented as top-level provider fields
+ * in the UI, but stored within `_addi_defaults` for Addi compatibility.
  */
 export interface ByokDefaultSettings {
-  /** API endpoint for listing available models */
+  /** Default API endpoint URL (provider-level, stored in _addi_defaults) */
+  url?: string;
+  /** API endpoint for listing available models (stored in _addi_defaults) */
   listApi?: string;
   /** Default values applied to new models */
   toolCalling?: boolean;
   vision?: boolean;
   thinking?: boolean;
   streaming?: boolean;
+  supportsReasoningEffort?: 'low' | 'medium' | 'high' | ('low' | 'medium' | 'high')[];
   maxInputTokens?: number;
   maxOutputTokens?: number;
-  url?: string;
 }
 
-/** Helper to get the _default settings from a provider */
+/** Helper to get the _addi_defaults from a provider */
 export function getProviderDefaults(provider: ByokProvider): ByokDefaultSettings {
-  return (provider.settings?.['_default'] as ByokDefaultSettings) ?? {};
+  return (provider._addi_defaults as ByokDefaultSettings) ?? {};
 }
 
-/** Helper to set the _default settings on a provider */
+/** Helper to set the _addi_defaults on a provider */
 export function setProviderDefaults(provider: ByokProvider, defaults: ByokDefaultSettings): void {
-  if (!provider.settings) provider.settings = {};
-  provider.settings['_default'] = defaults as Record<string, unknown>;
+  provider._addi_defaults = defaults as Record<string, unknown>;
 }
 
 /**

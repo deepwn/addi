@@ -287,7 +287,9 @@
           "defaults": {
             "url": "https://ark.cn-beijing.volces.com/api/v3",
             "listApi": "https://ark.cn-beijing.volces.com/api/v3/models"
-          }
+          },
+          "codingUrl": "https://ark.cn-beijing.volces.com/api/v3",
+          "codingListApi": "https://ark.cn-beijing.volces.com/api/v3/models"
         }
       ]
     },
@@ -304,7 +306,9 @@
           "defaults": {
             "url": "https://qianfan.baidubce.com/v2",
             "listApi": "https://qianfan.baidubce.com/v2/models"
-          }
+          },
+          "codingUrl": "https://qianfan.baidubce.com/v2",
+          "codingListApi": "https://qianfan.baidubce.com/v2/models"
         }
       ]
     },

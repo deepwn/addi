@@ -13,6 +13,38 @@ interface ModelFormProps {
   remoteModels?: RemoteModelInfo[];
 }
 
+/** Reasoning effort options */
+const REASONING_EFFORT_OPTIONS = [
+  { value: "", label: "None" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: '["low","medium","high"]', label: "All (Low / Medium / High)" },
+];
+
+/** Reasoning effort format options */
+const REASONING_EFFORT_FORMAT_OPTIONS = [
+  { value: "", label: "Default" },
+  { value: "api-token", label: "API Token (in body)" },
+  { value: "api-header-proxy", label: "API Header Proxy" },
+  { value: "api-key", label: "API Key" },
+];
+
+function serializeReasoningEffort(v: ByokModelFormData['supportsReasoningEffort']): string {
+  if (!v) return '';
+  if (Array.isArray(v)) return JSON.stringify(v);
+  return v;
+}
+
+function parseReasoningEffort(raw: string): ByokModelFormData['supportsReasoningEffort'] {
+  if (!raw) return undefined;
+  if (raw.startsWith('[')) {
+    try { return JSON.parse(raw) as ('low' | 'medium' | 'high')[]; } catch { return undefined; }
+  }
+  if (raw === 'low' || raw === 'medium' || raw === 'high') return raw;
+  return undefined;
+}
+
 export const ModelForm: React.FC<ModelFormProps> = ({
   data,
   mode,
@@ -38,7 +70,6 @@ export const ModelForm: React.FC<ModelFormProps> = ({
         streaming: providerDefaults.streaming ?? prev.streaming,
         maxInputTokens: providerDefaults.maxInputTokens ?? prev.maxInputTokens,
         maxOutputTokens: providerDefaults.maxOutputTokens ?? prev.maxOutputTokens,
-        url: providerDefaults.url ?? prev.url,
       }));
     }
   }, [data, providerDefaults]);
@@ -176,7 +207,7 @@ export const ModelForm: React.FC<ModelFormProps> = ({
       </div>
 
       <div className="form-group">
-        <label>Capabilities</label>
+        <label>{t("model.capabilities")}</label>
         <div className="checkbox-group">
           <label className="checkbox-item">
             <input
@@ -214,16 +245,35 @@ export const ModelForm: React.FC<ModelFormProps> = ({
             />{" "}
             {t("model.streaming")}
           </label>
-          <label className="checkbox-item">
-            <input
-              type="checkbox"
-              checked={!!formData.supportsReasoningEffort}
-              onChange={(e) => handleChange("supportsReasoningEffort", e.target.checked || undefined)}
-              disabled={mode === "read"}
-            />{" "}
-            {t("model.supportsReasoningEffort")}
-          </label>
         </div>
+      </div>
+
+      <div className="form-group">
+        <label>{t("model.supportsReasoningEffort")}</label>
+        <select
+          value={serializeReasoningEffort(formData.supportsReasoningEffort)}
+          onChange={(e) => handleChange("supportsReasoningEffort", parseReasoningEffort(e.target.value))}
+          disabled={mode === "read"}
+        >
+          {REASONING_EFFORT_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{t(opt.label as any) || opt.label}</option>
+          ))}
+        </select>
+        <div className="field-hint">{t("model.supportsReasoningEffortNote")}</div>
+      </div>
+
+      <div className="form-group">
+        <label>{t("model.reasoningEffortFormat")}</label>
+        <select
+          value={formData.reasoningEffortFormat || ""}
+          onChange={(e) => handleChange("reasoningEffortFormat", e.target.value || undefined)}
+          disabled={mode === "read"}
+        >
+          {REASONING_EFFORT_FORMAT_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        <div className="field-hint">{t("model.reasoningEffortFormatNote")}</div>
       </div>
 
       {mode !== "read" && (

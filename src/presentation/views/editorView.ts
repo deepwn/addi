@@ -5,6 +5,7 @@ import type { ProviderModelManager } from '../../core/providers/ProviderModelMan
 import { ProviderTreeItem } from './providerView';
 import { ModelTreeItem } from './treeItems';
 import { logger, LogScope } from '../../common/logger';
+import { resolveApiKey, storeApiKey } from '../commands/base';
 
 // ---- Webview message types ----
 
@@ -19,10 +20,13 @@ interface ProviderUpdateData {
   vendor: string;
   apiType?: string;
   apiKey?: string;
+  /** Provider-level API URL (stored in _addi_defaults.url) */
+  url?: string;
+  /** Model list API endpoint (stored in _addi_defaults.listApi) */
+  listApi?: string;
   models?: unknown[];
   defaultSettings?: Record<string, unknown>;
   settings?: Record<string, Record<string, unknown>>;
-  url?: string;
 }
 
 /** Data for model editing sent to webview */
@@ -38,6 +42,7 @@ interface ModelUpdateData {
   maxOutputTokens?: number;
   editTools?: unknown;
   supportsReasoningEffort?: unknown;
+  reasoningEffortFormat?: string;
   requestHeaders?: Record<string, string>;
   // Extra metadata
   providerDefaults?: Record<string, unknown>;
@@ -69,6 +74,10 @@ interface ProviderFormPayload {
   vendor: string;
   apiType?: string;
   apiKey?: string;
+  /** Provider-level API URL */
+  url?: string;
+  /** Model list API endpoint */
+  listApi?: string;
   defaultSettings?: Record<string, unknown>;
 }
 
@@ -84,6 +93,7 @@ interface ModelFormPayload {
   maxOutputTokens?: number;
   editTools?: unknown;
   supportsReasoningEffort?: unknown;
+  reasoningEffortFormat?: string;
   requestHeaders?: Record<string, string>;
 }
 
@@ -92,7 +102,7 @@ interface ModelFormPayload {
  *
  * Opens a webview panel for creating/editing providers and models.
  * Supports single-model editing and batch-model editing.
- * Provider forms include _default settings, listApi, and quick-add presets.
+ * Provider forms include _addi_defaults settings, listApi, and quick-add presets.
  */
 export class EditorViewManager {
   public static readonly viewType = 'addiEditor';
@@ -114,6 +124,7 @@ export class EditorViewManager {
     private readonly _extensionUri: vscode.Uri,
     private readonly _manager: ProviderModelManager,
     private readonly _refreshTree: () => void,
+    private readonly _context: vscode.ExtensionContext,
   ) {}
 
   // ==================== Public API ====================
@@ -308,6 +319,9 @@ export class EditorViewManager {
       if (Object.keys(defaults).length > 0) {
         data.defaultSettings = defaults as Record<string, unknown>;
       }
+      // Extract top-level fields from _addi_defaults
+      if (defaults.url) data.url = defaults.url;
+      if (defaults.listApi) data.listApi = defaults.listApi;
       return data;
     }
 
@@ -326,6 +340,7 @@ export class EditorViewManager {
       if (item.model.maxOutputTokens !== undefined) data.maxOutputTokens = item.model.maxOutputTokens;
       if (item.model.editTools !== undefined) data.editTools = item.model.editTools;
       if (item.model.supportsReasoningEffort !== undefined) data.supportsReasoningEffort = item.model.supportsReasoningEffort;
+      if (item.model.reasoningEffortFormat !== undefined) data.reasoningEffortFormat = item.model.reasoningEffortFormat;
       if (item.model.requestHeaders !== undefined) data.requestHeaders = item.model.requestHeaders;
       return data;
     }
@@ -362,7 +377,7 @@ export class EditorViewManager {
         if (p.maxOutputTokens !== undefined) data.maxOutputTokens = p.maxOutputTokens;
       }
 
-      // Apply provider _default settings
+      // Apply provider _addi_defaults settings
       const parentProvider = this._manager.getProvider(parentId);
       if (parentProvider) {
         const defaults = getProviderDefaults(parentProvider);
@@ -378,13 +393,14 @@ export class EditorViewManager {
           if (defaults.streaming !== undefined) data.streaming = defaults.streaming;
           if (defaults.maxInputTokens !== undefined) data.maxInputTokens = defaults.maxInputTokens;
           if (defaults.maxOutputTokens !== undefined) data.maxOutputTokens = defaults.maxOutputTokens;
+          if (defaults.supportsReasoningEffort !== undefined) data.supportsReasoningEffort = defaults.supportsReasoningEffort;
           if (defaults.url !== undefined) data.url = defaults.url;
         }
 
         // Fetch remote models if listApi is configured
         if (defaults.listApi && parentProvider.apiKey) {
           try {
-            const apiKey = this._resolveApiKey(parentProvider.apiKey);
+            const apiKey = await resolveApiKey(parentProvider.apiKey, parentProvider.name, this._context);
             if (apiKey) {
               const { fetchProviderModels } = await import('../../services/remoteModelFetcher.js');
               const remoteModels = await fetchProviderModels(parentProvider, apiKey);
@@ -408,6 +424,8 @@ export class EditorViewManager {
       name: '',
       vendor: 'customendpoint',
       apiKey: '',
+      url: '',
+      listApi: '',
       defaultSettings: {},
     };
 
@@ -443,6 +461,7 @@ export class EditorViewManager {
     if (first.model.maxOutputTokens !== undefined) data.maxOutputTokens = first.model.maxOutputTokens;
     if (first.model.editTools !== undefined) data.editTools = first.model.editTools;
     if (first.model.supportsReasoningEffort !== undefined) data.supportsReasoningEffort = first.model.supportsReasoningEffort;
+    if (first.model.reasoningEffortFormat !== undefined) data.reasoningEffortFormat = first.model.reasoningEffortFormat;
     if (first.model.requestHeaders !== undefined) data.requestHeaders = first.model.requestHeaders;
     return data;
   }
@@ -457,10 +476,18 @@ export class EditorViewManager {
         vendor: (data.vendor || 'customendpoint') as ByokVendor,
         models: [],
       };
-      if (data.apiKey) providerData.apiKey = data.apiKey;
+      if (data.apiKey) {
+        // Encrypt: store in extension secrets, write ${input:} reference to file
+        providerData.apiKey = await storeApiKey(data.apiKey, data.name, this._context);
+      }
       if (data.apiType) providerData.apiType = data.apiType as ByokApiType;
-      if (data.defaultSettings && Object.keys(data.defaultSettings).length > 0) {
-        providerData.settings = { _default: data.defaultSettings };
+
+      // Merge url, listApi, and defaultSettings into _addi_defaults
+      const defaults: Record<string, unknown> = { ...(data.defaultSettings || {}) };
+      if (data.url) defaults['url'] = data.url;
+      if (data.listApi) defaults['listApi'] = data.listApi;
+      if (Object.keys(defaults).length > 0) {
+        providerData._addi_defaults = defaults;
       }
 
       if (!providerData.name.trim()) {
@@ -490,12 +517,24 @@ export class EditorViewManager {
       updates.apiType = data.apiType as ByokApiType;
     }
     if (data.apiKey !== provider.apiKey) {
-      if (data.apiKey) updates.apiKey = data.apiKey;
+      if (data.apiKey) {
+        // Encrypt new key: store in extension secrets, write ${input:} reference
+        updates.apiKey = await storeApiKey(data.apiKey, data.name, this._context);
+      }
     }
 
-    // Handle _default settings changes
+    // Handle _addi_defaults changes — merge url, listApi + defaultSettings
     const oldDefaults = getProviderDefaults(provider);
-    const newDefaults: Record<string, unknown> = data.defaultSettings ?? {};
+    const newDefaults: Record<string, unknown> = { ...(data.defaultSettings || {}) };
+    if (data.url !== undefined) newDefaults['url'] = data.url || undefined;
+    if (data.listApi !== undefined) newDefaults['listApi'] = data.listApi || undefined;
+
+    // Clean undefined/empty values
+    for (const k of Object.keys(newDefaults)) {
+      if (newDefaults[k] === undefined || newDefaults[k] === '') {
+        delete newDefaults[k];
+      }
+    }
     const oldKeys = Object.keys(oldDefaults);
     const newKeys = Object.keys(newDefaults);
     const defaultsChanged =
@@ -503,26 +542,7 @@ export class EditorViewManager {
       oldKeys.some(k => newDefaults[k] !== (oldDefaults as Record<string, unknown>)[k]);
 
     if (defaultsChanged) {
-      if (newKeys.length === 0) {
-        if (provider.settings) {
-          const clean: Record<string, Record<string, unknown>> = {};
-          let hasOtherKeys = false;
-          for (const k of Object.keys(provider.settings)) {
-            const val = provider.settings[k];
-            if (k !== '_default' && val !== undefined) {
-              clean[k] = val;
-              hasOtherKeys = true;
-            }
-          }
-          if (hasOtherKeys) {
-            updates.settings = clean;
-          }
-          // When no other keys, leaving updates.settings unset means "no change"
-          // but we need to signal the removal. The file manager handles this.
-        }
-      } else {
-        updates.settings = { ...(provider.settings || {}), _default: newDefaults };
-      }
+      updates._addi_defaults = newKeys.length > 0 ? newDefaults : undefined;
     }
 
     if (Object.keys(updates).length === 0) {
@@ -559,6 +579,7 @@ export class EditorViewManager {
       if (data.maxOutputTokens !== undefined && data.maxOutputTokens > 0) model.maxOutputTokens = data.maxOutputTokens;
       if (data.editTools !== undefined) model.editTools = data.editTools as boolean | string[];
       if (data.supportsReasoningEffort !== undefined) model.supportsReasoningEffort = data.supportsReasoningEffort as 'low' | 'medium' | 'high' | ('low' | 'medium' | 'high')[];
+      if (data.reasoningEffortFormat) model.reasoningEffortFormat = data.reasoningEffortFormat as 'api-token' | 'api-header-proxy' | 'api-key';
       if (data.requestHeaders) model.requestHeaders = data.requestHeaders;
 
       if (!model.id.trim()) {
@@ -602,6 +623,9 @@ export class EditorViewManager {
     if (data.supportsReasoningEffort !== model.supportsReasoningEffort) {
       if (data.supportsReasoningEffort !== undefined) updates.supportsReasoningEffort = data.supportsReasoningEffort as 'low' | 'medium' | 'high' | ('low' | 'medium' | 'high')[];
     }
+    if (data.reasoningEffortFormat !== model.reasoningEffortFormat) {
+      if (data.reasoningEffortFormat !== undefined) updates.reasoningEffortFormat = data.reasoningEffortFormat as 'api-token' | 'api-header-proxy' | 'api-key';
+    }
     if (data.requestHeaders !== model.requestHeaders) {
       if (data.requestHeaders) updates.requestHeaders = data.requestHeaders;
     }
@@ -620,11 +644,6 @@ export class EditorViewManager {
   }
 
   // ==================== Helpers ====================
-
-  private _resolveApiKey(apiKey: string): string | undefined {
-    if (apiKey.startsWith('${input:')) return undefined;
-    return apiKey.trim() || undefined;
-  }
 
   private async _getHtmlForWebview(webview: vscode.Webview): Promise<string> {
     const nonce = getNonce();

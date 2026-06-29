@@ -15,23 +15,36 @@ export interface I18nMessages {
     title: string;
     name: string;
     apiType: string;
+    apiUrl: string;
+    apiUrlPlaceholder: string;
+    apiUrlNote: string;
     apiKey: string;
     apiKeyPlaceholder: string;
     apiKeyNote: string;
     apiTypeOptions: Record<string, string>;
-    defaultsSection: string;
-    defaultsDescription: string;
     listApi: string;
     listApiPlaceholder: string;
     listApiNote: string;
+    defaultsSection: string;
+    defaultsDescription: string;
+    defaultMaxInputTokens: string;
+    defaultMaxOutputTokens: string;
+    defaultCapabilities: string;
     defaultToolCalling: string;
     defaultVision: string;
     defaultThinking: string;
     defaultStreaming: string;
-    defaultMaxInputTokens: string;
-    defaultMaxOutputTokens: string;
+    defaultReasoningEffort: string;
+    defaultReasoningEffortNote: string;
+    reasoningEffortNone: string;
+    reasoningEffortLow: string;
+    reasoningEffortMedium: string;
+    reasoningEffortHigh: string;
+    reasoningEffortAll: string;
     quickAddTitle: string;
     quickAddSearchPlaceholder: string;
+    codingPlanToggle: string;
+    codingPlanHint: string;
   };
 
   // ── Model Form ──
@@ -46,11 +59,15 @@ export interface I18nMessages {
     urlPlaceholder: string;
     maxInputTokens: string;
     maxOutputTokens: string;
+    capabilities: string;
     toolCalling: string;
     thinking: string;
     vision: string;
     streaming: string;
     supportsReasoningEffort: string;
+    supportsReasoningEffortNote: string;
+    reasoningEffortFormat: string;
+    reasoningEffortFormatNote: string;
   };
 
   // ── App ──

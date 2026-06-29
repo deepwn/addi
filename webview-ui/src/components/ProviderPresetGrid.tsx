@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
-import { getLobeIconCDN } from "../utils/getLobeIconCDN";
+import { getProviderIcon } from "../utils/getProviderIcon";
 import { useLocale } from "../i18n";
 import presetsJson from "../data/presets.json";
 import type { PresetsData, ProviderPreset, PresetProfile } from "../data/presetTypes";
@@ -15,6 +15,10 @@ export interface PresetSelectResult {
   vendor: string;
   apiType: string;
   defaults?: Record<string, unknown>;
+  /** Optional coding plan endpoint URL (if provider has a separate coding tier) */
+  codingUrl?: string;
+  /** Optional coding plan model list endpoint */
+  codingListApi?: string;
 }
 
 interface Props {
@@ -33,7 +37,7 @@ const ProfileChooser: React.FC<{
       <div className="profile-chooser-header">
         <img
           className="profile-chooser-icon"
-          src={getLobeIconCDN(preset.iconKey, { type: "color", format: "svg", cdn: "unpkg" })}
+          src={getProviderIcon(preset.iconKey)}
           alt={preset.name}
         />
         <span className="profile-chooser-title">{preset.name}</span>
@@ -72,32 +76,30 @@ export const ProviderPresetGrid: React.FC<Props> = ({ onSelect }) => {
     );
   }, [query]);
 
+  const buildResult = useCallback((preset: ProviderPreset, profile: PresetProfile): PresetSelectResult => ({
+    name: preset.name,
+    vendor: preset.vendor,
+    apiType: profile.apiType,
+    defaults: profile.defaults as Record<string, unknown> | undefined,
+    codingUrl: profile.codingUrl,
+    codingListApi: profile.codingListApi,
+  }), []);
+
   const handleCardClick = useCallback((preset: ProviderPreset) => {
     if (preset.profiles.length === 1 && preset.profiles[0]) {
       // Single profile → apply immediately
-      const profile = preset.profiles[0];
-      onSelect({
-        name: preset.name,
-        vendor: preset.vendor,
-        apiType: profile.apiType,
-        defaults: profile.defaults as Record<string, unknown> | undefined,
-      });
+      onSelect(buildResult(preset, preset.profiles[0]));
     } else {
       // Multiple profiles → show chooser
       setActivePreset(preset);
     }
-  }, [onSelect]);
+  }, [onSelect, buildResult]);
 
   const handleProfilePick = useCallback((profile: PresetProfile) => {
     if (!activePreset) return;
-    onSelect({
-      name: activePreset.name,
-      vendor: activePreset.vendor,
-      apiType: profile.apiType,
-      defaults: profile.defaults as Record<string, unknown> | undefined,
-    });
+    onSelect(buildResult(activePreset, profile));
     setActivePreset(null);
-  }, [activePreset, onSelect]);
+  }, [activePreset, onSelect, buildResult]);
 
   return (
     <div className="quick-add-section">
@@ -127,11 +129,7 @@ export const ProviderPresetGrid: React.FC<Props> = ({ onSelect }) => {
           >
             <img
               className="preset-card-icon"
-              src={getLobeIconCDN(preset.iconKey, {
-                type: "color",
-                format: "svg",
-                cdn: "unpkg",
-              })}
+            src={getProviderIcon(preset.iconKey)}
               alt={preset.name}
             />
             <span className="preset-card-name">{preset.name}</span>

@@ -13,6 +13,34 @@
 import type { ByokProvider } from './byokTypes';
 import { logger, LogScope } from '../common/logger';
 
+/**
+ * Resolve a potentially relative listApi URL against the provider's base URL.
+ *
+ * If listApi starts with "/" (relative path), it's joined onto the origin of
+ * the provider's base URL. Otherwise it's returned as-is (absolute URL).
+ *
+ * Examples:
+ *   url="https://api.openai.com/v1", listApi="/v1/models"
+ *     → "https://api.openai.com/v1/models"
+ *   url="https://api.deepseek.com", listApi="/models"
+ *     → "https://api.deepseek.com/models"
+ *   url="https://api.example.com", listApi="https://models.example.com/v1/models"
+ *     → "https://models.example.com/v1/models" (absolute, returned as-is)
+ */
+function resolveListApiUrl(listApi: string, baseUrl?: string): string {
+  if (!listApi.startsWith('/') || !baseUrl) return listApi;
+
+  try {
+    const base = new URL(baseUrl);
+    // Build: origin + listApi path (strips path from baseUrl)
+    const resolved = new URL(listApi, base.origin);
+    return resolved.toString();
+  } catch {
+    // If baseUrl is invalid, return listApi as-is
+    return listApi;
+  }
+}
+
 /** Lightweight remote model info returned from listApi */
 export interface RemoteModelInfo {
   id: string;
@@ -45,12 +73,16 @@ export async function fetchProviderModels(
   provider: ByokProvider,
   apiKey: string,
 ): Promise<RemoteModelInfo[]> {
-  const defaults = (provider.settings?.['_default'] ?? {}) as Record<string, unknown>;
-  const listApi = typeof defaults['listApi'] === 'string' ? defaults['listApi'].trim() : '';
+  const defaults = (provider._addi_defaults ?? {}) as Record<string, unknown>;
+  const rawListApi = typeof defaults['listApi'] === 'string' ? defaults['listApi'].trim() : '';
+  const baseUrl = typeof defaults['url'] === 'string' ? defaults['url'].trim() : undefined;
 
-  if (!listApi) {
-    throw new Error('Provider has no listApi configured in _default settings');
+  if (!rawListApi) {
+    throw new Error('Provider has no listApi configured in _addi_defaults');
   }
+
+  // Resolve relative paths (e.g. "/v1/models") against baseUrl
+  const listApi = resolveListApiUrl(rawListApi, baseUrl);
 
   if (!apiKey) {
     throw new Error('Provider API key is not configured');

@@ -25,7 +25,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Core manager (wraps ByokFileManager)
   const manager = new ProviderModelManager(fileManager);
-  const treeDataProvider = new AddiTreeDataProvider(manager);
+  const treeDataProvider = new AddiTreeDataProvider(manager, context.extensionUri);
   context.subscriptions.push(manager.onDidUpdate(() => treeDataProvider.refresh()));
   vscode.window.registerTreeDataProvider('addiProviders', treeDataProvider);
 
@@ -53,6 +53,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Editor webview manager
   const editorViewManager = new EditorViewManager(context.extensionUri, manager, () =>
     treeDataProvider.refresh(),
+    context,
   );
   commandHandler.setEditorViewManager(editorViewManager);
 

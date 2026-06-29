@@ -59,6 +59,7 @@ export class ModelCommandHandler extends BaseCommandHandler {
   /**
    * Select a model in VS Code Copilot chat.
    * Only works for models with toolCalling support.
+   * Uses the model's owning provider vendor for proper BYOK model selection.
    */
   async selectModel(item: ModelTreeItem): Promise<void> {
     if (!item.model.toolCalling) {
@@ -69,8 +70,12 @@ export class ModelCommandHandler extends BaseCommandHandler {
     }
 
     try {
+      // Resolve the provider to get the correct vendor for BYOK models
+      const result = this.manager.findModel(item.model.id);
+      const vendor = result?.provider.vendor ?? 'copilot';
+
       await vscode.lm.selectChatModels({
-        vendor: 'copilot',
+        vendor,
         family: item.model.id,
       });
 
@@ -81,7 +86,7 @@ export class ModelCommandHandler extends BaseCommandHandler {
         // Ignore if already open
       }
 
-      logger.info('Chat model selected', { modelId: item.model.id, provider: item.providerName }, LogScope.COMMAND);
+      logger.info('Chat model selected', { modelId: item.model.id, vendor, provider: item.providerName }, LogScope.COMMAND);
     } catch (error) {
       logger.warn('Failed to select chat model', {
         error: error instanceof Error ? error.message : String(error),
