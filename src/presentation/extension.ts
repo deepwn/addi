@@ -1,201 +1,112 @@
-import * as vscode from "vscode";
-import { AddiChatProvider } from "../core/providers/AddiChatProvider";
-import { ProviderModelManager } from "../core/providers/ProviderModelManager";
-import { LLMService } from "../core/llm/llmService";
-import { AddiTreeDataProvider, type ProviderTreeItem } from "./views/providerView";
-import { type ModelTreeItem, normalizeTreeItems } from "./views/treeItems";
-import { CommandHandler } from "./commands";
-import { EditorViewManager } from "./views/editorView";
-import { logger, LogScope } from "../common/logger";
-import { UserFeedback } from "./utils/feedback";
-import { StorageService } from "../infrastructure/storage/storageService";
+import * as vscode from 'vscode';
+import { ProviderModelManager } from '../core/providers/ProviderModelManager';
+import { ByokFileManager } from '../services/byokFileManager';
+import { AddiTreeDataProvider, type ProviderTreeItem } from './views/providerView';
+import { type ModelTreeItem, normalizeTreeItems } from './views/treeItems';
+import { CommandHandler } from './commands';
+import { EditorViewManager } from './views/editorView';
+import { logger, LogScope } from '../common/logger';
 
 /**
- * Composition Root & Entry Point.
+ * Activation Entry Point (BYOK Edition)
  *
- * Responsibilities:
- * 1. Initialize Infrastructure Services (Storage, Logger).
- * 2. Instantiate Core Business Logic (ProviderModelManager).
- * 3. Wire Dependencies (Dependency Injection).
- * 4. Register VS Code UI Components (Commands, Views).
+ * Addi is a visual editor for the user-level chatLanguageModels.json
+ * (%APPDATA%/Code/User/chatLanguageModels.json).
+ * VS Code Copilot handles all agent/chat interactions natively.
  */
 export function activate(context: vscode.ExtensionContext) {
   logger.initialize(context);
-  const extension = vscode.extensions.getExtension("deepwn.addi");
-  const version = extension?.packageJSON?.version ?? "unknown";
-  logger.info(`Extension activated (v${version})`, undefined, LogScope.EXTENSION);
+  logger.info('Addi BYOK extension activated', undefined, LogScope.EXTENSION);
 
-  // Initialize Services (Infrastructure)
-  const storageService = new StorageService(context);
+  // BYOK file manager (reads/writes user-level chatLanguageModels.json)
+  const fileManager = new ByokFileManager();
+  context.subscriptions.push(fileManager);
+  fileManager.initialize(); // ensure config is loaded before tree renders
 
-  const applySettingsSyncPreference = async () => {
-    const config = vscode.workspace.getConfiguration("addi");
-
-    // Enable/disable settings sync for provider configuration
-    const settingsSyncEnabled = config.get<boolean>("syncConfiguration", false);
-    storageService.setSettingsSync(Boolean(settingsSyncEnabled));
-  };
-
-  applySettingsSyncPreference();
-
-  // Initialize Core Managers with Dependencies
-  const manager = new ProviderModelManager(storageService);
-  // context.subscriptions.push(new vscode.Disposable(() => manager.dispose())); // Manager no longer needs dispose if it strictly manages logic
-
+  // Core manager (wraps ByokFileManager)
+  const manager = new ProviderModelManager(fileManager);
   const treeDataProvider = new AddiTreeDataProvider(manager);
   context.subscriptions.push(manager.onDidUpdate(() => treeDataProvider.refresh()));
-  vscode.window.registerTreeDataProvider("addiProviders", treeDataProvider);
+  vscode.window.registerTreeDataProvider('addiProviders', treeDataProvider);
 
-  // Automatically refresh the tree view when the available chat models change in VS Code
+  // Auto-refresh when BYOK config file changes externally
   context.subscriptions.push(
-    vscode.lm.onDidChangeChatModels(() => {
-      treeDataProvider.refresh();
-    }),
+    manager.onDidUpdate(() => treeDataProvider.refresh()),
   );
 
+  // Refresh when VS Code's chat model list changes
   context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration(async (event) => {
-      if (event.affectsConfiguration("addi")) {
-        applySettingsSyncPreference();
-        treeDataProvider.refresh();
-      }
-    }),
+    vscode.lm.onDidChangeChatModels(() => treeDataProvider.refresh()),
   );
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand("addi.showLogs", () => {
-      logger.show();
-    }),
-  );
-
-  // Debug command to list registered tools
-  context.subscriptions.push(
-    vscode.commands.registerCommand("addi.debug.listTools", () => {
-      const tools = vscode.lm.tools;
-      const names = tools.map((t) => t.name).join(", ");
-      vscode.window.showInformationMessage(vscode.l10n.t("Registered LM Tools: {0}", names));
-      logger.info(
-        "Registered LM Tools",
-        {
-          tools: tools.map((t) => ({ name: t.name, tags: t.tags })),
-        },
-        LogScope.EXTENSION,
-      );
-    }),
-  );
-
-  const llmService = new LLMService();
-  const addiChatProvider = new AddiChatProvider(manager, llmService);
-  vscode.lm.registerLanguageModelChatProvider("addi-provider", addiChatProvider);
-
-  const treeView = vscode.window.createTreeView("addiProviders", {
+  // Tree view (multi-select support)
+  const treeView = vscode.window.createTreeView('addiProviders', {
     treeDataProvider,
     showCollapseAll: true,
     canSelectMany: true,
   });
   context.subscriptions.push(treeView);
 
-  // Refresh the tree view when the window gains focus to reflect any changes
-  context.subscriptions.push(
-    vscode.window.onDidChangeWindowState(async (e) => {
-      if (e.focused) {
-        treeDataProvider.refresh();
-      }
-    }),
-  );
+  // Command handler
+  const commandHandler = new CommandHandler(manager, treeDataProvider, context);
 
-  const commandHandler = new CommandHandler(manager, treeDataProvider, context, llmService);
-
-  // Pass storage service to command handler
-  commandHandler.setStorageService(storageService);
-
-  // Initialize EditorViewManager
+  // Editor webview manager
   const editorViewManager = new EditorViewManager(context.extensionUri, manager, () =>
     treeDataProvider.refresh(),
   );
   commandHandler.setEditorViewManager(editorViewManager);
 
-  // Helper: register a command with error handling and auto-dispose
-  function registerCmd(id: string, handler: (...args: any[]) => any): void {
+  // ----- Helper: register command with error handling -----
+  function registerCmd(id: string, handler: (...args: never[]) => unknown): void {
     context.subscriptions.push(
-      vscode.commands.registerCommand(id, async (...args: any[]) => {
+      vscode.commands.registerCommand(id, async (...args: unknown[]) => {
         try {
-          await handler(...args);
+          await (handler as (...a: unknown[]) => unknown)(...args);
         } catch (error) {
-          UserFeedback.showError(vscode.l10n.t("Command {0} failed: {1}", id, error instanceof Error ? error.message : String(error)));
+          vscode.window.showErrorMessage(
+            vscode.l10n.t('Command {0} failed: {1}', id, error instanceof Error ? error.message : String(error)),
+          );
           logger.error(`Command ${id} failed`, error, LogScope.COMMAND);
         }
       }),
     );
   }
 
-  // Helper: resolve multi-select items from explicit arg or treeView.selection
+  // Helper: resolve multi-select items
   function resolveModelItems(item: ModelTreeItem | ModelTreeItem[]): ModelTreeItem[] {
     let items = normalizeTreeItems(item);
     if (items.length <= 1) {
       const sel = treeView.selection as ModelTreeItem[];
-      if (sel && sel.length > 1) {
-        items = sel;
-      }
+      if (sel && sel.length > 1) items = sel;
     }
     return items;
   }
 
-  registerCmd("addi.manage", async () => {
-    await vscode.commands.executeCommand("addiProviders.focus");
+  // ==================== Commands ====================
+  registerCmd('addi.manage', async () => {
+    await vscode.commands.executeCommand('addiProviders.focus');
   });
 
-  registerCmd("addi.addProvider", () => commandHandler.addProvider());
-  registerCmd("addi.editProvider", (item: ProviderTreeItem) => commandHandler.editProvider(item));
-  registerCmd("addi.copyProvider", (item: ProviderTreeItem) => commandHandler.copyProvider(item));
-  registerCmd("addi.deleteProvider", (item: ProviderTreeItem) =>
-    commandHandler.deleteProvider(item),
-  );
-  registerCmd("addi.pullProviderModels", (item: ProviderTreeItem) =>
-    commandHandler.pullProviderModels(item),
-  );
-  registerCmd("addi.addModel", (item: ProviderTreeItem) => commandHandler.addModel(item));
-  registerCmd("addi.setApiKey", (item: ProviderTreeItem) => commandHandler.setApiKey(item));
+  // Provider commands
+  registerCmd('addi.addProvider', () => commandHandler.addProvider());
+  registerCmd('addi.editProvider', (item: ProviderTreeItem) => commandHandler.editProvider(item));
+  registerCmd('addi.copyProvider', (item: ProviderTreeItem) => commandHandler.copyProvider(item));
+  registerCmd('addi.deleteProvider', (item: ProviderTreeItem) => commandHandler.deleteProvider(item));
+  registerCmd('addi.syncProviderModels', (item: ProviderTreeItem) => commandHandler.syncProviderModels(item));
 
-  // Unified commands - handle both single and multi-select internally
-  registerCmd("addi.editModels", (item: ModelTreeItem | ModelTreeItem[]) =>
+  // Model commands
+  registerCmd('addi.addModel', (item: ProviderTreeItem) => commandHandler.addModel(item));
+  registerCmd('addi.editModels', (item: ModelTreeItem | ModelTreeItem[]) =>
     commandHandler.editModels(resolveModelItems(item)),
   );
-  registerCmd("addi.copyModel", (item: ModelTreeItem) => commandHandler.copyModel(item));
-  registerCmd("addi.deleteModels", (item: ModelTreeItem | ModelTreeItem[]) =>
+  registerCmd('addi.deleteModels', (item: ModelTreeItem | ModelTreeItem[]) =>
     commandHandler.deleteModels(resolveModelItems(item)),
   );
+  registerCmd('addi.copyModel', (item: ModelTreeItem) => commandHandler.copyModel(item));
+  registerCmd('addi.selectModel', (item: ModelTreeItem) => commandHandler.selectModel(item));
 
-  // Register visibility commands for models
-  registerCmd("addi.showModelsInPicker", (item: ModelTreeItem | ModelTreeItem[]) =>
-    commandHandler.showModelsInPicker(resolveModelItems(item)),
-  );
-  registerCmd("addi.hideModelsFromPicker", (item: ModelTreeItem | ModelTreeItem[]) =>
-    commandHandler.hideModelsFromPicker(resolveModelItems(item)),
-  );
-
-  // Register visibility commands for providers
-  registerCmd("addi.showProviderModelsInPicker", (item: ProviderTreeItem) =>
-    commandHandler.showProviderModelsInPicker(item),
-  );
-  registerCmd("addi.hideProviderModelsFromPicker", (item: ProviderTreeItem) =>
-    commandHandler.hideProviderModelsFromPicker(item),
-  );
-
-  registerCmd("addi.exportConfig", () => commandHandler.exportConfig());
-  registerCmd("addi.importConfig", () => commandHandler.importConfig());
-  registerCmd("addi.openSettings", () => {
-    vscode.commands.executeCommand("workbench.action.openSettings", "@ext:deepwn.addi");
-  });
-  registerCmd("addi.setModelToCopilot", (item: ModelTreeItem) =>
-    commandHandler.setModelToCopilot(item),
-  );
-  registerCmd("addi.ineligibleModelInfo", () => {
-    // No action, just provides hover via command title
-  });
-  registerCmd("addi.initExtension", () => commandHandler.initExtension());
-  registerCmd("addi.restoreFromBackup", () => commandHandler.restoreFromBackup());
-  registerCmd("addi.manageBackups", () => commandHandler.manageBackups());
+  // Config commands
+  registerCmd('addi.openConfig', () => commandHandler.openConfig());
 }
 
 export function deactivate() {}

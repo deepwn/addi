@@ -7,10 +7,7 @@ export interface I18nMessages {
   common: {
     save: string;
     delete: string;
-    verifyConnection: string;
     cancel: string;
-    default: string;
-    notApplicable: string;
   };
 
   // ── Provider Form ──
@@ -18,84 +15,46 @@ export interface I18nMessages {
     title: string;
     name: string;
     apiType: string;
-    apiEndpoint: string;
     apiKey: string;
     apiKeyPlaceholder: string;
-    apiKeySavedSecurely: string;
-    description: string;
-    website: string;
-    defaultModelSettings: string;
-    defaultModelSettingsDesc: string;
-    defaultTemperature: string;
-    thinkingLabel: {
-      anthropicGoogle: string;
-      default: string;
-    };
-    thinkingHint: string;
-    /** Provider-specific thinking hints keyed by providerType */
-    thinkingHintMap: Record<string, string>;
-    budgetTokensLabel: string;
-    budgetTokensPlaceholder: string;
-    budgetTokensHint: string;
-    extraBody: string;
-    extraBodyPlaceholder: string;
-    globalExtraBody: string;
-    experimental: string;
-    experimentalDesc: string;
-    reasoningContentAdapt: string;
-    reasoningContentAdaptHint: string;
-    extractReasoningContent: string;
-    extractReasoningContentHint: string;
+    apiKeyNote: string;
     apiTypeOptions: Record<string, string>;
+    defaultsSection: string;
+    defaultsDescription: string;
+    listApi: string;
+    listApiPlaceholder: string;
+    listApiNote: string;
+    defaultToolCalling: string;
+    defaultVision: string;
+    defaultThinking: string;
+    defaultStreaming: string;
+    defaultMaxInputTokens: string;
+    defaultMaxOutputTokens: string;
+    quickAddTitle: string;
+    quickAddSearchPlaceholder: string;
   };
 
   // ── Model Form ──
   model: {
     title: string;
     titleBatch: string;
-    displayName: string;
-    remoteModelId: string;
-    remoteModelIdPlaceholder: string;
+    id: string;
+    idPlaceholder: string;
+    idSelectPlaceholder: string;
+    name: string;
+    url: string;
+    urlPlaceholder: string;
     maxInputTokens: string;
     maxOutputTokens: string;
-    capabilities: string;
     toolCalling: string;
     thinking: string;
     vision: string;
-    settingsOverrides: string;
-    settingsOverridesDesc: string;
-    temperature: string;
-    thinkingLabel: {
-      anthropicGoogle: string;
-      default: string;
-    };
-    thinkingHint: string;
-    /** Provider-specific thinking hints keyed by providerType */
-    thinkingHintMap: Record<string, string>;
-    budgetTokensLabel: string;
-    budgetTokensPlaceholder: string;
-    budgetTokensHint: string;
-    extraBody: string;
-    extraBodyPlaceholder: string;
-    experimental: string;
-    experimentalDesc: string;
-    reasoningContentAdapt: string;
-    reasoningContentAdaptHint: string;
-    extractReasoningContent: string;
-    extractReasoningContentHint: string;
-    batchDisabled: string;
+    streaming: string;
+    supportsReasoningEffort: string;
   };
 
   // ── App ──
   app: {
     noSelection: string;
-  };
-
-  // ── Feedback messages ──
-  feedback: {
-    low: string;
-    medium: string;
-    high: string;
-    defaultNotApplicable: string;
   };
 }

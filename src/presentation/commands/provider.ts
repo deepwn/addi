@@ -1,463 +1,173 @@
-import * as vscode from "vscode";
-import { BaseCommandHandler } from "./base";
-import type { ProviderTreeItem } from "../views/providerView";
-import { UserFeedback } from "../utils/feedback";
-import { ConfigManager } from "../../infrastructure/vscode/configService";
-import { maskSecret, logger, LogScope } from "../../common/logger";
-import type { Provider, Model } from "../../common/types";
+import * as vscode from 'vscode';
+import { BaseCommandHandler } from './base';
+import type { ProviderTreeItem } from '../views/providerView';
+import { getProviderDefaults } from '../../services/byokTypes';
+import { fetchProviderModels } from '../../services/remoteModelFetcher';
+import type { ByokModel } from '../../services/byokTypes';
+import { logger, LogScope } from '../../common/logger';
 
 /**
- * Provider-related command handler
+ * Provider-related command handler (BYOK Edition)
  */
 export class ProviderCommandHandler extends BaseCommandHandler {
-  /**
-   * Add a new provider
-   */
   async addProvider(): Promise<void> {
-    if (this.editorViewManager) {
-      this.editorViewManager.openEditor(undefined, "create");
-    } else {
-      UserFeedback.showError(vscode.l10n.t("Editor view manager not initialized"));
-    }
+    this.editorViewManager?.openEditor(undefined, 'create');
   }
 
-  /**
-   * Edit an existing provider
-   */
   async editProvider(item: ProviderTreeItem): Promise<void> {
-    if (this.editorViewManager) {
-      this.editorViewManager.openEditor(item, "edit");
-    } else {
-      UserFeedback.showError(vscode.l10n.t("Editor view manager not initialized"));
-    }
+    this.editorViewManager?.openEditor(item, 'edit');
   }
 
-  /**
-   * Delete a provider and all its models
-   */
   async deleteProvider(item: ProviderTreeItem): Promise<void> {
-    if (ConfigManager.getConfirmDelete()) {
-      const deleteOption: vscode.MessageItem = { title: vscode.l10n.t("Delete") };
-      const deleteDontAskOption: vscode.MessageItem = {
-        title: vscode.l10n.t("Delete and don't ask again"),
-      };
-      const cancelOption: vscode.MessageItem = {
-        title: vscode.l10n.t("Cancel"),
-        isCloseAffordance: true,
-      };
-
-      const selection = await vscode.window.showWarningMessage(
-        vscode.l10n.t('Are you sure you want to delete provider "{0}"?', item.provider.name) +
-          vscode.l10n.t(" This will also delete all of its models."),
-        { modal: false },
-        deleteOption,
-        deleteDontAskOption,
-        cancelOption,
-      );
-
-      if (selection === deleteDontAskOption) {
-        await vscode.workspace
-          .getConfiguration("addi")
-          .update("confirmDelete", false, vscode.ConfigurationTarget.Global);
-        void vscode.window.showInformationMessage(
-          vscode.l10n.t("Delete confirmation disabled. You can re-enable it in settings."),
-        );
-      }
-
-      if (!selection || selection === cancelOption) {
-        logger.debug(
-          "deleteProvider canceled",
-          logger.sanitizeProvider(item.provider),
-          LogScope.COMMAND,
-        );
-        return;
-      }
-    }
-
-    try {
-      await this.manager.deleteProvider(item.provider.id);
-      this.refreshTreeView();
-      UserFeedback.showInfo(vscode.l10n.t('Provider "{0}" deleted', item.provider.name));
-      logger.info("Provider deleted", logger.sanitizeProvider(item.provider), LogScope.COMMAND);
-    } catch (error) {
-      UserFeedback.showError(
-        vscode.l10n.t(
-          "Failed to delete provider: {0}",
-          error instanceof Error ? error.message : "Unknown error",
-        ),
-      );
-      this.logError("deleteProvider failed", error);
-    }
-  }
-
-  /**
-   * Set API key for a provider
-   */
-  async setApiKey(item: ProviderTreeItem): Promise<void> {
-    const currentApiKey = (await this.manager.getApiKey(item.provider.id)) || "";
-
-    const newApiKey = await UserFeedback.showInputBox({
-      prompt: vscode.l10n.t('Set Api Key for "{0}"', item.provider.name),
-      value: "",
-      password: true,
-      placeHolder: currentApiKey
-        ? vscode.l10n.t("Current: {0}", maskSecret(currentApiKey) ?? "")
-        : vscode.l10n.t("Please enter the new API key"),
-    });
-
-    if (newApiKey === undefined || newApiKey === "") {
-      logger.debug(
-        "setApiKey canceled or empty",
-        logger.sanitizeProvider(item.provider),
-        LogScope.COMMAND,
-      );
-      return;
-    }
-
-    try {
-      await this.manager.setApiKey(item.provider.id, newApiKey);
-      logger.info(
-        "Provider API key updated",
-        logger.sanitizeProvider(item.provider),
-        LogScope.COMMAND,
-      );
-      this.refreshTreeView();
-      UserFeedback.showInfo(vscode.l10n.t('Provider "{0}" API key updated', item.provider.name));
-    } catch (error) {
-      UserFeedback.showError(
-        vscode.l10n.t(
-          "Failed to update API key: {0}",
-          error instanceof Error ? error.message : "Unknown error",
-        ),
-      );
-      this.logError("setApiKey failed", error);
-    }
-  }
-
-  /**
-   * Pull models from a provider
-   */
-  async pullProviderModels(item: ProviderTreeItem): Promise<void> {
-    logger.info(
-      "Command pullProviderModels invoked",
-      logger.sanitizeProvider(item.provider),
-      LogScope.COMMAND,
+    const confirmed = await vscode.window.showWarningMessage(
+      vscode.l10n.t('Are you sure you want to delete provider "{0}"? This will also delete all of its models.', item.provider.name),
+      { modal: false },
+      vscode.l10n.t('Delete'),
     );
-    await this.syncProviderModels(item.provider.id);
+    if (!confirmed) return;
+
+    try {
+      await this.manager.deleteProvider(item.provider.name);
+      this.refreshTreeView();
+      vscode.window.showInformationMessage(vscode.l10n.t('Provider "{0}" deleted', item.provider.name));
+    } catch (error) {
+      vscode.window.showErrorMessage(
+        vscode.l10n.t('Failed to delete provider: {0}', error instanceof Error ? error.message : 'Unknown error'),
+      );
+    }
   }
 
-  /**
-   * Copy a provider - opens editor for creating a copy
-   */
   async copyProvider(item: ProviderTreeItem): Promise<void> {
-    logger.info(
-      "Command copyProvider invoked",
-      logger.sanitizeProvider(item.provider),
-      LogScope.COMMAND,
-    );
-
-    if (this.editorViewManager) {
-      // Copy provider data without id/models to ensure it's treated as new
-      const { id: _id, models: _models, ...providerWithoutIdModels } = item.provider;
-      const prefillData: Record<string, unknown> = {
-        ...providerWithoutIdModels,
-        name: `${item.provider.name} ${vscode.l10n.t("Copy")}`,
-      };
-
-      this.editorViewManager.openEditor(undefined, "create", undefined, prefillData);
-    } else {
-      UserFeedback.showError(vscode.l10n.t("Editor view manager not initialized"));
-    }
+    const { models: _models, ...providerData } = item.provider;
+    this.editorViewManager?.openEditor(undefined, 'create', undefined, {
+      ...providerData,
+      name: `${item.provider.name} ${vscode.l10n.t('Copy')}`,
+    } as any);
   }
 
   /**
-   * Sync models from a provider
+   * Sync models from remote listApi endpoint.
+   * Fetches the model list, auto-adds new models, and prompts for stale ones.
    */
-  private async syncProviderModels(providerId: string): Promise<void> {
-    type ModelSyncResult = {
-      added: number;
-      updated: number;
-      totalRemote: number;
-      mutated: boolean;
-    };
+  async syncProviderModels(item: ProviderTreeItem): Promise<void> {
+    const provider = item.provider;
+    const defaults = getProviderDefaults(provider);
 
-    const providers = this.manager.getProviders();
-    const providerIndex = providers.findIndex((p) => p.id === providerId);
-    if (providerIndex < 0) {
-      UserFeedback.showError(vscode.l10n.t("Provider not found"));
-      return;
-    }
-
-    const provider = providers[providerIndex]!;
-    const endpoint = provider.apiEndpoint?.trim();
-    if (!endpoint) {
-      const message = vscode.l10n.t(
-        'Provider "{0}" is missing an API endpoint. Configure it and try pulling models again.',
-        provider.name,
-      );
-      UserFeedback.showWarning(message);
-      logger.warn(
-        "syncProviderModels missing endpoint",
-        logger.sanitizeProvider(provider),
-        LogScope.COMMAND,
+    if (!defaults.listApi) {
+      vscode.window.showWarningMessage(
+        vscode.l10n.t('Provider "{0}" has no listApi configured. Set it in the provider _default settings.', provider.name),
       );
       return;
     }
 
-    // Retrieve API key from SecretStorage
-    const apiKey = await this.manager.getApiKey(provider.id);
+    if (!provider.apiKey) {
+      vscode.window.showWarningMessage(
+        vscode.l10n.t('Provider "{0}" has no API key. Please configure one first.', provider.name),
+      );
+      return;
+    }
+
+    // Resolve API key
+    const apiKey = provider.apiKey.startsWith('${input:')
+      ? undefined
+      : provider.apiKey.trim();
 
     if (!apiKey) {
-      const message = vscode.l10n.t(
-        'Provider "{0}" is missing an API key. Set the key and rerun "Pull Models List".',
-        provider.name,
-      );
-      UserFeedback.showWarning(message);
-      logger.warn(
-        "syncProviderModels missing api key",
-        logger.sanitizeProvider(provider),
-        LogScope.COMMAND,
+      vscode.window.showWarningMessage(
+        vscode.l10n.t('Cannot resolve API key for provider "{0}". Secret references (${{input:...}}) cannot be resolved for direct API calls.', provider.name),
       );
       return;
     }
 
-    const fetchableProvider: Provider = {
-      ...provider,
-      apiEndpoint: endpoint,
-      apiKey,
-    };
-
-    logger.debug(
-      "syncProviderModels start",
-      {
-        provider: logger.sanitizeProvider(fetchableProvider),
-      },
-      LogScope.COMMAND,
-    );
-
     try {
-      const result = await UserFeedback.showProgress<ModelSyncResult>(
-        "Fetching models list...",
-        async (_progress, _token) => {
-          const remoteModels = await this.manager.fetchProviderModelsFromApi(fetchableProvider);
-          // Use model.id (remote model's id = rid) as the key for matching
-          const existingByRid = new Map(provider.models.map((model) => [model.rid, model]));
-          let added = 0;
-          let updated = 0;
-          let skipped = 0;
-
-          if (remoteModels.length === 0) {
-            logger.warn(
-              "fetchProviderModelsFromApi returned no models",
-              {
-                provider: logger.sanitizeProvider(fetchableProvider),
-              },
-              LogScope.COMMAND,
-            );
-            return {
-              added,
-              updated,
-              totalRemote: 0,
-              mutated: false,
-            } satisfies ModelSyncResult;
-          }
-
-          const defaultFamily = ConfigManager.getDefaultModelFamily().trim();
-          const defaultVersion = ConfigManager.getDefaultModelVersion().trim();
-          const defaultMaxInputTokens = ConfigManager.getDefaultMaxInputTokens();
-          const defaultMaxOutputTokens = ConfigManager.getDefaultMaxOutputTokens();
-
-          // Normalize remote token values that may be reported using 1024-based units
-          const normalizeRemoteToken = (v: number | undefined): number | undefined => {
-            if (v === undefined || v === null) {
-              return undefined;
-            }
-            // If value is an exact multiple of 1024, assume provider used 1024-based units
-            // and convert to 1000-based friendly value (e.g. 60*1024 -> 60*1000 = 60000)
-            if (v % 1024 === 0 && v > 0) {
-              return Math.round((v / 1024) * 1000);
-            }
-            return v;
-          };
-
-          // Process remote models and merge with existing
-          for (const remote of remoteModels) {
-            if (!remote.id) {
-              continue;
-            }
-
-            // Use remote.id (which is the remote model's rid) to find existing model
-            const remoteRid = remote.id.trim();
-            const existing = existingByRid.get(remoteRid);
-            if (existing) {
-              let changed = false;
-
-              // Update name if remote has a better name and local name equals the rid
-              if (remote.name && remote.name !== existing.name && existing.name === existing.rid) {
-                existing.name = remote.name;
-                changed = true;
-              }
-
-              const remoteFamily = remote.family?.trim();
-              if (remoteFamily && remoteFamily !== existing.family) {
-                existing.family = remoteFamily;
-                changed = true;
-              }
-
-              const normalizedRemoteInput = normalizeRemoteToken(remote.maxInputTokens);
-              if (
-                normalizedRemoteInput !== undefined &&
-                normalizedRemoteInput !== existing.maxInputTokens
-              ) {
-                existing.maxInputTokens = normalizedRemoteInput;
-                changed = true;
-              }
-
-              const normalizedRemoteOutput = normalizeRemoteToken(remote.maxOutputTokens);
-              if (
-                normalizedRemoteOutput !== undefined &&
-                normalizedRemoteOutput !== existing.maxOutputTokens
-              ) {
-                existing.maxOutputTokens = normalizedRemoteOutput;
-                changed = true;
-              }
-
-              if (remote.capabilities) {
-                existing.capabilities = { ...remote.capabilities };
-                changed = true;
-              }
-
-              if (changed) {
-                updated++;
-              } else {
-                skipped++;
-              }
-
-              continue;
-            }
-
-            // Check for rid conflict: if there's a model with same rid but different local id
-            const conflictingModel = provider.models.find((m) => m.rid === remoteRid);
-            if (conflictingModel) {
-              logger.warn(
-                "Found model with conflicting rid during pull",
-                {
-                  provider: logger.sanitizeProvider(fetchableProvider),
-                  remoteRid,
-                  existingModelId: conflictingModel.id,
-                },
-                LogScope.COMMAND,
-              );
-              // Update the existing model's other properties instead of adding duplicate
-              conflictingModel.name = remote.name?.trim() || remote.id;
-              if (remote.family?.trim()) {
-                conflictingModel.family = remote.family.trim();
-              }
-              if (remote.maxInputTokens) {
-                conflictingModel.maxInputTokens =
-                  normalizeRemoteToken(remote.maxInputTokens) ?? defaultMaxInputTokens;
-              }
-              if (remote.maxOutputTokens) {
-                conflictingModel.maxOutputTokens =
-                  normalizeRemoteToken(remote.maxOutputTokens) ?? defaultMaxOutputTokens;
-              }
-              if (remote.capabilities) {
-                conflictingModel.capabilities = { ...remote.capabilities };
-              }
-              updated++;
-              continue;
-            }
-
-            const remoteFamily = remote.family?.trim();
-            // Capability sync: Default to false for safety
-            const remoteCapabilities = remote.capabilities ? { ...remote.capabilities } : {};
-            if (remoteCapabilities.toolCalling === undefined) {
-              remoteCapabilities.toolCalling = false;
-            }
-
-            // Generate a UUID for the new model
-            const { IdGenerator } = await import("../../common/utils/index.js");
-            const model: Model = {
-              id: IdGenerator.generate(),
-              rid: remoteRid,
-              name: remote.name?.trim() || remote.id,
-              family: remoteFamily || defaultFamily,
-              version: defaultVersion,
-              maxInputTokens: normalizeRemoteToken(remote.maxInputTokens) ?? defaultMaxInputTokens,
-              maxOutputTokens:
-                normalizeRemoteToken(remote.maxOutputTokens) ?? defaultMaxOutputTokens,
-              capabilities: remoteCapabilities,
-              // Default to show in picker when model is pulled
-              isUserSelectable: true,
-            };
-
-            provider.models.push(model);
-            existingByRid.set(remoteRid, model);
-            added++;
-          }
-
-          const mutated = added > 0 || updated > 0;
-          if (mutated) {
-            await this.manager.saveProviders(providers);
-          }
-
-          return {
-            added,
-            updated,
-            totalRemote: remoteModels.length,
-            mutated,
-          } satisfies ModelSyncResult;
+      const remoteModels = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: vscode.l10n.t('Fetching models for {0}...', provider.name),
+          cancellable: false,
+        },
+        async () => {
+          return await fetchProviderModels(provider, apiKey);
         },
       );
 
-      if (!result) {
-        return;
-      }
-
-      if (!result.mutated) {
-        logger.info(
-          "syncProviderModels: no changes",
-          {
-            provider: logger.sanitizeProvider(fetchableProvider),
-          },
-          LogScope.COMMAND,
+      if (remoteModels.length === 0) {
+        vscode.window.showWarningMessage(
+          vscode.l10n.t('No models returned from {0}. Check the listApi endpoint.', provider.name),
         );
         return;
       }
 
-      const fragments: string[] = [];
-      if (result.added > 0) {
-        fragments.push(vscode.l10n.t("{0} added", result.added));
+      const existingIds = new Set((provider.models || []).map(m => m.id));
+      const remoteIds = new Set(remoteModels.map(m => m.id));
+
+      // Auto-add new models (in remote but not in local)
+      let addedCount = 0;
+      for (const remote of remoteModels) {
+        if (!existingIds.has(remote.id)) {
+          const newModel: ByokModel = {
+            id: remote.id,
+            name: remote.name || remote.id,
+            toolCalling: defaults.toolCalling ?? true,
+            vision: defaults.vision ?? false,
+            thinking: defaults.thinking ?? false,
+            streaming: defaults.streaming ?? true,
+            maxInputTokens: remote.maxInputTokens || defaults.maxInputTokens || 128000,
+            maxOutputTokens: remote.maxOutputTokens || defaults.maxOutputTokens || 64000,
+          };
+          await this.manager.addModel(provider.name, newModel);
+          addedCount++;
+        }
       }
-      if (result.updated > 0) {
-        fragments.push(vscode.l10n.t("{0} updated", result.updated));
+
+      // Find stale models (in local but not in remote)
+      const staleIds: string[] = [];
+      for (const mid of existingIds) {
+        if (!remoteIds.has(mid)) {
+          staleIds.push(mid);
+        }
       }
-      const summary = fragments.length > 0 ? fragments.join(", ") : vscode.l10n.t("up to date");
-      UserFeedback.showInfo(vscode.l10n.t('Synced models for "{0}" ({1})', provider.name, summary));
-      logger.info(
-        "syncProviderModels success",
-        {
-          provider: logger.sanitizeProvider(fetchableProvider),
-          added: result.added,
-          updated: result.updated,
-          skipped: result.totalRemote - result.added - result.updated,
-          totalRemote: result.totalRemote,
-        },
-        LogScope.COMMAND,
-      );
+
+      if (addedCount > 0) {
+        vscode.window.showInformationMessage(
+          vscode.l10n.t('{0} new model(s) added to "{1}".', addedCount, provider.name),
+        );
+      }
+
+      if (staleIds.length > 0) {
+        const staleList = staleIds.map(id => `  • ${id}`).join('\n');
+        const remove = await vscode.window.showWarningMessage(
+          vscode.l10n.t(
+            '{0} model(s) in "{1}" were not found in the remote list:\n\n{2}\n\nRemove them?',
+            staleIds.length,
+            provider.name,
+            staleList,
+          ),
+          { modal: true },
+          vscode.l10n.t('Remove'),
+          vscode.l10n.t('Keep'),
+        );
+
+        if (remove === vscode.l10n.t('Remove')) {
+          const deleted = await this.manager.deleteModels(provider.name, staleIds);
+          vscode.window.showInformationMessage(
+            vscode.l10n.t('{0} stale model(s) removed from "{1}".', deleted, provider.name),
+          );
+        }
+      }
+
+      this.refreshTreeView();
+
+      if (addedCount === 0 && staleIds.length === 0) {
+        vscode.window.showInformationMessage(
+          vscode.l10n.t('All {0} models for "{1}" are up to date.', remoteModels.length, provider.name),
+        );
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      UserFeedback.showError(
-        vscode.l10n.t('Failed to sync models for "{0}": {1}', provider.name, message),
+      vscode.window.showErrorMessage(
+        vscode.l10n.t('Failed to sync models: {0}', error instanceof Error ? error.message : 'Unknown error'),
       );
-      logger.error(
-        "syncProviderModels error",
-        {
-          provider: logger.sanitizeProvider(fetchableProvider),
-          error: message,
-        },
-        LogScope.COMMAND,
-      );
+      logger.error('syncProviderModels failed', error, LogScope.COMMAND);
     }
   }
 }

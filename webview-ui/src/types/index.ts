@@ -1,84 +1,62 @@
-export type ProviderType =
-  | "openai-completions"
-  | "openai-responses"
-  | "anthropic-messages"
-  | "google-generateContent";
+// BYOK-compatible types for the webview UI (Addi BYOK Edition)
 
-export interface ModelCapabilities {
+/** Provider-level model default settings */
+export interface ByokModelDefaultSettings {
+  listApi?: string;
+  toolCalling?: boolean;
   vision?: boolean;
-  toolCalling?: boolean | number;
-  reasoning?: boolean;
+  thinking?: boolean;
+  streaming?: boolean;
+  maxInputTokens?: number;
+  maxOutputTokens?: number;
+  url?: string;
 }
 
-export interface ModelOptions {
-  /** Temperature - determines the creativity/randomness (0.0 to 1.0/2.0 depending on provider) */
-  temperature?: number;
-  /** TopP parameter */
-  topP?: number;
-  /** Frequency Penalty */
-  frequencyPenalty?: number;
-  /** Presence Penalty */
-  presencePenalty?: number;
-  /**
-   * OpenAI Native Reasoning Effort ('low' | 'medium' | 'high')
-   */
-  reasoningEffort?: "low" | "medium" | "high";
-  /**
-   * Anthropic/Google Native Thinking Budget (Tokens)
-   */
-  budgetTokens?: number;
-  /**
-   * [实验性] 适配 reasoning_content 思考模式（双向格式适配中间件）
-   */
-  reasoningContentAdapt?: boolean;
-  /**
-   * [实验性] 从 <think> 标签提取 reasoning 内容
-   */
-  extractReasoningContent?: boolean;
-}
-
-export interface ModelConfig {
+/** Info about a remote model (from listApi) */
+export interface RemoteModelInfo {
   id: string;
-  rid: string;
-  name: string;
-  family: string;
-  version: string;
-  maxInputTokens: number;
-  maxOutputTokens: number;
-  capabilities: ModelCapabilities;
-  extraBody?: string;
-  extraHeader?: string;
-  options?: ModelOptions;
-  isUserSelectable?: boolean;
+  name?: string;
 }
 
-export interface ProviderConfig {
-  id: string;
+export interface ByokModelFormData {
+  id: string;                    // Model identifier (required)
+  name?: string;                 // Optional display name
+  url?: string;                  // Model-specific endpoint
+  toolCalling?: boolean;
+  vision?: boolean;
+  thinking?: boolean;
+  streaming?: boolean;
+  maxInputTokens?: number;
+  maxOutputTokens?: number;
+  supportsReasoningEffort?: unknown;
+  editTools?: unknown;
+  requestHeaders?: Record<string, string>;
+  parentProviderName?: string;
+  isBatchMode?: boolean;
+  batchCount?: number;
+}
+
+export interface ByokProviderFormData {
+  vendor?: string;
   name: string;
-  providerType: ProviderType;
-  description?: string;
-  website?: string;
-  apiEndpoint?: string;
-  models: ModelConfig[];
-  order?: number;
-  extraBody?: string;
-  extraHeader?: string;
-  options?: ModelOptions;
-  apiKey?: string; // Appended for UI transmission
-  maskedApiKey?: string;
-  apiKeyTouched?: boolean;
+  apiKey?: string;
+  apiType?: string;
+  models?: ByokModelFormData[];
+  defaultSettings?: ByokModelDefaultSettings;
+  settings?: Record<string, Record<string, unknown>>;
+  url?: string;
 }
 
 /** Message received from the extension (VS Code -> Webview) */
 export interface WebviewUpdateMessage {
   type: "update";
-  locale: string; // vscode.env.language
+  locale: string;
   mode: "edit" | "create";
   item: {
     type: "provider" | "model";
     isBatchMode?: boolean;
     batchCount?: number;
-    data: ProviderConfig | (ModelConfig & { parentProviderType?: string });
+    data: ByokProviderFormData | (ByokModelFormData & { parentProviderName?: string; providerDefaults?: ByokModelDefaultSettings; remoteModels?: RemoteModelInfo[] });
     parentId?: string;
   };
 }

@@ -1,0 +1,464 @@
+{
+  "$schema": "./presets.schema.json",
+  "description": "Predefined provider presets for BYOK quick-add. Each provider may have multiple API profiles.",
+  "providers": [
+    {
+      "id": "openai",
+      "iconKey": "openai",
+      "name": "OpenAI",
+      "vendor": "openai",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v1/chat/completions — 标准 OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://api.openai.com/v1",
+            "listApi": "https://api.openai.com/v1/models"
+          }
+        },
+        {
+          "apiType": "responses",
+          "label": "Responses API",
+          "description": "/v1/responses — OpenAI 新版 Responses API",
+          "defaults": {
+            "url": "https://api.openai.com/v1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "anthropic",
+      "iconKey": "anthropic",
+      "name": "Anthropic",
+      "vendor": "anthropic",
+      "profiles": [
+        {
+          "apiType": "messages",
+          "label": "Messages API",
+          "description": "/v1/messages — Anthropic 原生 Messages API",
+          "defaults": {
+            "listApi": "https://api.anthropic.com/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "google",
+      "iconKey": "google",
+      "name": "Google Gemini",
+      "vendor": "google",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "OpenAI 兼容",
+          "description": "Gemini OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://generativelanguage.googleapis.com/v1beta/openai"
+          }
+        }
+      ]
+    },
+    {
+      "id": "mistral",
+      "iconKey": "mistral",
+      "name": "Mistral AI",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v1/chat/completions — OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://api.mistral.ai/v1",
+            "listApi": "https://api.mistral.ai/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "deepseek",
+      "iconKey": "deepseek",
+      "name": "DeepSeek",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v1/chat/completions — OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://api.deepseek.com/v1",
+            "listApi": "https://api.deepseek.com/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "xai",
+      "iconKey": "xai",
+      "name": "xAI Grok",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v1/chat/completions — OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://api.x.ai/v1",
+            "listApi": "https://api.x.ai/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "groq",
+      "iconKey": "groq",
+      "name": "Groq",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v1/chat/completions — OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://api.groq.com/openai/v1",
+            "listApi": "https://api.groq.com/openai/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "togetherai",
+      "iconKey": "togetherai",
+      "name": "Together AI",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v1/chat/completions — OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://api.together.xyz/v1",
+            "listApi": "https://api.together.xyz/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "perplexity",
+      "iconKey": "perplexity",
+      "name": "Perplexity",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v1/chat/completions — OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://api.perplexity.ai"
+          }
+        }
+      ]
+    },
+    {
+      "id": "cohere",
+      "iconKey": "cohere",
+      "name": "Cohere",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v2/chat — Cohere Chat API（OpenAI 兼容）",
+          "defaults": {
+            "url": "https://api.cohere.ai/v2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "azureai",
+      "iconKey": "azureai",
+      "name": "Azure AI",
+      "vendor": "azure",
+      "profiles": [
+        {
+          "apiType": "azure-chat-completions",
+          "label": "Azure Chat Completions",
+          "description": "Azure OpenAI 服务端点 — 需要部署资源名",
+          "defaults": {}
+        }
+      ]
+    },
+    {
+      "id": "zhipu",
+      "iconKey": "zhipu",
+      "name": "智谱 GLM",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "OpenAI 兼容",
+          "description": "/v1/chat/completions — 智谱 OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://open.bigmodel.cn/api/paas/v4",
+            "listApi": "https://open.bigmodel.cn/api/paas/v4/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "moonshot",
+      "iconKey": "moonshot",
+      "name": "月之暗面 Kimi",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v1/chat/completions — OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://api.moonshot.cn/v1",
+            "listApi": "https://api.moonshot.cn/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "minimax",
+      "iconKey": "minimax",
+      "name": "MiniMax 海螺",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "OpenAI 兼容",
+          "description": "/v1/chat/completions — MiniMax OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://api.minimax.chat/v1",
+            "listApi": "https://api.minimax.chat/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "qwen",
+      "iconKey": "qwen",
+      "name": "阿里百炼 Qwen",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "OpenAI 兼容",
+          "description": "/v1/chat/completions — 百炼 OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "listApi": "https://dashscope.aliyuncs.com/compatible-mode/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "spark",
+      "iconKey": "spark",
+      "name": "讯飞星火",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "OpenAI 兼容",
+          "description": "/v1/chat/completions — 星火 OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://spark-api-open.xf-yun.com/v1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "bytedance",
+      "iconKey": "bytedance",
+      "name": "火山引擎豆包",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "OpenAI 兼容",
+          "description": "/v1/chat/completions — 豆包 OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://ark.cn-beijing.volces.com/api/v3",
+            "listApi": "https://ark.cn-beijing.volces.com/api/v3/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "baidu",
+      "iconKey": "baidu",
+      "name": "百度文心",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "OpenAI 兼容",
+          "description": "/v1/chat/completions — 千帆 OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://qianfan.baidubce.com/v2",
+            "listApi": "https://qianfan.baidubce.com/v2/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "hunyuan",
+      "iconKey": "hunyuan",
+      "name": "腾讯混元",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "OpenAI 兼容",
+          "description": "/v1/chat/completions — 混元 OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://api.hunyuan.cloud.tencent.com/v1",
+            "listApi": "https://api.hunyuan.cloud.tencent.com/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "stepfun",
+      "iconKey": "stepfun",
+      "name": "阶跃星辰",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v1/chat/completions — OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://api.stepfun.com/v1",
+            "listApi": "https://api.stepfun.com/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "siliconcloud",
+      "iconKey": "siliconcloud",
+      "name": "硅基流动",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v1/chat/completions — OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://api.siliconflow.cn/v1",
+            "listApi": "https://api.siliconflow.cn/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "openrouter",
+      "iconKey": "openrouter",
+      "name": "OpenRouter",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v1/chat/completions — OpenAI 兼容聚合端点",
+          "defaults": {
+            "url": "https://openrouter.ai/api/v1",
+            "listApi": "https://openrouter.ai/api/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "baichuan",
+      "iconKey": "baichuan",
+      "name": "百川",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v1/chat/completions — OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://api.baichuan-ai.com/v1",
+            "listApi": "https://api.baichuan-ai.com/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "cerebras",
+      "iconKey": "cerebras",
+      "name": "Cerebras",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v1/chat/completions — OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://api.cerebras.ai/v1",
+            "listApi": "https://api.cerebras.ai/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "fireworks",
+      "iconKey": "fireworks",
+      "name": "Fireworks AI",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v1/chat/completions — OpenAI 兼容端点",
+          "defaults": {
+            "url": "https://api.fireworks.ai/inference/v1",
+            "listApi": "https://api.fireworks.ai/inference/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ollama",
+      "iconKey": "ollama",
+      "name": "Ollama",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v1/chat/completions — OpenAI 兼容（本地）",
+          "defaults": {
+            "url": "http://localhost:11434/v1",
+            "listApi": "http://localhost:11434/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "id": "cloudflare",
+      "iconKey": "cloudflare",
+      "name": "Cloudflare Workers AI",
+      "vendor": "custom",
+      "profiles": [
+        {
+          "apiType": "chat-completions",
+          "label": "Chat Completions",
+          "description": "/v1/chat/completions — Workers AI OpenAI 兼容",
+          "defaults": {
+            "url": "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1"
+          }
+        }
+      ]
+    }
+  ]
+}

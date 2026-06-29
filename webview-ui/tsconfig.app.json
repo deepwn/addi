@@ -4,6 +4,7 @@
     "target": "es2023",
     "lib": ["ES2023", "DOM"],
     "module": "esnext",
+    "resolveJsonModule": true,
     "types": ["vite/client"],
     "skipLibCheck": true,
 

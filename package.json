@@ -3,7 +3,7 @@
   "icon": "resources/icon-bg.min.png",
   "displayName": "Addi",
   "description": "add more custom AI providers and models for your copilot",
-  "version": "1.1.3",
+  "version": "2.0.0",
   "publisher": "deepwn",
   "repository": {
     "type": "git",
@@ -27,7 +27,7 @@
     "Gemini",
     "LLM",
     "Agent",
-    "OAI",
+    "BYOK",
     "language model"
   ],
   "categories": [
@@ -36,11 +36,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onLanguageModelChat:addi-provider",
     "onStartupFinished"
-  ],
-  "enabledApiProposals": [
-    "languageModelThinkingPart"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -85,26 +81,9 @@
           "group": "navigation@1"
         },
         {
-          "command": "addi.importConfig",
+          "command": "addi.openConfig",
           "when": "view == addiProviders",
           "group": "navigation@2"
-        },
-        {
-          "command": "addi.exportConfig",
-          "when": "view == addiProviders",
-          "group": "navigation@3"
-        },
-        {
-          "command": "addi.openSettings",
-          "when": "view == addiProviders",
-          "group": "navigation@4"
-        }
-      ],
-      "panel/title": [
-        {
-          "command": "addi.showLogs",
-          "when": "panel == output",
-          "group": "navigation@3"
         }
       ],
       "commandPalette": [
@@ -133,14 +112,6 @@
           "when": "false"
         },
         {
-          "command": "addi.setApiKey",
-          "when": "false"
-        },
-        {
-          "command": "addi.pullProviderModels",
-          "when": "false"
-        },
-        {
           "command": "addi.copyProvider",
           "when": "false"
         },
@@ -149,146 +120,73 @@
           "when": "false"
         },
         {
-          "command": "addi.initExtension"
-        },
-        {
-          "command": "addi.showModelsInPicker",
+          "command": "addi.openConfig",
           "when": "false"
         },
         {
-          "command": "addi.hideModelsFromPicker",
+          "command": "addi.syncProviderModels",
           "when": "false"
         },
         {
-          "command": "addi.showProviderModelsInPicker",
-          "when": "false"
-        },
-        {
-          "command": "addi.hideProviderModelsFromPicker",
+          "command": "addi.selectModel",
           "when": "false"
         }
       ],
       "view/item/context": [
         {
-          "command": "addi.setModelToCopilot",
-          "when": "view == addiProviders && viewItem == model",
-          "group": "inline@0"
-        },
-        {
-          "command": "addi.ineligibleModelInfo",
-          "when": "view == addiProviders && viewItem == model-ineligible",
-          "group": "inline@0"
-        },
-        {
           "command": "addi.addModel",
-          "when": "view == addiProviders && (viewItem == provider || viewItem == provider-synced)",
+          "when": "view == addiProviders && viewItem == provider",
           "group": "inline@0"
         },
         {
-          "command": "addi.pullProviderModels",
-          "when": "view == addiProviders && (viewItem == provider || viewItem == provider-synced)",
+          "command": "addi.syncProviderModels",
+          "when": "view == addiProviders && viewItem == provider",
           "group": "inline@1"
         },
         {
-          "command": "addi.setApiKey",
-          "when": "view == addiProviders && viewItem == provider-no-key",
+          "command": "addi.selectModel",
+          "when": "view == addiProviders && (viewItem == model || viewItem == model-no-key)",
           "group": "inline@0"
         },
         {
           "command": "addi.editProvider",
-          "when": "view == addiProviders && (viewItem == provider-no-key || viewItem == provider || viewItem == provider-synced)",
+          "when": "view == addiProviders && viewItem == provider",
           "group": "modify@1"
         },
         {
           "command": "addi.copyProvider",
-          "when": "view == addiProviders && (viewItem == provider-no-key || viewItem == provider || viewItem == provider-synced)",
+          "when": "view == addiProviders && viewItem == provider",
           "group": "modify@2"
         },
         {
           "command": "addi.deleteProvider",
-          "when": "view == addiProviders && (viewItem == provider-no-key || viewItem == provider || viewItem == provider-synced)",
+          "when": "view == addiProviders && viewItem == provider",
           "group": "modify@99"
         },
         {
           "command": "addi.editModels",
-          "when": "view == addiProviders && (viewItem == model || viewItem == model-no-key || viewItem == model-ineligible || viewItem == model-hidden)",
+          "when": "view == addiProviders && (viewItem == model || viewItem == model-no-key)",
           "group": "modify@1"
         },
         {
           "command": "addi.copyModel",
-          "when": "view == addiProviders && (viewItem == model || viewItem == model-no-key || viewItem == model-ineligible || viewItem == model-hidden)",
+          "when": "view == addiProviders && (viewItem == model || viewItem == model-no-key)",
           "group": "modify@2"
         },
         {
-          "command": "addi.showModelsInPicker",
-          "when": "view == addiProviders && (viewItem == model || viewItem == model-no-key || viewItem == model-ineligible || viewItem == model-hidden)",
-          "group": "visibility@1"
-        },
-        {
-          "command": "addi.hideModelsFromPicker",
-          "when": "view == addiProviders && (viewItem == model || viewItem == model-no-key || viewItem == model-ineligible || viewItem == model-hidden)",
-          "group": "visibility@2"
-        },
-        {
           "command": "addi.deleteModels",
-          "when": "view == addiProviders && (viewItem == model || viewItem == model-no-key || viewItem == model-ineligible || viewItem == model-hidden)",
+          "when": "view == addiProviders && (viewItem == model || viewItem == model-no-key)",
           "group": "modify@99"
-        },
-        {
-          "command": "addi.showProviderModelsInPicker",
-          "when": "view == addiProviders && (viewItem == provider-no-key || viewItem == provider || viewItem == provider-synced)",
-          "group": "visibility@1"
-        },
-        {
-          "command": "addi.hideProviderModelsFromPicker",
-          "when": "view == addiProviders && (viewItem == provider-no-key || viewItem == provider || viewItem == provider-synced)",
-          "group": "visibility@2"
         }
       ]
     },
     "configuration": {
       "title": "%addi.configuration.title%",
       "properties": {
-        "addi.defaultMaxInputTokens": {
-          "type": "number",
-          "default": 80000,
-          "description": "%addi.configuration.maxInputTokens.desc%"
-        },
-        "addi.defaultMaxOutputTokens": {
-          "type": "number",
-          "default": 128000,
-          "description": "%addi.configuration.maxOutputTokens.desc%"
-        },
         "addi.confirmDelete": {
           "type": "boolean",
           "default": true,
           "description": "%addi.configuration.confirmDelete.desc%"
-        },
-        "addi.sortRule": {
-          "type": "string",
-          "enum": [
-            "none",
-            "alphabet",
-            "input tokens",
-            "output tokens"
-          ],
-          "default": "none",
-          "description": "%addi.configuration.sortRule.desc%"
-        },
-        "addi.sortTarget": {
-          "type": "string",
-          "enum": [
-            "providers",
-            "models",
-            "both"
-          ],
-          "default": "both",
-          "description": "%addi.configuration.sortTarget.desc%"
-        },
-        "addi.syncConfiguration": {
-          "type": "boolean",
-          "default": false,
-          "description": "%addi.configuration.syncConfiguration.desc%"
         }
       }
     },
@@ -298,12 +196,6 @@
         "title": "%addi.command.manage.title%",
         "shortTitle": "%addi.command.manage.shortTitle%",
         "icon": "$(settings-gear)",
-        "category": "%addi.command.category%"
-      },
-      {
-        "command": "addi.ineligibleModelInfo",
-        "title": "%addi.command.ineligibleModelInfo.title%",
-        "icon": "$(question)",
         "category": "%addi.command.category%"
       },
       {
@@ -328,13 +220,6 @@
         "category": "%addi.command.category%"
       },
       {
-        "command": "addi.setModelToCopilot",
-        "title": "%addi.command.setModelToCopilot.title%",
-        "shortTitle": "%addi.command.setModelToCopilot.shortTitle%",
-        "icon": "$(comment)",
-        "category": "%addi.command.category%"
-      },
-      {
         "command": "addi.addModel",
         "title": "%addi.command.addModel.title%",
         "shortTitle": "%addi.command.addModel.shortTitle%",
@@ -356,34 +241,6 @@
         "category": "%addi.command.category%"
       },
       {
-        "command": "addi.showModelsInPicker",
-        "title": "%addi.command.showModelsInPicker.title%",
-        "shortTitle": "%addi.command.showModelsInPicker.shortTitle%",
-        "icon": "$(eye)",
-        "category": "%addi.command.category%"
-      },
-      {
-        "command": "addi.hideModelsFromPicker",
-        "title": "%addi.command.hideModelsFromPicker.title%",
-        "shortTitle": "%addi.command.hideModelsFromPicker.shortTitle%",
-        "icon": "$(eye-closed)",
-        "category": "%addi.command.category%"
-      },
-      {
-        "command": "addi.showProviderModelsInPicker",
-        "title": "%addi.command.showProviderModelsInPicker.title%",
-        "shortTitle": "%addi.command.showProviderModelsInPicker.shortTitle%",
-        "icon": "$(eye)",
-        "category": "%addi.command.category%"
-      },
-      {
-        "command": "addi.hideProviderModelsFromPicker",
-        "title": "%addi.command.hideProviderModelsFromPicker.title%",
-        "shortTitle": "%addi.command.hideProviderModelsFromPicker.shortTitle%",
-        "icon": "$(eye-closed)",
-        "category": "%addi.command.category%"
-      },
-      {
         "command": "addi.copyProvider",
         "title": "%addi.command.copyProvider.title%",
         "shortTitle": "%addi.command.copyProvider.shortTitle%",
@@ -398,73 +255,25 @@
         "category": "%addi.command.category%"
       },
       {
-        "command": "addi.setApiKey",
-        "title": "%addi.command.setApiKey.title%",
-        "shortTitle": "%addi.command.setApiKey.shortTitle%",
-        "icon": "$(key)",
+        "command": "addi.openConfig",
+        "title": "%addi.command.openConfig.title%",
+        "shortTitle": "%addi.command.openConfig.shortTitle%",
+        "icon": "$(go-to-file)",
         "category": "%addi.command.category%"
       },
       {
-        "command": "addi.pullProviderModels",
-        "title": "%addi.command.pullProviderModels.title%",
-        "shortTitle": "%addi.command.pullProviderModels.shortTitle%",
-        "icon": "$(broadcast)",
+        "command": "addi.syncProviderModels",
+        "title": "%addi.command.syncProviderModels.title%",
+        "shortTitle": "%addi.command.syncProviderModels.shortTitle%",
+        "icon": "$(sync)",
         "category": "%addi.command.category%"
       },
       {
-        "command": "addi.exportConfig",
-        "title": "%addi.command.exportConfig.title%",
-        "shortTitle": "%addi.command.exportConfig.shortTitle%",
-        "icon": "$(clone)",
+        "command": "addi.selectModel",
+        "title": "%addi.command.selectModel.title%",
+        "shortTitle": "%addi.command.selectModel.shortTitle%",
+        "icon": "$(comment-discussion)",
         "category": "%addi.command.category%"
-      },
-      {
-        "command": "addi.importConfig",
-        "title": "%addi.command.importConfig.title%",
-        "shortTitle": "%addi.command.importConfig.shortTitle%",
-        "icon": "$(cloud-upload)",
-        "category": "%addi.command.category%"
-      },
-      {
-        "command": "addi.showLogs",
-        "title": "%addi.command.showLogs.title%",
-        "shortTitle": "%addi.command.showLogs.shortTitle%",
-        "icon": "$(output)",
-        "category": "%addi.command.category%"
-      },
-      {
-        "command": "addi.openSettings",
-        "title": "%addi.command.openSettings.title%",
-        "shortTitle": "%addi.command.openSettings.shortTitle%",
-        "icon": "$(settings-gear)",
-        "category": "%addi.command.category%"
-      },
-      {
-        "command": "addi.initExtension",
-        "title": "%addi.command.initExtension.title%",
-        "shortTitle": "%addi.command.initExtension.shortTitle%",
-        "icon": "$(refresh)",
-        "category": "%addi.command.category%"
-      },
-      {
-        "command": "addi.restoreFromBackup",
-        "title": "%addi.command.restoreFromBackup.title%",
-        "shortTitle": "%addi.command.restoreFromBackup.shortTitle%",
-        "icon": "$(debug-restart)",
-        "category": "%addi.command.category%"
-      },
-      {
-        "command": "addi.manageBackups",
-        "title": "%addi.command.manageBackups.title%",
-        "shortTitle": "%addi.command.manageBackups.shortTitle%",
-        "icon": "$(folder)",
-        "category": "%addi.command.category%"
-      }
-    ],
-    "languageModelChatProviders": [
-      {
-        "vendor": "addi-provider",
-        "displayName": "%addi.languageModel.displayName%"
       }
     ]
   },
@@ -502,11 +311,5 @@
     "oxlint": "^1.71.0",
     "typescript": "^5.9.3"
   },
-  "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.85",
-    "@ai-sdk/google": "^3.0.83",
-    "@ai-sdk/openai": "^3.0.74",
-    "@ai-sdk/openai-compatible": "^2.0.51",
-    "ai": "^6.0.208"
-  }
+  "dependencies": {}
 }

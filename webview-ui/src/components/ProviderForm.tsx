@@ -1,63 +1,52 @@
 import React, { useState, useEffect } from "react";
-import type { ProviderConfig, ProviderType } from "../types";
+import type { ByokProviderFormData, ByokModelDefaultSettings } from "../types";
 import { postMessage } from "../hooks/useVscode";
 import { useLocale } from "../i18n";
+import { ProviderPresetGrid } from "./ProviderPresetGrid";
+import type { PresetSelectResult } from "./ProviderPresetGrid";
 
 interface ProviderFormProps {
-  data: ProviderConfig;
+  data: ByokProviderFormData;
   mode: "edit" | "read";
+  isCreate?: boolean;  // true = creating a new provider (show preset grid)
 }
 
-export const ProviderForm: React.FC<ProviderFormProps> = ({ data, mode }) => {
+export const ProviderForm: React.FC<ProviderFormProps> = ({ data, mode, isCreate = false }) => {
   const { t, tRaw } = useLocale();
-  const [formData, setFormData] = useState<ProviderConfig>(data);
+  const [formData, setFormData] = useState<ByokProviderFormData>(data);
+  const [showDefaults, setShowDefaults] = useState(false);
 
-  // Sync when parent pushes new data
   useEffect(() => {
     setFormData(data);
+    // Auto-expand defaults section if there are existing settings
+    if (data.defaultSettings && Object.keys(data.defaultSettings).length > 0) {
+      setShowDefaults(true);
+    }
   }, [data]);
 
-  const isAnthropic = formData.providerType === "anthropic-messages";
-  const isGoogle = formData.providerType === "google-generateContent";
-
-  // Provider-specific labels
-  const thinkingLabel =
-    isAnthropic || isGoogle
-      ? t("provider.thinkingLabel.anthropicGoogle")
-      : t("provider.thinkingLabel.default");
-  const thinkingHintMap = tRaw("provider.thinkingHintMap") as Record<string, string>;
-  const thinkingHint = formData.providerType
-    ? thinkingHintMap[formData.providerType] || t("provider.thinkingHint")
-    : t("provider.thinkingHint");
-
-  const handleChange = (field: keyof ProviderConfig, value: unknown) => {
+  const handleChange = (field: keyof ByokProviderFormData, value: unknown) => {
     if (mode === "read") return;
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleOptionChange = (
-    field: keyof NonNullable<ProviderConfig["options"]>,
-    value: unknown,
-  ) => {
+  const handleDefaultsChange = (field: keyof ByokModelDefaultSettings, value: unknown) => {
     if (mode === "read") return;
     setFormData((prev) => ({
       ...prev,
-      options: { ...prev.options, [field]: value },
+      defaultSettings: {
+        ...prev.defaultSettings,
+        [field]: value,
+      },
     }));
   };
 
   const handleSave = () => {
-    postMessage("saveProvider", formData);
-  };
-
-  const handleVerify = () => {
-    // There was no verifyProvider in old code based on that snippet, but leaving for future
-    postMessage("verifyProvider", formData);
-  };
-
-  const handleDelete = () => {
-    // Old code might not have delete via webview, but let's keep it safe
-    postMessage("deleteProvider", formData);
+    // Clean up empty defaultSettings
+    const payload = { ...formData };
+    if (payload.defaultSettings && Object.keys(payload.defaultSettings).length === 0) {
+      delete payload.defaultSettings;
+    }
+    postMessage("saveProvider", payload);
   };
 
   const apiTypeOptions = tRaw("provider.apiTypeOptions") as Record<string, string>;
@@ -81,172 +70,144 @@ export const ProviderForm: React.FC<ProviderFormProps> = ({ data, mode }) => {
       <div className="form-group">
         <label>{t("provider.apiType")}</label>
         <select
-          value={formData.providerType || "openai-completions"}
-          onChange={(e) => handleChange("providerType", e.target.value as ProviderType)}
+          value={formData.apiType || "chat-completions"}
+          onChange={(e) => handleChange("apiType", e.target.value)}
           disabled={mode === "read"}
         >
-          <option value="openai-completions">{apiTypeOptions["openai-completions"]}</option>
-          <option value="openai-responses">{apiTypeOptions["openai-responses"]}</option>
-          <option value="anthropic-messages">{apiTypeOptions["anthropic-messages"]}</option>
-          <option value="google-generateContent">{apiTypeOptions["google-generateContent"]}</option>
+          <option value="chat-completions">{apiTypeOptions["chat-completions"]}</option>
+          <option value="responses">{apiTypeOptions["responses"]}</option>
+          <option value="messages">{apiTypeOptions["messages"]}</option>
         </select>
-      </div>
-
-      <div className="form-group">
-        <label>{t("provider.apiEndpoint")}</label>
-        <input
-          type="text"
-          value={formData.apiEndpoint || ""}
-          onChange={(e) => handleChange("apiEndpoint", e.target.value)}
-          disabled={mode === "read"}
-        />
       </div>
 
       <div className="form-group">
         <label>{t("provider.apiKey")}</label>
         <input
           type="password"
-          value={formData.apiKeyTouched ? formData.apiKey || "" : ""}
-          onChange={(e) =>
-            setFormData((prev) => ({ ...prev, apiKey: e.target.value, apiKeyTouched: true }))
-          }
-          placeholder={data.maskedApiKey || t("provider.apiKeyPlaceholder")}
+          value={formData.apiKey || ""}
+          onChange={(e) => handleChange("apiKey", e.target.value)}
+          placeholder={t("provider.apiKeyPlaceholder")}
           disabled={mode === "read"}
         />
-        <div className="field-hint">{t("provider.apiKeySavedSecurely")}</div>
+        <div className="field-hint">{t("provider.apiKeyNote")}</div>
       </div>
 
-      <div className="form-group">
-        <label>{t("provider.description")}</label>
-        <input
-          type="text"
-          value={formData.description || ""}
-          onChange={(e) => handleChange("description", e.target.value)}
-          disabled={mode === "read"}
-        />
-      </div>
-
-      <div className="form-group">
-        <label>{t("provider.website")}</label>
-        <input
-          type="text"
-          value={formData.website || ""}
-          onChange={(e) => handleChange("website", e.target.value)}
-          disabled={mode === "read"}
-        />
-      </div>
-
-      <div className="form-group section">
-        <div className="section-title">{t("provider.defaultModelSettings")}</div>
-        <div className="section-desc">{t("provider.defaultModelSettingsDesc")}</div>
-
-        <div className="form-group">
-          <label>{t("provider.defaultTemperature")}</label>
-          <input
-            type="number"
-            step="0.1"
-            value={formData.options?.temperature ?? ""}
-            onChange={(e) => handleOptionChange("temperature", parseFloat(e.target.value))}
-            disabled={mode === "read"}
-            placeholder={t("common.default")}
-          />
+      {/* ── Model Defaults Section (collapsible) ── */}
+      <div className="defaults-section">
+        <div
+          className="defaults-header"
+          onClick={() => setShowDefaults(!showDefaults)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setShowDefaults(!showDefaults); }}
+        >
+          <span className="collapse-icon">{showDefaults ? "▾" : "▸"}</span>
+          <span>{t("provider.defaultsSection")}</span>
         </div>
+        {showDefaults && (
+          <div className="defaults-body">
+            <div className="field-hint" style={{ marginBottom: "8px" }}>
+              {t("provider.defaultsDescription")}
+            </div>
 
-        <div className="form-group">
-          <label>{thinkingLabel}</label>
-          <select
-            value={formData.options?.reasoningEffort || ""}
-            onChange={(e) => handleOptionChange("reasoningEffort", e.target.value || undefined)}
-            disabled={mode === "read"}
-          >
-            <option value="">{t("feedback.defaultNotApplicable")}</option>
-            <option value="low">{t("feedback.low")}</option>
-            <option value="medium">{t("feedback.medium")}</option>
-            <option value="high">{t("feedback.high")}</option>
-          </select>
-          <div className="field-hint">{thinkingHint}</div>
-        </div>
+            <div className="form-group">
+              <label>{t("provider.listApi")}</label>
+              <input
+                type="text"
+                value={formData.defaultSettings?.listApi || ""}
+                onChange={(e) => handleDefaultsChange("listApi", e.target.value)}
+                placeholder={t("provider.listApiPlaceholder")}
+                disabled={mode === "read"}
+              />
+              <div className="field-hint">{t("provider.listApiNote")}</div>
+            </div>
 
-        {isAnthropic && (
-          <div className="form-group">
-            <label>{t("provider.budgetTokensLabel")}</label>
-            <input
-              type="number"
-              value={formData.options?.budgetTokens ?? ""}
-              onChange={(e) =>
-                handleOptionChange("budgetTokens", parseInt(e.target.value) || undefined)
-              }
-              disabled={mode === "read"}
-              placeholder={t("provider.budgetTokensPlaceholder")}
-            />
-            <div className="field-hint">{t("provider.budgetTokensHint")}</div>
+            <div className="checkbox-group">
+              <label className="checkbox-item">
+                <input
+                  type="checkbox"
+                  checked={!!formData.defaultSettings?.toolCalling}
+                  onChange={(e) => handleDefaultsChange("toolCalling", e.target.checked || undefined)}
+                  disabled={mode === "read"}
+                />{" "}
+                {t("provider.defaultToolCalling")}
+              </label>
+              <label className="checkbox-item">
+                <input
+                  type="checkbox"
+                  checked={!!formData.defaultSettings?.vision}
+                  onChange={(e) => handleDefaultsChange("vision", e.target.checked || undefined)}
+                  disabled={mode === "read"}
+                />{" "}
+                {t("provider.defaultVision")}
+              </label>
+              <label className="checkbox-item">
+                <input
+                  type="checkbox"
+                  checked={!!formData.defaultSettings?.thinking}
+                  onChange={(e) => handleDefaultsChange("thinking", e.target.checked || undefined)}
+                  disabled={mode === "read"}
+                />{" "}
+                {t("provider.defaultThinking")}
+              </label>
+              <label className="checkbox-item">
+                <input
+                  type="checkbox"
+                  checked={!!formData.defaultSettings?.streaming}
+                  onChange={(e) => handleDefaultsChange("streaming", e.target.checked || undefined)}
+                  disabled={mode === "read"}
+                />{" "}
+                {t("provider.defaultStreaming")}
+              </label>
+            </div>
+
+            <div className="form-group">
+              <label>{t("provider.defaultMaxInputTokens")}</label>
+              <input
+                type="number"
+                value={formData.defaultSettings?.maxInputTokens ?? ""}
+                onChange={(e) => handleDefaultsChange("maxInputTokens", parseInt(e.target.value) || undefined)}
+                disabled={mode === "read"}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>{t("provider.defaultMaxOutputTokens")}</label>
+              <input
+                type="number"
+                value={formData.defaultSettings?.maxOutputTokens ?? ""}
+                onChange={(e) => handleDefaultsChange("maxOutputTokens", parseInt(e.target.value) || undefined)}
+                disabled={mode === "read"}
+              />
+            </div>
           </div>
         )}
       </div>
 
-      <div className="form-group section">
-        <div className="section-title">{t("provider.experimental")}</div>
-        <div className="section-desc">{t("provider.experimentalDesc")}</div>
-        <div className="checkbox-group experimental-features">
-          <div className="experimental-option">
-            <label className="checkbox-item">
-              <input
-                type="checkbox"
-                checked={!!formData.options?.reasoningContentAdapt}
-                onChange={(e) =>
-                  handleOptionChange("reasoningContentAdapt", e.target.checked || undefined)
-                }
-                disabled={mode === "read"}
-              />{" "}
-              {t("provider.reasoningContentAdapt")}
-            </label>
-            <div className="field-hint">{t("provider.reasoningContentAdaptHint")}</div>
-          </div>
-          <div className="experimental-option">
-            <label className="checkbox-item">
-              <input
-                type="checkbox"
-                checked={!!formData.options?.extractReasoningContent}
-                onChange={(e) =>
-                  handleOptionChange("extractReasoningContent", e.target.checked || undefined)
-                }
-                disabled={mode === "read"}
-              />{" "}
-              {t("provider.extractReasoningContent")}
-            </label>
-            <div className="field-hint">{t("provider.extractReasoningContentHint")}</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="form-group">
-        <label>{t("provider.globalExtraBody")}</label>
-        <textarea
-          value={formData.extraBody || ""}
-          onChange={(e) => handleChange("extraBody", e.target.value)}
-          disabled={mode === "read"}
-          placeholder={t("provider.extraBodyPlaceholder")}
-          rows={5}
-        />
-      </div>
-
       {mode !== "read" && (
         <div className="button-row">
-          <button type="button" onClick={handleVerify} className="secondary-btn">
-            {t("common.verifyConnection")}
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="secondary-btn"
-            style={{ color: "var(--vscode-errorForeground)" }}
-          >
-            {t("common.delete")}
-          </button>
           <button type="button" onClick={handleSave}>
             {t("common.save")}
           </button>
         </div>
+      )}
+
+      {/* ── Quick-Add Preset Cards (only in create mode) ── */}
+      {isCreate && (
+        <ProviderPresetGrid
+          onSelect={(preset: PresetSelectResult) => {
+            setFormData((prev) => ({
+              ...prev,
+              name: preset.name,
+              vendor: preset.vendor,
+              apiType: preset.apiType,
+              // Apply preset defaults (url, listApi) to defaultSettings
+              defaultSettings: preset.defaults
+                ? { ...prev.defaultSettings, ...preset.defaults }
+                : prev.defaultSettings,
+            }));
+          }}
+        />
       )}
     </div>
   );

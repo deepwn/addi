@@ -1,15 +1,15 @@
-import type * as vscode from "vscode";
-import type { ProviderModelManager } from "../../core/providers/ProviderModelManager";
-import type { AddiTreeDataProvider } from "../views/providerView";
-import type { LLMService } from "../../core/llm/llmService";
-import type { EditorViewManager } from "../views/editorView";
-import type { IStorageService } from "../../domain/interfaces";
-import { ProviderCommandHandler } from "./provider";
-import { ModelCommandHandler } from "./model";
-import { ConfigCommandHandler } from "./config";
+import type * as vscode from 'vscode';
+import type { ProviderModelManager } from '../../core/providers/ProviderModelManager';
+import type { AddiTreeDataProvider } from '../views/providerView';
+import type { ProviderTreeItem } from '../views/providerView';
+import type { ModelTreeItem } from '../views/treeItems';
+import type { EditorViewManager } from '../views/editorView';
+import { ProviderCommandHandler } from './provider';
+import { ModelCommandHandler } from './model';
+import { ConfigCommandHandler } from './config';
 
 /**
- * Command Handler - Facade that delegates to specialized handlers
+ * Command Handler - Facade that delegates to specialized handlers (BYOK Edition)
  */
 export class CommandHandler {
   private providerHandler: ProviderCommandHandler;
@@ -20,18 +20,10 @@ export class CommandHandler {
     manager: ProviderModelManager,
     treeDataProvider: AddiTreeDataProvider,
     context: vscode.ExtensionContext,
-    _llmService: LLMService,
   ) {
-    // Initialize specialized handlers
     this.providerHandler = new ProviderCommandHandler(manager, treeDataProvider, context);
     this.modelHandler = new ModelCommandHandler(manager, treeDataProvider, context);
     this.configHandler = new ConfigCommandHandler(manager, treeDataProvider, context);
-  }
-
-  public setStorageService(service: IStorageService): void {
-    this.providerHandler.setStorageService(service);
-    this.modelHandler.setStorageService(service);
-    this.configHandler.setStorageService(service);
   }
 
   public setEditorViewManager(manager: EditorViewManager): void {
@@ -46,90 +38,47 @@ export class CommandHandler {
     return this.providerHandler.addProvider();
   }
 
-  async editProvider(item: { provider: { id: string; name: string } }): Promise<void> {
-    return this.providerHandler.editProvider(item as any);
+  async editProvider(item: ProviderTreeItem): Promise<void> {
+    return this.providerHandler.editProvider(item);
   }
 
-  async deleteProvider(item: { provider: { id: string; name: string } }): Promise<void> {
-    return this.providerHandler.deleteProvider(item as any);
+  async deleteProvider(item: ProviderTreeItem): Promise<void> {
+    return this.providerHandler.deleteProvider(item);
   }
 
-  async setApiKey(item: { provider: { id: string; name: string } }): Promise<void> {
-    return this.providerHandler.setApiKey(item as any);
+  async copyProvider(item: ProviderTreeItem): Promise<void> {
+    return this.providerHandler.copyProvider(item);
   }
 
-  async pullProviderModels(item: { provider: { id: string; name: string } }): Promise<void> {
-    return this.providerHandler.pullProviderModels(item as any);
-  }
-
-  async copyProvider(item: { provider: { id: string; name: string } }): Promise<void> {
-    return this.providerHandler.copyProvider(item as any);
+  async syncProviderModels(item: ProviderTreeItem): Promise<void> {
+    return this.providerHandler.syncProviderModels(item);
   }
 
   // ==================== Model Commands ====================
 
-  async addModel(item: { provider: { id: string; name: string } }): Promise<void> {
-    return this.modelHandler.addModel(item as any);
+  async addModel(item: ProviderTreeItem): Promise<void> {
+    return this.modelHandler.addModel(item);
   }
 
-  async editModels(items: any): Promise<void> {
+  async editModels(items: ModelTreeItem[]): Promise<void> {
     return this.modelHandler.editModels(items);
   }
 
-  async deleteModels(items: any): Promise<void> {
+  async deleteModels(items: ModelTreeItem[]): Promise<void> {
     return this.modelHandler.deleteModels(items);
   }
 
-  async copyModel(item: any): Promise<void> {
+  async copyModel(item: ModelTreeItem): Promise<void> {
     return this.modelHandler.copyModel(item);
   }
 
-  async showModelsInPicker(items: any): Promise<void> {
-    return this.modelHandler.showModelsInPicker(items);
-  }
-
-  async hideModelsFromPicker(items: any): Promise<void> {
-    return this.modelHandler.hideModelsFromPicker(items);
-  }
-
-  async showProviderModelsInPicker(item: {
-    provider: { id: string; name: string };
-  }): Promise<void> {
-    return this.modelHandler.showProviderModelsInPicker(item as any);
-  }
-
-  async hideProviderModelsFromPicker(item: {
-    provider: { id: string; name: string };
-  }): Promise<void> {
-    return this.modelHandler.hideProviderModelsFromPicker(item as any);
-  }
-
-  async setModelToCopilot(item: {
-    model: { id: string; rid?: string; family: string };
-    vendor: string;
-  }): Promise<void> {
-    return this.modelHandler.setModelToCopilot(item as any);
+  async selectModel(item: ModelTreeItem): Promise<void> {
+    return this.modelHandler.selectModel(item);
   }
 
   // ==================== Config Commands ====================
 
-  async exportConfig(): Promise<void> {
-    return this.configHandler.exportConfig();
-  }
-
-  async importConfig(): Promise<void> {
-    return this.configHandler.importConfig();
-  }
-
-  async initExtension(): Promise<void> {
-    return this.configHandler.initExtension();
-  }
-
-  async restoreFromBackup(): Promise<void> {
-    return this.configHandler.restoreFromBackup();
-  }
-
-  async manageBackups(): Promise<void> {
-    return this.configHandler.manageBackups();
+  async openConfig(): Promise<void> {
+    return this.configHandler.openConfig();
   }
 }

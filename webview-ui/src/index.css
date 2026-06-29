@@ -61,6 +61,7 @@ input[type="number"]::-webkit-inner-spin-button {
   margin: 0;
 }
 input[type="number"] {
+  appearance: textfield;
   -moz-appearance: textfield;
 }
 
@@ -301,4 +302,240 @@ h3 {
 }
 .json-editor-actions button:hover {
   background: var(--vscode-button-secondaryHoverBackground);
+}
+
+/* ── Autocomplete dropdown for model ID ── */
+.autocomplete-wrapper {
+  position: relative;
+}
+.autocomplete-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border);
+  z-index: 1000;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.autocomplete-dropdown li {
+  padding: 6px 10px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.autocomplete-dropdown li:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+.autocomplete-dropdown .model-id {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.9em;
+}
+.autocomplete-dropdown .model-name-hint {
+  font-size: 0.8em;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* ── Defaults collapsible section ── */
+.defaults-section {
+  margin-top: 16px;
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 4px;
+}
+.defaults-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: bold;
+  font-size: 0.9em;
+}
+.defaults-header:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+.collapse-icon {
+  font-size: 0.8em;
+  width: 14px;
+  text-align: center;
+}
+.defaults-body {
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--vscode-widget-border);
+}
+
+.field-hint {
+  font-size: 0.8em;
+  color: var(--vscode-descriptionForeground);
+  margin-top: 2px;
+}
+
+/* ── Quick-Add Preset Cards ── */
+
+.quick-add-section {
+  margin-top: 24px;
+}
+
+.divider {
+  border-top: 1px solid var(--vscode-widget-border);
+  margin-bottom: 16px;
+}
+
+.quick-add-section h3 {
+  margin: 0 0 12px;
+  font-size: 1em;
+}
+
+.quick-add-search {
+  width: 100%;
+  padding: 6px 10px;
+  margin-bottom: 12px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  box-sizing: border-box;
+  border-radius: 4px;
+}
+.quick-add-search:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.preset-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.preset-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  width: 100%;
+  position: relative;
+}
+.preset-card:hover {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-list-hoverBackground);
+}
+
+.preset-card-icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.preset-card-name {
+  font-size: 0.8em;
+  font-weight: 500;
+  color: var(--vscode-foreground);
+  text-align: center;
+}
+
+.preset-card-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--vscode-badge-background, #007acc);
+  color: var(--vscode-badge-foreground, #fff);
+  font-size: 0.65em;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 8px;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* ---- Profile chooser modal ---- */
+
+.profile-chooser-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.profile-chooser {
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  min-width: 300px;
+  max-width: 400px;
+  overflow: hidden;
+}
+
+.profile-chooser-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--vscode-widget-border);
+}
+
+.profile-chooser-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.profile-chooser-title {
+  font-size: 1.05em;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.profile-chooser-list {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-chooser-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.profile-chooser-item:hover {
+  background: var(--vscode-list-hoverBackground);
+  border-color: var(--vscode-focusBorder);
+}
+
+.profile-chooser-label {
+  font-size: 0.9em;
+  font-weight: 500;
+  color: var(--vscode-foreground);
+}
+
+.profile-chooser-desc {
+  font-size: 0.78em;
+  color: var(--vscode-descriptionForeground);
 }

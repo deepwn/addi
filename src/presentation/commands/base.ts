@@ -1,9 +1,8 @@
-import type * as vscode from "vscode";
-import type { ProviderModelManager } from "../../core/providers/ProviderModelManager";
-import type { AddiTreeDataProvider } from "../views/providerView";
-import type { IStorageService } from "../../domain/interfaces";
-import type { EditorViewManager } from "../views/editorView";
-import { logger, LogScope } from "../../common/logger";
+import type * as vscode from 'vscode';
+import type { ProviderModelManager } from '../../core/providers/ProviderModelManager';
+import type { AddiTreeDataProvider } from '../views/providerView';
+import type { EditorViewManager } from '../views/editorView';
+import { logger, LogScope } from '../../common/logger';
 
 /**
  * Base command handler with common dependencies
@@ -12,7 +11,6 @@ export abstract class BaseCommandHandler {
   protected manager: ProviderModelManager;
   protected treeDataProvider: AddiTreeDataProvider;
   protected context: vscode.ExtensionContext;
-  protected storageService?: IStorageService;
   protected editorViewManager?: EditorViewManager;
 
   constructor(
@@ -25,12 +23,8 @@ export abstract class BaseCommandHandler {
     this.context = context;
   }
 
-  public setStorageService(service: IStorageService) {
-    this.storageService = service;
-  }
-
-  public setEditorViewManager(manager: EditorViewManager) {
-    this.editorViewManager = manager;
+  public setEditorViewManager(m: EditorViewManager) {
+    this.editorViewManager = m;
   }
 
   protected refreshTreeView(): void {

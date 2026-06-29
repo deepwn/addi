@@ -1,75 +1,64 @@
-import * as vscode from "vscode";
-import type { Model } from "../../common/types";
-import { TokenFormatter } from "../../common/utils";
+import * as vscode from 'vscode';
+import type { ByokModel } from '../../services/byokTypes';
 
 /**
  * Tree item representing a single AI model in the provider tree view.
- * Moved from core/providers/AddiChatProvider.ts to presentation layer (A2 fix).
+ * Adapted for BYOK native types — uses LMModel.id as tree item id.
  */
 export class ModelTreeItem extends vscode.TreeItem {
   constructor(
-    public model: Model,
-    public vendor = "addi-provider",
-    public hasApiKey = false, // whether the parent provider has API key
+    public model: ByokModel,
+    public providerName: string,
+    public hasApiKey = false,
   ) {
-    super(model.name, vscode.TreeItemCollapsibleState.None);
-    this.id = model.id;
+    super(model.name || model.id, vscode.TreeItemCollapsibleState.None);
+    this.id = `${providerName}::${model.id}`;
 
-    const supportsTools = model.capabilities?.toolCalling;
-    const isHidden = model.isUserSelectable === false;
+    this.contextValue = hasApiKey ? 'model' : 'model-no-key';
 
-    // Context value: show warning icon if no API key or model doesn't support tools
-    // or if the model is hidden from the picker
-    if (isHidden) {
-      // Model is hidden from picker - show as hidden
-      this.contextValue = "model-hidden";
-    } else if (!hasApiKey) {
-      // No API key - show warning
-      this.contextValue = "model-no-key";
-    } else if (!supportsTools) {
-      // Has API key but model doesn't support tools - show as ineligible
-      this.contextValue = "model-ineligible";
+    // Set icon based on toolCalling support
+    if (model.toolCalling) {
+      this.iconPath = new vscode.ThemeIcon('comment-discussion');
     } else {
-      // Has API key and supports tools - normal model
-      this.contextValue = "model";
+      this.iconPath = new vscode.ThemeIcon('warning');
     }
 
     const capabilityHints: string[] = [];
-    if (model.capabilities?.toolCalling) {
-      capabilityHints.push("tool");
-    }
-    if (model.capabilities?.reasoning) {
-      capabilityHints.push("think");
-    }
-    if (model.capabilities?.vision) {
-      capabilityHints.push("vision");
-    }
-    const inputTokensDetail = TokenFormatter.formatDetailed(model.maxInputTokens);
-    const outputTokensDetail = TokenFormatter.formatDetailed(model.maxOutputTokens);
-    let tooltip = `${vscode.l10n.t("name: {0}", model.name)}\n${vscode.l10n.t("vendor: {0}", vendor)}\n${vscode.l10n.t("id: {0}", model.id)}\n${vscode.l10n.t("rid: {0}", model.rid)}\n${vscode.l10n.t("family: {0}", model.family)}\n${vscode.l10n.t("version: {0}", model.version)}\n${vscode.l10n.t("input: {0}", inputTokensDetail)}\n${vscode.l10n.t("output: {0}", outputTokensDetail)}`;
-    if (model.averageSpeed) {
-      tooltip += `\n${vscode.l10n.t("speed: {0}", model.averageSpeed.toFixed(1) + " t/s")}`;
-    } else {
-      tooltip += `\n${vscode.l10n.t("speed: {0}", "?/s")}`;
-    }
+    if (model.toolCalling) capabilityHints.push('tool');
+    if (model.thinking) capabilityHints.push('think');
+    if (model.vision) capabilityHints.push('vision');
+
+    const formatTokens = (val?: number): string => {
+      if (!val) return '?';
+      if (val >= 1_000_000) return (val / 1_000_000).toFixed(1) + 'M';
+      if (val >= 1_000) return (val / 1_000).toFixed(0) + 'K';
+      return String(val);
+    };
+
+    const label = this.label;
+    const displayName: string = (label !== undefined && typeof label !== 'string') ? label.label : (typeof label === 'string' ? label : this.model.id);
+    let tooltip = `${vscode.l10n.t('name: {0}', displayName)}\n`;
+    tooltip += `${vscode.l10n.t('provider: {0}', providerName)}\n`;
+    tooltip += `${vscode.l10n.t('id: {0}', model.id)}\n`;
+    if (model.url) tooltip += `${vscode.l10n.t('url: {0}', model.url)}\n`;
+    tooltip += `${vscode.l10n.t('input: {0}', formatTokens(model.maxInputTokens))}\n`;
+    tooltip += `${vscode.l10n.t('output: {0}', formatTokens(model.maxOutputTokens))}`;
     if (capabilityHints.length > 0) {
-      tooltip += `\n${vscode.l10n.t("capabilities: {0}", capabilityHints.join(", "))}`;
+      tooltip += `\n${vscode.l10n.t('capabilities: {0}', capabilityHints.join(', '))}`;
+    }
+    if (!model.toolCalling) {
+      tooltip += `\n\n${vscode.l10n.t('⚠ Model does not support tool calling and cannot be used in Copilot.')}`;
     }
 
     this.tooltip = tooltip;
-    const inputSummary = TokenFormatter.format(model.maxInputTokens);
-    const outputSummary = TokenFormatter.format(model.maxOutputTokens);
-    let desc = inputSummary && outputSummary ? ` · ${inputSummary}↑/${outputSummary}↓` : "";
-    if (model.averageSpeed) {
-      desc += ` · ${model.averageSpeed.toFixed(0)}/s`;
-    }
-    this.description = desc;
+    const inputSummary = formatTokens(model.maxInputTokens);
+    const outputSummary = formatTokens(model.maxOutputTokens);
+    this.description = ` · ${inputSummary}↑/${outputSummary}↓`;
   }
 }
 
 /**
  * Normalize tree items argument to an array.
- * Extracted from repeated patterns in extension.ts (C8 fix).
  */
 export function normalizeTreeItems<T>(arg: T | T[]): T[] {
   return Array.isArray(arg) ? arg : [arg];
