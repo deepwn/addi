@@ -3,8 +3,12 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "target": "ES2022",
-    "lib": ["ES2022"],
-    "types": ["node"],
+    "lib": [
+      "ES2022"
+    ],
+    "types": [
+      "node"
+    ],
     "rootDir": "./src",
     "outDir": "dist",
     "sourceMap": true,
@@ -27,6 +31,13 @@
     "removeComments": false,
     "pretty": true
   },
-  "include": ["src/**/*", "typings/**/*"],
-  "exclude": ["node_modules", ".vscode-test", "dist", "tests"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    ".vscode-test",
+    "dist",
+    "tests"
+  ]
 }

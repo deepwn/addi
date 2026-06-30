@@ -11,19 +11,19 @@ applyTo: "src/**/*.ts"
 
 ## 项目概述
 
-Addi 是一个 VS Code 扩展，桥接 AI SDK 与 VS Code Copilot API，支持自定义 LLM 提供商。
+Addi 是一个 VS Code 扩展，作为 VS Code 原生 BYOK（Bring Your Own Key）系统的可视化编辑器。它管理 `chatLanguageModels.json` 文件，提供树视图和 Webview 面板来创建/编辑 AI Provider 和 Model。**零运行时依赖**——所有 AI 通信均由 VS Code Copilot 原生处理。
 
-**核心能力**：多 Provider、流式响应、工具调用、Thinking/Reasoning 处理、Vision 多模态。
+**核心能力**：Provider/Model CRUD、远程模型列表获取、预设快速添加、树视图展示、Webview 可视化编辑、i18n 中英双语。
 
 ---
 
 ## 开发环境
 
-| 要求    | 版本       | 说明              |
-| ------- | ---------- | ----------------- |
-| VS Code | `^1.118.0` | Proposed API 支持 |
-| Bun     | 最新版     | 运行时和包管理    |
-| Windows | PowerShell | 终端环境          |
+| 要求    | 版本       | 说明           |
+| ------- | ---------- | -------------- |
+| VS Code | `^1.125.0` | BYOK API 支持  |
+| Bun     | 最新版     | 运行时和包管理 |
+| Windows | PowerShell | 终端环境       |
 
 > **注意**：本项目使用 **Bun** 作为包管理器和运行时，不使用 npm/yarn/pnpm。
 
@@ -32,16 +32,15 @@ Addi 是一个 VS Code 扩展，桥接 AI SDK 与 VS Code Copilot API，支持�
 ## 常用命令
 
 ```powershell
-bun install        # 安装依赖
-bun run watch      # 开发模式（监听编译）
-bun run build      # 构建（编译 + 打包 VSIX）
-bun run clean      # 清理构建产物
-bun test           # 运行单元测试
-bun run test       # 运行端到端测试（需 VS Code 实例）
-bun run lint       # oxlint 检查
-bun run lint:fix   # oxlint 自动修复
-bun run format     # oxfmt 格式化
-bun run format:check  # oxfmt 检查（CI 用）
+bun install            # 安装依赖
+bun run watch          # 开发模式（监听编译）
+bun run build          # 构建（编译 + 打包 VSIX）
+bun run clean          # 清理构建产物
+bun run lint           # oxlint 检查
+bun run lint:fix       # oxlint 自动修复
+bun run format         # oxfmt 格式化
+bun run format:check   # oxfmt 检查（CI 用）
+bun run release:github # 发布到 GitHub Release
 ```
 
 按 `F5` 启动 Extension Development Host 调试。
@@ -52,19 +51,19 @@ bun run format:check  # oxfmt 检查（CI 用）
 
 ### 命名
 
-| 类型      | 规范             | 示例                            |
-| --------- | ---------------- | ------------------------------- |
-| 类/接口   | PascalCase       | `LLMService`, `ProviderFactory` |
-| 方法/变量 | camelCase        | `getProvider()`, `modelList`    |
-| 常量      | UPPER_SNAKE_CASE | `DEFAULT_MAX_TOKENS`            |
-| 文件      | kebab-case       | `llm-service.ts`                |
+| 类型      | 规范             | 示例                               |
+| --------- | ---------------- | ---------------------------------- |
+| 类/接口   | PascalCase       | `ProviderModelManager`, `ByokFileManager` |
+| 方法/变量 | camelCase        | `getProviders()`, `modelList`      |
+| 常量      | UPPER_SNAKE_CASE | `DEFAULT_MAX_TOKENS`               |
+| 文件      | kebab-case       | `byok-file-manager.ts`             |
 
 ### 日志
 
 ```typescript
-import { logger } from "./common/logger";
+import { logger, LogScope } from "./common/logger";
 
-logger.debug("Debug info", { data: "value" }, "ComponentName");
+logger.debug("Debug info", { data: "value" }, LogScope.VIEW);
 logger.info("Info message");
 logger.warn("Warning message");
 logger.error("Error message", error, "ComponentName");
@@ -77,7 +76,6 @@ logger.error("Error message", error, "ComponentName");
 - 优先 `interface` 用于可扩展类型
 - 使用 `type` 用于联合类型、交叉类型
 - 避免 `any`，使用 `unknown` 替代
-- 使用 `unknown` + 类型守卫替代类型断言
 
 ### 错误处理
 
@@ -93,110 +91,47 @@ try {
 
 ---
 
-## 项目分层架构
+## 项目架构
 
 ```
-VS Code (Copilot) → Addi → AI SDK → Providers
+VS Code 启动
+  └─ extension.ts:activate()
+       ├─ ByokFileManager         (读写 %APPDATA%/Code/User/chatLanguageModels.json)
+       ├─ ProviderModelManager    (CRUD 适配器)
+       ├─ AddiTreeDataProvider    (侧边栏树视图)
+       ├─ CommandHandler          (命令路由 → Provider/Model/Config 处理器)
+       ├─ EditorViewManager       (Webview 面板: React ProviderForm/ModelForm)
+       └─ 12 个已注册命令
 ```
 
-| 层级           | 目录                  | 职责                     |
-| -------------- | --------------------- | ------------------------ |
-| Presentation   | `src/presentation/`   | UI、命令、视图           |
-| Application    | `src/application/`    | 业务用例（UseCases）     |
-| Core           | `src/core/`           | LLM 编排、Provider 注册  |
-| Infrastructure | `src/infrastructure/` | 存储、加密、VS Code 配置 |
-| Domain         | `src/domain/`         | 接口定义、领域模型       |
-| Common         | `src/common/`         | 通用类型、工具、日志     |
+| 层级         | 目录                 | 职责                       |
+| ------------ | -------------------- | -------------------------- |
+| Presentation | `src/presentation/`  | UI、命令、视图、Webview    |
+| Core         | `src/core/`          | ProviderModelManager 数据层 |
+| Services     | `src/services/`      | BYOK 文件管理、远程获取    |
+| Common       | `src/common/`        | 日志、通用工具             |
 
 ### 核心组件
 
-| 组件                 | 文件                                         | 职责                 |
-| -------------------- | -------------------------------------------- | -------------------- |
-| AddiChatProvider     | `src/core/providers/AddiChatProvider.ts`     | VS Code ChatProvider |
-| LLMService           | `src/core/llm/llmService.ts`                 | 流式处理、工具调用   |
-| AIRegistry           | `src/core/llm/aiRegistry.ts`                 | Provider 工厂注册    |
-| MessageConverter     | `src/core/llm/messageConverter.ts`           | 消息格式转换         |
-| ToolOrchestrator     | `src/core/llm/toolOrchestrator.ts`           | 工具执行编排         |
-| ProviderModelManager | `src/core/providers/ProviderModelManager.ts` | Provider/Model CRUD  |
+| 组件                 | 文件                                         | 职责                    |
+| -------------------- | -------------------------------------------- | ----------------------- |
+| ByokFileManager      | `src/services/byokFileManager.ts`            | chatLanguageModels.json 读写 |
+| ProviderModelManager | `src/core/providers/ProviderModelManager.ts` | Provider/Model CRUD     |
+| EditorViewManager    | `src/presentation/views/editorView.ts`       | Webview 面板管理        |
+| AddiTreeDataProvider | `src/presentation/views/providerView.ts`     | 侧边栏树视图            |
+| CommandHandler       | `src/presentation/commands/index.ts`         | 命令路由门面            |
 
 ### 数据流
 
 ```
-用户 → AddiChatProvider → LLMService → AI SDK → 流式响应 → VS Code
+用户操作 → CommandHandler/EditorViewManager
+              ↓
+         ProviderModelManager
+              ↓
+         ByokFileManager → chatLanguageModels.json
+              ↓
+         VS Code Copilot BYOK 引擎 (自动加载模型)
 ```
-
-1. `provideLanguageModelChatResponse()` 接收 Chat 请求
-2. `MessageConverter.toAiCoreMessages()` 转换消息格式
-3. `streamText()` 获取流式响应 → `processStreamPart()` 处理每个 part
-4. 工具调用通过 `ToolOrchestrator.executeTool()` 执行
-
----
-
-## Model ID 双标识设计
-
-每个 Model 包含两个标识符，**不可混淆**：
-
-| 字段  | 名称       | 用途                          | 示例                                   |
-| ----- | ---------- | ----------------------------- | -------------------------------------- |
-| `id`  | Local UUID | 本地内部管理：存储、UI、查找  | `550e8400-e29b-41d4-a716-446655440000` |
-| `rid` | Remote ID  | 远程 API 调用：实际发送给模型 | `gpt-4o`, `claude-sonnet-4-20250514`   |
-
-**使用规则**：
-
-- **内部管理**（查找、删除、UI 显示）→ 使用 `model.id`
-- **AI SDK 交互**（API 调用、createModel）→ 使用 `model.rid`
-
-```typescript
-// ❌ 错误：使用 model.id 调用 AI SDK
-aiProviderInstance(model.id);
-
-// ✅ 正确：使用 model.rid 调用 AI SDK
-aiProviderInstance(model.rid);
-```
-
----
-
-## 存储键规范
-
-所有存储键必须以 `addi.` 前缀开头：
-
-| 键                        | 存储          | 同步 | 说明                |
-| ------------------------- | ------------- | ---- | ------------------- |
-| `addi.config`             | Memento       | ✅   | Provider/Model 配置 |
-| `addi.config.modifiedAt`  | Memento       | ✅   | 配置修改时间        |
-| `addi.local.apikeys.{id}` | SecretStorage | ❌   | API Keys（不同步）  |
-| `addi.local.deviceId`     | SecretStorage | ❌   | 设备标识            |
-| `addi.local.backups`      | Memento       | ❌   | 本地备份记录        |
-
-> API Key 使用 VS Code `SecretStorage` 存储，永远不会被导出或同步。
-
----
-
-## Provider 注册
-
-在 `src/core/llm/aiRegistry.ts` 的 `ensureInitialized()` 中注册新 Provider：
-
-```typescript
-this.register({
-  id: "custom-provider",
-  label: "Custom Provider",
-  create: (p) => {
-    return createCustomProvider({
-      baseURL: p.apiEndpoint,
-      apiKey: p.apiKey,
-    });
-  },
-});
-```
-
-支持的 Provider 类型：
-
-| providerType             | AI SDK Provider                           | 说明                               |
-| ------------------------ | ----------------------------------------- | ---------------------------------- |
-| `openai-completions`     | `createOpenAI` / `createOpenAICompatible` | OpenAI 兼容（含 DeepSeek、Ollama） |
-| `openai-responses`       | `createOpenAI` (responses API)            | OpenAI 新版 Responses API          |
-| `anthropic-messages`     | `createAnthropic`                         | Claude 模型                        |
-| `google-generateContent` | `createGoogleGenerativeAI`                | Gemini 模型                        |
 
 ---
 

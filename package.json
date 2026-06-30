@@ -278,9 +278,6 @@
     ]
   },
   "scripts": {
-    "test": "bun run compile:test && bun run compile && vscode-test",
-    "test:unit": "bun test tests-unit/",
-    "compile:test": "tsc -p tsconfig.test.json",
     "package": "bun build ./src/presentation/extension.ts --outdir ./dist --target node --format cjs --external vscode --minify",
     "watch": "bun build ./src/presentation/extension.ts --outdir ./dist --target node --format cjs --external vscode --watch",
     "compile": "bun build ./src/presentation/extension.ts --outdir ./dist --target node --format cjs --external vscode",
@@ -295,18 +292,14 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint src/",
-    "lint:fix": "oxlint --fix src/"
+    "lint:fix": "oxlint --fix src/",
+    "release:github": "bun scripts/release.js"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
-    "@types/jest": "^30.0.0",
-    "@types/mocha": "^10.0.10",
     "@types/node": "^25.9.4",
     "@types/vscode": "^1.125.0",
-    "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.2",
-    "mocha": "^11.7.6",
     "oxfmt": "^0.48.0",
     "oxlint": "^1.71.0",
     "typescript": "^5.9.3"

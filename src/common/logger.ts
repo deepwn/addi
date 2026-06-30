@@ -7,16 +7,8 @@ export const LogScope = {
   EXTENSION: "Ext",
   COMMAND: "Cmd",
   PROVIDER_MGR: "ProviderMgr",
-  CHAT_PROVIDER: "Chat",
-  LLM_SERVICE: "LLM",
-  AI_REGISTRY: "AI",
-  MSG_CONVERTER: "MsgConv",
   VIEW: "View",
-  STORAGE: "Storage",
-  CRYPTO: "Crypto",
-  MODEL_TESTER: "Test",
   REMOTE_FETCHER: "Remote",
-  TOOL: "Tool",
 } as const;
 
 // ============================================================================
@@ -139,51 +131,21 @@ export class AddiLogger {
   }
 
   // --------------------------------------------------------------------------
-  // Sanitizers
+  // Sanitizer
   // --------------------------------------------------------------------------
 
   /**
-   * Sanitize provider info for logging (masks API key).
+   * Sanitize object for logging by masking sensitive fields.
    */
-  sanitizeProvider(provider?: {
-    id?: string;
-    name?: string;
-    apiEndpoint?: string | null;
-    apiKey?: string | null;
-    providerType?: string | null;
-  }): Record<string, unknown> | undefined {
-    if (!provider) {
-      return undefined;
+  sanitize(
+    obj: Record<string, unknown>,
+    sensitiveKeys: string[] = ["apiKey"],
+  ): Record<string, unknown> {
+    const sanitized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      sanitized[key] = sensitiveKeys.includes(key) ? maskSecret(String(value ?? "")) : value;
     }
-    return {
-      id: provider.id,
-      name: provider.name,
-      providerType: provider.providerType,
-      apiEndpoint: provider.apiEndpoint,
-      apiKey: maskSecret(provider.apiKey ?? undefined),
-    };
-  }
-
-  /**
-   * Sanitize model info for logging.
-   */
-  sanitizeModel(model?: {
-    rid?: string;
-    id?: string;
-    name?: string;
-    family?: string;
-    version?: string;
-  }): Record<string, unknown> | undefined {
-    if (!model) {
-      return undefined;
-    }
-    return {
-      rid: model.rid,
-      id: model.id,
-      name: model.name,
-      family: model.family,
-      version: model.version,
-    };
+    return sanitized;
   }
 }
 

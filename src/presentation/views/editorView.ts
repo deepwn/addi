@@ -1,11 +1,11 @@
-import * as vscode from 'vscode';
-import type { ByokProvider, ByokModel, ByokVendor, ByokApiType } from '../../services/byokTypes';
-import { getProviderDefaults } from '../../services/byokTypes';
-import type { ProviderModelManager } from '../../core/providers/ProviderModelManager';
-import { ProviderTreeItem } from './providerView';
-import { ModelTreeItem } from './treeItems';
-import { logger, LogScope } from '../../common/logger';
-import { resolveApiKey, storeApiKey } from '../commands/base';
+import * as vscode from "vscode";
+import type { ByokProvider, ByokModel, ByokVendor, ByokApiType } from "../../services/byokTypes";
+import { getProviderDefaults } from "../../services/byokTypes";
+import type { ProviderModelManager } from "../../core/providers/ProviderModelManager";
+import { ProviderTreeItem } from "./providerView";
+import { ModelTreeItem } from "./treeItems";
+import { logger, LogScope } from "../../common/logger";
+import { resolveApiKey, storeApiKey } from "../commands/base";
 
 // ---- Webview message types ----
 
@@ -55,11 +55,11 @@ interface ModelUpdateData {
 type UpdateItemData = ProviderUpdateData | ModelUpdateData;
 
 interface UpdateMessagePayload {
-  type: 'update';
+  type: "update";
   locale: string;
-  mode: 'edit' | 'create';
+  mode: "edit" | "create";
   item: {
-    type: 'provider' | 'model';
+    type: "provider" | "model";
     data: UpdateItemData;
     parentId?: string;
     isBatchMode?: boolean;
@@ -105,7 +105,7 @@ interface ModelFormPayload {
  * Provider forms include _addi_defaults settings, listApi, and quick-add presets.
  */
 export class EditorViewManager {
-  public static readonly viewType = 'addiEditor';
+  public static readonly viewType = "addiEditor";
   private _panel: vscode.WebviewPanel | undefined;
 
   /** Current edit target — single item for provider/model, array for batch model edit */
@@ -113,10 +113,10 @@ export class EditorViewManager {
   private _batchItems: ModelTreeItem[] | undefined;
 
   private _viewState: {
-    mode: 'edit' | 'create';
-    type: 'provider' | 'model';
+    mode: "edit" | "create";
+    type: "provider" | "model";
     parentId?: string;
-  } = { mode: 'edit', type: 'provider' };
+  } = { mode: "edit", type: "provider" };
 
   private _lastUpdateMessage: UpdateMessagePayload | undefined;
 
@@ -138,7 +138,7 @@ export class EditorViewManager {
    */
   public async openEditor(
     item: ProviderTreeItem | ModelTreeItem | ModelTreeItem[] | undefined,
-    mode: 'edit' | 'create',
+    mode: "edit" | "create",
     parentId?: string,
     prefill?: Partial<ByokProvider> | Partial<ByokModel>,
   ): Promise<void> {
@@ -160,7 +160,7 @@ export class EditorViewManager {
   private _createPanel(column?: vscode.ViewColumn): vscode.WebviewPanel {
     const panel = vscode.window.createWebviewPanel(
       EditorViewManager.viewType,
-      vscode.l10n.t('Addi Editor'),
+      vscode.l10n.t("Addi Editor"),
       column || vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -184,27 +184,25 @@ export class EditorViewManager {
     panel.webview.html = await this._getHtmlForWebview(panel.webview);
 
     panel.webview.onDidReceiveMessage(async (data: WebviewMessage) => {
-      logger.debug('Webview message received', data, LogScope.VIEW);
-      switch (data['type']) {
-        case 'saveProvider':
-          await this._saveProvider(data['payload'] as ProviderFormPayload);
+      logger.debug("Webview message received", data, LogScope.VIEW);
+      switch (data["type"]) {
+        case "saveProvider":
+          await this._saveProvider(data["payload"] as ProviderFormPayload);
           break;
-        case 'saveModel':
-          await this._saveModel(data['payload'] as ModelFormPayload);
+        case "saveModel":
+          await this._saveModel(data["payload"] as ModelFormPayload);
           break;
-        case 'ready':
+        case "ready":
           if (this._lastUpdateMessage) {
             this._panel?.webview.postMessage(this._lastUpdateMessage);
           }
           break;
-        case 'cancel':
+        case "cancel":
           this._panel?.dispose();
           break;
-        case 'showError': {
-          const p = data['payload'] as { message?: string } | undefined;
-          await vscode.window.showErrorMessage(
-            p?.message || vscode.l10n.t('An error occurred'),
-          );
+        case "showError": {
+          const p = data["payload"] as { message?: string } | undefined;
+          await vscode.window.showErrorMessage(p?.message || vscode.l10n.t("An error occurred"));
           break;
         }
       }
@@ -215,7 +213,7 @@ export class EditorViewManager {
 
   private async _updatePanelContent(
     item: ProviderTreeItem | ModelTreeItem | ModelTreeItem[] | undefined,
-    mode: 'edit' | 'create',
+    mode: "edit" | "create",
     parentId?: string,
     prefill?: Partial<ByokProvider> | Partial<ByokModel>,
   ): Promise<void> {
@@ -230,17 +228,17 @@ export class EditorViewManager {
     }
 
     // Determine type
-    let type: 'provider' | 'model';
+    let type: "provider" | "model";
     if (isBatch) {
-      type = 'model';
+      type = "model";
     } else if (item instanceof ProviderTreeItem) {
-      type = 'provider';
+      type = "provider";
     } else if (item instanceof ModelTreeItem) {
-      type = 'model';
-    } else if (mode === 'create' && parentId) {
-      type = 'model';
+      type = "model";
+    } else if (mode === "create" && parentId) {
+      type = "model";
     } else {
-      type = 'provider';
+      type = "provider";
     }
 
     this._viewState = parentId !== undefined ? { mode, type, parentId } : { mode, type };
@@ -249,17 +247,16 @@ export class EditorViewManager {
     const batchItems = this._batchItems;
     let title: string;
     if (isBatch && batchItems) {
-      title = vscode.l10n.t('Edit {0} Models', String(batchItems.length));
-    } else if (mode === 'create') {
-      title = type === 'provider'
-        ? vscode.l10n.t('Create Provider')
-        : vscode.l10n.t('Create Model');
+      title = vscode.l10n.t("Edit {0} Models", String(batchItems.length));
+    } else if (mode === "create") {
+      title =
+        type === "provider" ? vscode.l10n.t("Create Provider") : vscode.l10n.t("Create Model");
     } else if (item instanceof ProviderTreeItem) {
-      title = vscode.l10n.t('Edit {0}', item.provider.name);
+      title = vscode.l10n.t("Edit {0}", item.provider.name);
     } else if (item instanceof ModelTreeItem) {
-      title = vscode.l10n.t('Edit {0}', item.model.name || item.model.id);
+      title = vscode.l10n.t("Edit {0}", item.model.name || item.model.id);
     } else {
-      title = vscode.l10n.t('Addi Editor');
+      title = vscode.l10n.t("Addi Editor");
     }
 
     // ---- Build data payload ----
@@ -268,7 +265,7 @@ export class EditorViewManager {
     // ---- Send update message ----
     if (this._panel) {
       this._panel.title = title;
-      const itemPayload: UpdateMessagePayload['item'] = {
+      const itemPayload: UpdateMessagePayload["item"] = {
         type,
         data,
       };
@@ -278,7 +275,7 @@ export class EditorViewManager {
         if (batchItems) itemPayload.batchCount = batchItems.length;
       }
       this._lastUpdateMessage = {
-        type: 'update',
+        type: "update",
         locale: vscode.env.language,
         mode,
         item: itemPayload,
@@ -290,13 +287,13 @@ export class EditorViewManager {
   /** Build the data object sent to the webview for rendering */
   private async _buildUpdateData(
     item: ProviderTreeItem | ModelTreeItem | ModelTreeItem[] | undefined,
-    mode: 'edit' | 'create',
+    mode: "edit" | "create",
     parentId?: string,
     prefill?: Partial<ByokProvider> | Partial<ByokModel>,
     isBatch = false,
   ): Promise<UpdateItemData> {
     // ---- CREATE mode ----
-    if (mode === 'create') {
+    if (mode === "create") {
       return this._buildCreateData(parentId, prefill);
     }
 
@@ -337,16 +334,19 @@ export class EditorViewManager {
       if (item.model.name !== undefined) data.name = item.model.name;
       if (item.model.url !== undefined) data.url = item.model.url;
       if (item.model.maxInputTokens !== undefined) data.maxInputTokens = item.model.maxInputTokens;
-      if (item.model.maxOutputTokens !== undefined) data.maxOutputTokens = item.model.maxOutputTokens;
+      if (item.model.maxOutputTokens !== undefined)
+        data.maxOutputTokens = item.model.maxOutputTokens;
       if (item.model.editTools !== undefined) data.editTools = item.model.editTools;
-      if (item.model.supportsReasoningEffort !== undefined) data.supportsReasoningEffort = item.model.supportsReasoningEffort;
-      if (item.model.reasoningEffortFormat !== undefined) data.reasoningEffortFormat = item.model.reasoningEffortFormat;
+      if (item.model.supportsReasoningEffort !== undefined)
+        data.supportsReasoningEffort = item.model.supportsReasoningEffort;
+      if (item.model.reasoningEffortFormat !== undefined)
+        data.reasoningEffortFormat = item.model.reasoningEffortFormat;
       if (item.model.requestHeaders !== undefined) data.requestHeaders = item.model.requestHeaders;
       return data;
     }
 
     // Fallback
-    return { name: '', vendor: 'customendpoint' };
+    return { name: "", vendor: "customendpoint" };
   }
 
   /** Build data for the create path */
@@ -357,8 +357,8 @@ export class EditorViewManager {
     // Creating a MODEL
     if (parentId) {
       const data: ModelUpdateData = {
-        id: '',
-        name: '',
+        id: "",
+        name: "",
         toolCalling: true,
         maxInputTokens: 128000,
         maxOutputTokens: 64000,
@@ -392,26 +392,32 @@ export class EditorViewManager {
           if (defaults.thinking !== undefined) data.thinking = defaults.thinking;
           if (defaults.streaming !== undefined) data.streaming = defaults.streaming;
           if (defaults.maxInputTokens !== undefined) data.maxInputTokens = defaults.maxInputTokens;
-          if (defaults.maxOutputTokens !== undefined) data.maxOutputTokens = defaults.maxOutputTokens;
-          if (defaults.supportsReasoningEffort !== undefined) data.supportsReasoningEffort = defaults.supportsReasoningEffort;
+          if (defaults.maxOutputTokens !== undefined)
+            data.maxOutputTokens = defaults.maxOutputTokens;
+          if (defaults.supportsReasoningEffort !== undefined)
+            data.supportsReasoningEffort = defaults.supportsReasoningEffort;
           if (defaults.url !== undefined) data.url = defaults.url;
         }
 
         // Fetch remote models if listApi is configured
         if (defaults.listApi && parentProvider.apiKey) {
           try {
-            const apiKey = await resolveApiKey(parentProvider.apiKey, parentProvider.name, this._context);
+            const apiKey = await resolveApiKey(
+              parentProvider.apiKey,
+              parentProvider.name,
+              this._context,
+            );
             if (apiKey) {
-              const { fetchProviderModels } = await import('../../services/remoteModelFetcher.js');
+              const { fetchProviderModels } = await import("../../services/remoteModelFetcher.js");
               const remoteModels = await fetchProviderModels(parentProvider, apiKey);
-              data.remoteModels = remoteModels.map(m => {
+              data.remoteModels = remoteModels.map((m) => {
                 const entry: { id: string; name?: string } = { id: m.id };
                 if (m.name !== undefined) entry.name = m.name;
                 return entry;
               });
             }
           } catch (err) {
-            logger.warn('Failed to fetch remote models for editor', err, LogScope.VIEW);
+            logger.warn("Failed to fetch remote models for editor", err, LogScope.VIEW);
           }
         }
       }
@@ -421,11 +427,11 @@ export class EditorViewManager {
 
     // Creating a PROVIDER
     const data: ProviderUpdateData = {
-      name: '',
-      vendor: 'customendpoint',
-      apiKey: '',
-      url: '',
-      listApi: '',
+      name: "",
+      vendor: "customendpoint",
+      apiKey: "",
+      url: "",
+      listApi: "",
       defaultSettings: {},
     };
 
@@ -443,7 +449,8 @@ export class EditorViewManager {
   /** Build data for batch model editing */
   private _buildBatchData(items: ModelTreeItem[]): ModelUpdateData {
     const first = items[0];
-    if (!first) return { id: '', toolCalling: true, vision: false, thinking: false, streaming: true };
+    if (!first)
+      return { id: "", toolCalling: true, vision: false, thinking: false, streaming: true };
 
     const data: ModelUpdateData = {
       id: first.model.id,
@@ -458,10 +465,13 @@ export class EditorViewManager {
     if (first.model.name !== undefined) data.name = first.model.name;
     if (first.model.url !== undefined) data.url = first.model.url;
     if (first.model.maxInputTokens !== undefined) data.maxInputTokens = first.model.maxInputTokens;
-    if (first.model.maxOutputTokens !== undefined) data.maxOutputTokens = first.model.maxOutputTokens;
+    if (first.model.maxOutputTokens !== undefined)
+      data.maxOutputTokens = first.model.maxOutputTokens;
     if (first.model.editTools !== undefined) data.editTools = first.model.editTools;
-    if (first.model.supportsReasoningEffort !== undefined) data.supportsReasoningEffort = first.model.supportsReasoningEffort;
-    if (first.model.reasoningEffortFormat !== undefined) data.reasoningEffortFormat = first.model.reasoningEffortFormat;
+    if (first.model.supportsReasoningEffort !== undefined)
+      data.supportsReasoningEffort = first.model.supportsReasoningEffort;
+    if (first.model.reasoningEffortFormat !== undefined)
+      data.reasoningEffortFormat = first.model.reasoningEffortFormat;
     if (first.model.requestHeaders !== undefined) data.requestHeaders = first.model.requestHeaders;
     return data;
   }
@@ -469,11 +479,11 @@ export class EditorViewManager {
   // ==================== Save handlers ====================
 
   private async _saveProvider(data: ProviderFormPayload): Promise<void> {
-    if (this._viewState.mode === 'create') {
+    if (this._viewState.mode === "create") {
       // Build provider — only set optional fields when they have values
       const providerData: ByokProvider = {
         name: data.name,
-        vendor: (data.vendor || 'customendpoint') as ByokVendor,
+        vendor: (data.vendor || "customendpoint") as ByokVendor,
         models: [],
       };
       if (data.apiKey) {
@@ -484,14 +494,14 @@ export class EditorViewManager {
 
       // Merge url, listApi, and defaultSettings into _addi_defaults
       const defaults: Record<string, unknown> = { ...(data.defaultSettings || {}) };
-      if (data.url) defaults['url'] = data.url;
-      if (data.listApi) defaults['listApi'] = data.listApi;
+      if (data.url) defaults["url"] = data.url;
+      if (data.listApi) defaults["listApi"] = data.listApi;
       if (Object.keys(defaults).length > 0) {
         providerData._addi_defaults = defaults;
       }
 
       if (!providerData.name.trim()) {
-        vscode.window.showErrorMessage(vscode.l10n.t('Provider name is required'));
+        vscode.window.showErrorMessage(vscode.l10n.t("Provider name is required"));
         return;
       }
 
@@ -526,12 +536,12 @@ export class EditorViewManager {
     // Handle _addi_defaults changes — merge url, listApi + defaultSettings
     const oldDefaults = getProviderDefaults(provider);
     const newDefaults: Record<string, unknown> = { ...(data.defaultSettings || {}) };
-    if (data.url !== undefined) newDefaults['url'] = data.url || undefined;
-    if (data.listApi !== undefined) newDefaults['listApi'] = data.listApi || undefined;
+    if (data.url !== undefined) newDefaults["url"] = data.url || undefined;
+    if (data.listApi !== undefined) newDefaults["listApi"] = data.listApi || undefined;
 
     // Clean undefined/empty values
     for (const k of Object.keys(newDefaults)) {
-      if (newDefaults[k] === undefined || newDefaults[k] === '') {
+      if (newDefaults[k] === undefined || newDefaults[k] === "") {
         delete newDefaults[k];
       }
     }
@@ -539,10 +549,14 @@ export class EditorViewManager {
     const newKeys = Object.keys(newDefaults);
     const defaultsChanged =
       oldKeys.length !== newKeys.length ||
-      oldKeys.some(k => newDefaults[k] !== (oldDefaults as Record<string, unknown>)[k]);
+      oldKeys.some((k) => newDefaults[k] !== (oldDefaults as Record<string, unknown>)[k]);
 
     if (defaultsChanged) {
-      updates._addi_defaults = newKeys.length > 0 ? newDefaults : undefined;
+      if (newKeys.length > 0) {
+        updates._addi_defaults = newDefaults;
+      } else {
+        delete updates._addi_defaults;
+      }
     }
 
     if (Object.keys(updates).length === 0) {
@@ -559,15 +573,15 @@ export class EditorViewManager {
   }
 
   private async _saveModel(data: ModelFormPayload): Promise<void> {
-    if (this._viewState.mode === 'create') {
+    if (this._viewState.mode === "create") {
       if (!this._viewState.parentId) {
-        vscode.window.showErrorMessage(vscode.l10n.t('No parent provider specified.'));
+        vscode.window.showErrorMessage(vscode.l10n.t("No parent provider specified."));
         return;
       }
 
       // Build model — only set optional fields when they have values
       const model: ByokModel = {
-        id: data.id || data.name || '',
+        id: data.id || data.name || "",
         toolCalling: data.toolCalling !== false,
         vision: Boolean(data.vision),
         thinking: Boolean(data.thinking),
@@ -575,21 +589,34 @@ export class EditorViewManager {
       };
       if (data.name) model.name = data.name;
       if (data.url) model.url = data.url;
-      if (data.maxInputTokens !== undefined && data.maxInputTokens > 0) model.maxInputTokens = data.maxInputTokens;
-      if (data.maxOutputTokens !== undefined && data.maxOutputTokens > 0) model.maxOutputTokens = data.maxOutputTokens;
+      if (data.maxInputTokens !== undefined && data.maxInputTokens > 0)
+        model.maxInputTokens = data.maxInputTokens;
+      if (data.maxOutputTokens !== undefined && data.maxOutputTokens > 0)
+        model.maxOutputTokens = data.maxOutputTokens;
       if (data.editTools !== undefined) model.editTools = data.editTools as boolean | string[];
-      if (data.supportsReasoningEffort !== undefined) model.supportsReasoningEffort = data.supportsReasoningEffort as 'low' | 'medium' | 'high' | ('low' | 'medium' | 'high')[];
-      if (data.reasoningEffortFormat) model.reasoningEffortFormat = data.reasoningEffortFormat as 'api-token' | 'api-header-proxy' | 'api-key';
+      if (data.supportsReasoningEffort !== undefined)
+        model.supportsReasoningEffort = data.supportsReasoningEffort as
+          | "low"
+          | "medium"
+          | "high"
+          | ("low" | "medium" | "high")[];
+      if (data.reasoningEffortFormat)
+        model.reasoningEffortFormat = data.reasoningEffortFormat as
+          | "api-token"
+          | "api-header-proxy"
+          | "api-key";
       if (data.requestHeaders) model.requestHeaders = data.requestHeaders;
 
       if (!model.id.trim()) {
-        vscode.window.showErrorMessage(vscode.l10n.t('Model ID is required'));
+        vscode.window.showErrorMessage(vscode.l10n.t("Model ID is required"));
         return;
       }
 
       try {
         await this._manager.addModel(this._viewState.parentId, model);
-        vscode.window.showInformationMessage(vscode.l10n.t('Model "{0}" added.', model.name || model.id));
+        vscode.window.showInformationMessage(
+          vscode.l10n.t('Model "{0}" added.', model.name || model.id),
+        );
         this._refreshTree();
         this._panel?.dispose();
       } catch (e: unknown) {
@@ -612,19 +639,30 @@ export class EditorViewManager {
     if (data.vision !== model.vision) updates.vision = data.vision;
     if (data.thinking !== model.thinking) updates.thinking = data.thinking;
     if (data.maxInputTokens !== model.maxInputTokens) {
-      if (data.maxInputTokens !== undefined && data.maxInputTokens > 0) updates.maxInputTokens = data.maxInputTokens;
+      if (data.maxInputTokens !== undefined && data.maxInputTokens > 0)
+        updates.maxInputTokens = data.maxInputTokens;
     }
     if (data.maxOutputTokens !== model.maxOutputTokens) {
-      if (data.maxOutputTokens !== undefined && data.maxOutputTokens > 0) updates.maxOutputTokens = data.maxOutputTokens;
+      if (data.maxOutputTokens !== undefined && data.maxOutputTokens > 0)
+        updates.maxOutputTokens = data.maxOutputTokens;
     }
     if (data.editTools !== model.editTools) {
       if (data.editTools !== undefined) updates.editTools = data.editTools as boolean | string[];
     }
     if (data.supportsReasoningEffort !== model.supportsReasoningEffort) {
-      if (data.supportsReasoningEffort !== undefined) updates.supportsReasoningEffort = data.supportsReasoningEffort as 'low' | 'medium' | 'high' | ('low' | 'medium' | 'high')[];
+      if (data.supportsReasoningEffort !== undefined)
+        updates.supportsReasoningEffort = data.supportsReasoningEffort as
+          | "low"
+          | "medium"
+          | "high"
+          | ("low" | "medium" | "high")[];
     }
     if (data.reasoningEffortFormat !== model.reasoningEffortFormat) {
-      if (data.reasoningEffortFormat !== undefined) updates.reasoningEffortFormat = data.reasoningEffortFormat as 'api-token' | 'api-header-proxy' | 'api-key';
+      if (data.reasoningEffortFormat !== undefined)
+        updates.reasoningEffortFormat = data.reasoningEffortFormat as
+          | "api-token"
+          | "api-header-proxy"
+          | "api-key";
     }
     if (data.requestHeaders !== model.requestHeaders) {
       if (data.requestHeaders) updates.requestHeaders = data.requestHeaders;
@@ -637,7 +675,9 @@ export class EditorViewManager {
 
     const success = await this._manager.updateModel(providerName, model.id, updates);
     if (success) {
-      vscode.window.showInformationMessage(vscode.l10n.t('Model "{0}" updated.', data.name || model.id));
+      vscode.window.showInformationMessage(
+        vscode.l10n.t('Model "{0}" updated.', data.name || model.id),
+      );
       this._refreshTree();
       this._panel?.dispose();
     }
@@ -648,10 +688,10 @@ export class EditorViewManager {
   private async _getHtmlForWebview(webview: vscode.Webview): Promise<string> {
     const nonce = getNonce();
     const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'resources', 'webview', 'assets', 'index.js'),
+      vscode.Uri.joinPath(this._extensionUri, "resources", "webview", "assets", "index.js"),
     );
     const styleUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'resources', 'webview', 'assets', 'index.css'),
+      vscode.Uri.joinPath(this._extensionUri, "resources", "webview", "assets", "index.css"),
     );
 
     return `<!DOCTYPE html>
@@ -672,8 +712,8 @@ export class EditorViewManager {
 }
 
 function getNonce(): string {
-  let text = '';
-  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let text = "";
+  const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   for (let i = 0; i < 32; i++) {
     text += possible.charAt(Math.floor(Math.random() * possible.length));
   }

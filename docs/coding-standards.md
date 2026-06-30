@@ -15,71 +15,21 @@
 ```typescript
 // ❌ 错误
 const data: any = JSON.parse(str);
-(provider as any).apiKey = key;
 
 // ✅ 正确
 const data: unknown = JSON.parse(str);
-// 直接使用已定义的字段
-provider.apiKey = key;
 ```
 
-### 1.2 Proposed API 类型扩展
-
-当 VS Code Proposed API 类型定义不完整时，定义扩展接口而非 `as any`：
-
-```typescript
-// ❌ 错误
-const tools = (options as any)?.tools;
-
-// ✅ 正确
-interface ExtendedLMOptions extends vscode.ProvideLanguageModelChatResponseOptions {
-  tools?: vscode.LanguageModelChatTool[];
-}
-const tools = (options as ExtendedLMOptions)?.tools;
-```
-
-### 1.3 接口优先
+### 1.2 接口优先
 
 - 使用 `interface` 定义可扩展的类型
 - 使用 `type` 定义联合类型、交叉类型
-- Provider 工厂的 settings 参数必须有具体类型约束
 
 ---
 
-## 二、分层约束
+## 二、日志规范
 
-### 2.1 依赖方向
-
-```
-Presentation → Application → Core → Domain (接口)
-                Infrastructure → Domain (接口)
-Common → 无外部依赖（纯类型/工具）
-```
-
-### 2.2 具体规则
-
-| 规则                      | 说明                                                             |
-| ------------------------- | ---------------------------------------------------------------- |
-| `core/` 不含 UI 组件      | `TreeItem` 子类、Webview 相关类必须放在 `presentation/`          |
-| `common/` 不依赖 vscode   | 依赖 VS Code API 的工具放在 `infrastructure/` 或 `presentation/` |
-| UseCases 接口注入         | Application 层通过接口注入依赖，不直接引用具体实现类             |
-| 存储操作归 infrastructure | 所有 Memento/SecretStorage 操作封装在 `infrastructure/storage/`  |
-
-### 2.3 文件归属参考
-
-| 文件类型                | 归属目录                 | 示例                                |
-| ----------------------- | ------------------------ | ----------------------------------- |
-| TreeItem 子类           | `presentation/views/`    | `treeItems.ts`                      |
-| 用户反馈/通知           | `presentation/utils/`    | `feedback.ts`                       |
-| VS Code 配置读取        | `infrastructure/vscode/` | `configService.ts`                  |
-| 纯工具函数（无 vscode） | `common/utils/`          | `id.ts`, `validator.ts`, `token.ts` |
-| 类型定义                | `common/types/`          | `model.ts`, `provider.ts`           |
-
----
-
-## 三、日志规范
-
-### 3.1 使用方式
+### 2.1 使用方式
 
 ```typescript
 import { logger } from "./common/logger";
@@ -90,23 +40,23 @@ logger.warn("警告信息");
 logger.error("错误信息", error, "ComponentName");
 ```
 
-### 3.2 初始化要求
+### 2.2 初始化要求
 
-`Logger` 必须在扩展激活时调用 `initialize(context)` 初始化，将 channel 注册到 `context.subscriptions`。未初始化时调用日志方法会抛出异常（防止资源泄漏）。
+`AddiLogger` 必须在扩展激活时调用 `initialize(context)` 初始化，将 channel 注册到 `context.subscriptions`。
 
-### 3.3 敏感信息脱敏
+### 2.3 敏感信息脱敏
 
-日志中涉及 API Key 等敏感信息时，使用 `maskSecret()` 脱敏：
+日志中涉及 API Key 等敏感信息时，使用 `logger.sanitize()` 或 `maskSecret()` 脱敏：
 
 ```typescript
-logger.debug("API Key loaded", { key: maskSecret(apiKey) });
+logger.debug("API Key loaded", logger.sanitize({ key: apiKey }));
 ```
 
 ---
 
-## 四、错误处理
+## 三、错误处理
 
-### 4.1 标准模式
+### 3.1 标准模式
 
 ```typescript
 try {
@@ -118,7 +68,7 @@ try {
 }
 ```
 
-### 4.2 用户面错误
+### 3.2 用户面错误
 
 面向用户的错误消息必须友好、可操作：
 
@@ -126,31 +76,17 @@ try {
 // ❌ 错误
 throw new Error("ERR_INVALID_INPUT");
 
-// ✅ 正确
-UserFeedback.showError("Model name cannot be empty");
+// ✅ 正确—使用 VS Code 原生 API
+vscode.window.showErrorMessage("Model name cannot be empty");
 ```
 
-### 4.3 命令注册模式
+### 3.3 命令注册模式
 
-命令处理函数统一使用 `wrapWithErrorHandling` 包装：
-
-```typescript
-function wrapWithErrorHandling(id: string, handler: Function) {
-  return async (...args: any[]) => {
-    try {
-      logger.info(`Command ${id} invoked`);
-      await handler(...args);
-    } catch (error) {
-      UserFeedback.showError(`Failed: ${error}`);
-      logger.error(`${id} failed`, error);
-    }
-  };
-}
-```
+命令处理函数统一使用 try-catch 包装错误处理和日志记录。
 
 ---
 
-## 五、验证模式
+## 四、验证模式
 
 验证方法返回错误信息字符串或 `null`，使用 `getError` 命名：
 
@@ -169,34 +105,10 @@ static getNameError(name: string): string | null {
 ```typescript
 const error = InputValidator.getNameError(name);
 if (error) {
-  UserFeedback.showError(error);
+  vscode.window.showErrorMessage(error);
   return;
 }
 ```
-
----
-
-## 六、API Key 处理
-
-### 6.1 存储规则
-
-- API Key 只存储在 VS Code `SecretStorage` 中
-- 禁止写入 `Memento`、`State`、配置文件或日志
-
-### 6.2 空字符串语义
-
-空字符串统一视为无效输入，静默忽略：
-
-```typescript
-// ApiKeyService.setApiKey()
-if (!apiKey || !apiKey.trim()) {
-  return; // 静默忽略空值
-}
-```
-
-删除 API Key 必须调用 `deleteApiKey()`，不依赖传入空字符串。
-
----
 
 ## 七、命名规范
 

@@ -1,48 +1,56 @@
-import * as vscode from 'vscode';
-import { BaseCommandHandler, resolveApiKey } from './base';
-import type { ProviderTreeItem } from '../views/providerView';
-import { getProviderDefaults } from '../../services/byokTypes';
-import { fetchProviderModels } from '../../services/remoteModelFetcher';
-import type { ByokModel } from '../../services/byokTypes';
-import { logger, LogScope } from '../../common/logger';
+import * as vscode from "vscode";
+import { BaseCommandHandler, resolveApiKey } from "./base";
+import type { ProviderTreeItem } from "../views/providerView";
+import { getProviderDefaults } from "../../services/byokTypes";
+import { fetchProviderModels } from "../../services/remoteModelFetcher";
+import type { ByokModel, ByokProvider } from "../../services/byokTypes";
+import { logger, LogScope } from "../../common/logger";
 
 /**
  * Provider-related command handler (BYOK Edition)
  */
 export class ProviderCommandHandler extends BaseCommandHandler {
   async addProvider(): Promise<void> {
-    this.editorViewManager?.openEditor(undefined, 'create');
+    this.editorViewManager?.openEditor(undefined, "create");
   }
 
   async editProvider(item: ProviderTreeItem): Promise<void> {
-    this.editorViewManager?.openEditor(item, 'edit');
+    this.editorViewManager?.openEditor(item, "edit");
   }
 
   async deleteProvider(item: ProviderTreeItem): Promise<void> {
     const confirmed = await vscode.window.showWarningMessage(
-      vscode.l10n.t('Are you sure you want to delete provider "{0}"? This will also delete all of its models.', item.provider.name),
+      vscode.l10n.t(
+        'Are you sure you want to delete provider "{0}"? This will also delete all of its models.',
+        item.provider.name,
+      ),
       { modal: false },
-      vscode.l10n.t('Delete'),
+      vscode.l10n.t("Delete"),
     );
     if (!confirmed) return;
 
     try {
       await this.manager.deleteProvider(item.provider.name);
       this.refreshTreeView();
-      vscode.window.showInformationMessage(vscode.l10n.t('Provider "{0}" deleted', item.provider.name));
+      vscode.window.showInformationMessage(
+        vscode.l10n.t('Provider "{0}" deleted', item.provider.name),
+      );
     } catch (error) {
       vscode.window.showErrorMessage(
-        vscode.l10n.t('Failed to delete provider: {0}', error instanceof Error ? error.message : 'Unknown error'),
+        vscode.l10n.t(
+          "Failed to delete provider: {0}",
+          error instanceof Error ? error.message : "Unknown error",
+        ),
       );
     }
   }
 
   async copyProvider(item: ProviderTreeItem): Promise<void> {
     const { models: _models, ...providerData } = item.provider;
-    this.editorViewManager?.openEditor(undefined, 'create', undefined, {
+    this.editorViewManager?.openEditor(undefined, "create", undefined, {
       ...providerData,
-      name: `${item.provider.name} ${vscode.l10n.t('Copy')}`,
-    } as any);
+      name: `${item.provider.name} ${vscode.l10n.t("Copy")}`,
+    } as Partial<ByokProvider>);
   }
 
   /**
@@ -55,7 +63,10 @@ export class ProviderCommandHandler extends BaseCommandHandler {
 
     if (!defaults.listApi) {
       vscode.window.showWarningMessage(
-        vscode.l10n.t('Provider "{0}" has no listApi configured. Set it in the provider _addi settings.', provider.name),
+        vscode.l10n.t(
+          'Provider "{0}" has no listApi configured. Set it in the provider _addi settings.',
+          provider.name,
+        ),
       );
       return;
     }
@@ -72,7 +83,10 @@ export class ProviderCommandHandler extends BaseCommandHandler {
 
     if (!apiKey) {
       vscode.window.showWarningMessage(
-        vscode.l10n.t('Cannot resolve API key for provider "{0}". Please enter the key when prompted.', provider.name),
+        vscode.l10n.t(
+          'Cannot resolve API key for provider "{0}". Please enter the key when prompted.',
+          provider.name,
+        ),
       );
       return;
     }
@@ -81,7 +95,7 @@ export class ProviderCommandHandler extends BaseCommandHandler {
       const remoteModels = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: vscode.l10n.t('Fetching models for {0}...', provider.name),
+          title: vscode.l10n.t("Fetching models for {0}...", provider.name),
           cancellable: false,
         },
         async () => {
@@ -91,13 +105,13 @@ export class ProviderCommandHandler extends BaseCommandHandler {
 
       if (remoteModels.length === 0) {
         vscode.window.showWarningMessage(
-          vscode.l10n.t('No models returned from {0}. Check the listApi endpoint.', provider.name),
+          vscode.l10n.t("No models returned from {0}. Check the listApi endpoint.", provider.name),
         );
         return;
       }
 
-      const existingIds = new Set((provider.models || []).map(m => m.id));
-      const remoteIds = new Set(remoteModels.map(m => m.id));
+      const existingIds = new Set((provider.models || []).map((m) => m.id));
+      const remoteIds = new Set(remoteModels.map((m) => m.id));
 
       // Auto-add new models (in remote but not in local)
       let addedCount = 0;
@@ -133,7 +147,7 @@ export class ProviderCommandHandler extends BaseCommandHandler {
       }
 
       if (staleIds.length > 0) {
-        const staleList = staleIds.map(id => `  • ${id}`).join('\n');
+        const staleList = staleIds.map((id) => `  • ${id}`).join("\n");
         const remove = await vscode.window.showWarningMessage(
           vscode.l10n.t(
             '{0} model(s) in "{1}" were not found in the remote list:\n\n{2}\n\nRemove them?',
@@ -142,11 +156,11 @@ export class ProviderCommandHandler extends BaseCommandHandler {
             staleList,
           ),
           { modal: true },
-          vscode.l10n.t('Remove'),
-          vscode.l10n.t('Keep'),
+          vscode.l10n.t("Remove"),
+          vscode.l10n.t("Keep"),
         );
 
-        if (remove === vscode.l10n.t('Remove')) {
+        if (remove === vscode.l10n.t("Remove")) {
           const deleted = await this.manager.deleteModels(provider.name, staleIds);
           vscode.window.showInformationMessage(
             vscode.l10n.t('{0} stale model(s) removed from "{1}".', deleted, provider.name),
@@ -158,14 +172,21 @@ export class ProviderCommandHandler extends BaseCommandHandler {
 
       if (addedCount === 0 && staleIds.length === 0) {
         vscode.window.showInformationMessage(
-          vscode.l10n.t('All {0} models for "{1}" are up to date.', remoteModels.length, provider.name),
+          vscode.l10n.t(
+            'All {0} models for "{1}" are up to date.',
+            remoteModels.length,
+            provider.name,
+          ),
         );
       }
     } catch (error) {
       vscode.window.showErrorMessage(
-        vscode.l10n.t('Failed to sync models: {0}', error instanceof Error ? error.message : 'Unknown error'),
+        vscode.l10n.t(
+          "Failed to sync models: {0}",
+          error instanceof Error ? error.message : "Unknown error",
+        ),
       );
-      logger.error('syncProviderModels failed', error, LogScope.COMMAND);
+      logger.error("syncProviderModels failed", error, LogScope.COMMAND);
     }
   }
 }

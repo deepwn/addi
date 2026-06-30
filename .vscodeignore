@@ -1,9 +1,9 @@
 # VSIX packaging ignore list
 .github/**
 .vscode/**
-.vscode-test/**
-.vscode-test.mjs
-out/**
+# VSIX packaging ignore list
+.github/**
+.vscode/**
 node_modules/**
 src/**
 .git/**
@@ -13,21 +13,13 @@ docs/**
 .gitignore
 bunfig.toml
 *.md
-!readme.md
 !README.md
 !CHANGELOG.md
-!changelog.md
 **/tsconfig.json
-**/eslint.config.mjs
 **/*.map
 **/*.ts
 !**/*.min.(svg|png|jpg|jpeg|gif)
 !resources/provider-icons/**
-release/**
-.lintstagedrc.json
-addi-config.json
-.prettierignore
-.prettierrc
 *.lock
 *.vsix
 *.test.*
